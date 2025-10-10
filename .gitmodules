@@ -1,0 +1,9 @@
+[submodule "deps/mmdetection"]
+	path = deps/mmdetection
+	url = https://github.com/open-mmlab/mmdetection.git
+[submodule "deps/yolov5"]
+	path = deps/yolov5
+	url = https://github.com/ultralytics/yolov5.git
+[submodule "deps/ultralytics"]
+	path = deps/ultralytics
+	url = https://github.com/ultralytics/ultralytics.git

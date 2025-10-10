@@ -1,0 +1,25 @@
+[project]
+name = "cracks-yolo"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "BoChen SHEN",email = "6goddddddd@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<=3.12"
+dependencies = [
+    "ultralytics (>=8.3.208,<9.0.0)",
+    "torch (>=2.8.0,<3.0.0)",
+    "mmdet (>=3.3.0,<4.0.0)",
+    "torchvision (>=0.23.0,<0.24.0)",
+    "pycocotools (>=2.0.10,<3.0.0)"
+]
+
+
+[project.optional-dependencies]
+dev = ["yapf (>=0.43.0,<0.44.0)", "isort (>=6.1.0,<7.0.0)", "pylint (>=3.3.9,<4.0.0)"]
+test = ["mypy (>=1.18.2,<2.0.0)", "pytest (>=8.4.2,<9.0.0)"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
