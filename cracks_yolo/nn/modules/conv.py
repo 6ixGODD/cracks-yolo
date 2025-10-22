@@ -9,6 +9,8 @@ import torch.nn.functional as F
 from ultralytics.nn.modules import Bottleneck
 from ultralytics.nn.modules import C3
 
+from cracks_yolo.helpers.inject import register_to_ultralytics
+
 
 def autopad(k: int | t.List[int],
             p: int | t.List[int] | None = None,
@@ -39,6 +41,7 @@ def autopad(k: int | t.List[int],
     return p
 
 
+@register_to_ultralytics
 class ConvAWS2d(nn.Conv2d):
     """Adaptive Weight Standardization (AWS) Convolution.
 
@@ -102,7 +105,7 @@ class ConvAWS2d(nn.Conv2d):
                                                              keepdim=True).mean(dim=3,
                                                                                 keepdim=True))
         # Center the weights (zero mean)
-        weight -= weight_mean
+        weight = weight - weight_mean  # noqa
 
         # Compute standard deviation for each output channel (flatten spatial + channel dims)
         std = torch.sqrt(weight.view(weight.size(0), -1).var(dim=1) + 1e-5).view(-1, 1, 1, 1)
@@ -175,6 +178,7 @@ class ConvAWS2d(nn.Conv2d):
         self.weight_gamma.data.copy_(std)
 
 
+@register_to_ultralytics
 class SAConv2d(ConvAWS2d):
     """Switchable Atrous Convolution (SAC).
 
@@ -357,6 +361,7 @@ class SAConv2d(ConvAWS2d):
 #     """
 
 
+@register_to_ultralytics
 class BottleneckSAC(Bottleneck):
     """Bottleneck block with Switchable Atrous Convolution (SAC).
 
@@ -437,6 +442,7 @@ class BottleneckSAC(Bottleneck):
 #     """
 
 
+@register_to_ultralytics
 class C3SAC(C3):
     """CSP Bottleneck with 3 convolutions using Switchable Atrous Convolution.
 
