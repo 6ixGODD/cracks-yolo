@@ -5,16 +5,18 @@ import typing as t
 import torch
 import torch.nn as nn
 import torch.nn.common_types as ct
-import torch.nn.functional as F
-from ultralytics.nn.modules import Bottleneck
+import torch.nn.functional as F  # noqa: N812
 from ultralytics.nn.modules import C3
+from ultralytics.nn.modules import Bottleneck
 
 from cracks_yolo.helpers.inject import register_to_ultralytics
 
 
-def autopad(k: int | t.List[int],
-            p: int | t.List[int] | None = None,
-            d: int = 1) -> int | t.List[int]:
+def autopad(
+    k: int | list[int],
+    p: int | list[int] | None = None,
+    d: int = 1,
+) -> int | list[int]:
     """Automatically calculates padding to maintain 'same' output shape for
     convolutions. Adjusts for optional dilation to ensure output size matches
     input size.
@@ -53,15 +55,17 @@ class ConvAWS2d(nn.Conv2d):
         "Weight Standardization" - Normalizes weights instead of activations.
     """
 
-    def __init__(self,
-                 in_channels: int,
-                 out_channels: int,
-                 kernel_size: ct._size_2_t,
-                 stride: ct._size_2_t = 1,
-                 padding: str | ct._size_2_t = 0,
-                 dilation: ct._size_2_t = 1,
-                 groups: int = 1,
-                 bias: bool = True) -> None:
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: ct._size_2_t,
+        stride: ct._size_2_t = 1,
+        padding: str | ct._size_2_t = 0,
+        dilation: ct._size_2_t = 1,
+        groups: int = 1,
+        bias: bool = True,
+    ):
         """Initializes AWS convolution with learnable scale (gamma) and shift
         (beta) parameters.
 
@@ -76,14 +80,16 @@ class ConvAWS2d(nn.Conv2d):
                 Defaults to 1.
             bias: If True, adds a learnable bias. Defaults to True.
         """
-        super().__init__(in_channels,
-                         out_channels,
-                         kernel_size,
-                         stride=stride,
-                         padding=padding,
-                         dilation=dilation,
-                         groups=groups,
-                         bias=bias)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+        )
         # Learnable scale parameter (gamma) for each output channel, initialized to 1
         self.register_buffer("weight_gamma", torch.ones(self.out_channels, 1, 1, 1))
         # Learnable shift parameter (beta) for each output channel, initialized to 0
@@ -101,11 +107,11 @@ class ConvAWS2d(nn.Conv2d):
             Standardized and scaled weights.
         """
         # Compute mean across spatial and input channel dimensions for each output channel
-        weight_mean = (weight.mean(dim=1, keepdim=True).mean(dim=2,
-                                                             keepdim=True).mean(dim=3,
-                                                                                keepdim=True))
+        weight_mean = (
+            weight.mean(dim=1, keepdim=True).mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
+        )
         # Center the weights (zero mean)
-        weight = weight - weight_mean  # noqa
+        weight = weight - weight_mean
 
         # Compute standard deviation for each output channel (flatten spatial + channel dims)
         std = torch.sqrt(weight.view(weight.size(0), -1).var(dim=1) + 1e-5).view(-1, 1, 1, 1)
@@ -113,8 +119,7 @@ class ConvAWS2d(nn.Conv2d):
         weight /= std
 
         # Apply learnable affine transformation: scale and shift
-        weight = self.weight_gamma * weight + self.weight_beta
-        return weight
+        return self.weight_gamma * weight + self.weight_beta
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass with weight standardization applied on-the-fly.
@@ -130,10 +135,16 @@ class ConvAWS2d(nn.Conv2d):
         # Perform convolution with standardized weights (bias=None handled separately)
         return super()._conv_forward(x, weight, None)
 
-    def _load_from_state_dict(self, state_dict: t.Dict[str, torch.Tensor], prefix: str,
-                              local_metadata: t.Dict[str, t.Any], strict: bool,
-                              missing_keys: t.List[str], unexpected_keys: t.List[str],
-                              error_msgs: t.List[str]) -> None:
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, torch.Tensor],
+        prefix: str,
+        local_metadata: dict[str, t.Any],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
         """Custom state dict loading to initialize gamma/beta from existing
         weights if needed. This ensures compatibility when loading weights
         trained without AWS.
@@ -157,8 +168,9 @@ class ConvAWS2d(nn.Conv2d):
         self.weight_gamma.data.fill_(-1)
 
         # Load state dict normally
-        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys,
-                                      unexpected_keys, error_msgs)
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
+        )
 
         # If gamma was successfully loaded (mean > 0), we're done
         if self.weight_gamma.data.mean() > 0:
@@ -168,9 +180,11 @@ class ConvAWS2d(nn.Conv2d):
         weight = self.weight.data
 
         # Compute mean for beta initialization
-        weight_mean = weight.data.mean(dim=1, keepdim=True).mean(dim=2,
-                                                                 keepdim=True).mean(dim=3,
-                                                                                    keepdim=True)
+        weight_mean = (
+            weight.data.mean(dim=1, keepdim=True)
+            .mean(dim=2, keepdim=True)
+            .mean(dim=3, keepdim=True)
+        )
         self.weight_beta.data.copy_(weight_mean)
 
         # Compute std for gamma initialization
@@ -203,16 +217,18 @@ class SAConv2d(ConvAWS2d):
 
     default_act = nn.SiLU()  # SiLU (Swish) activation
 
-    def __init__(self,
-                 in_channels: int,
-                 out_channels: int,
-                 kernel_size: int = 3,
-                 s: int = 1,
-                 p: int | None = None,
-                 g: int = 1,
-                 d: int = 1,
-                 act: bool | nn.Module = True,
-                 bias: bool = True) -> None:
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        s: int = 1,
+        p: int | None = None,
+        g: int = 1,
+        d: int = 1,
+        act: bool | nn.Module = True,
+        bias: bool = True,
+    ):
         """Initializes Switchable Atrous Convolution with context modules and
         switching mechanism.
 
@@ -228,14 +244,16 @@ class SAConv2d(ConvAWS2d):
                 or provide custom nn.Module. Defaults to True.
             bias: Whether to use bias in convolution. Defaults to True.
         """
-        super().__init__(in_channels,
-                         out_channels,
-                         kernel_size,
-                         stride=s,
-                         padding=autopad(kernel_size, p, d),
-                         dilation=d,
-                         groups=g,
-                         bias=bias)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=s,
+            padding=autopad(kernel_size, p, d),
+            dilation=d,
+            groups=g,
+            bias=bias,
+        )
 
         # ============ Switching Mechanism ============
         # 1x1 conv that outputs a scalar per spatial location (acts as attention weight)
@@ -259,17 +277,21 @@ class SAConv2d(ConvAWS2d):
 
         # Post-context: Adds global context after convolution
         # 1x1 conv initialized to zero (identity at start of training)
-        self.post_context = nn.Conv2d(self.out_channels,
-                                      self.out_channels,
-                                      kernel_size=1,
-                                      bias=True)
+        self.post_context = nn.Conv2d(
+            self.out_channels, self.out_channels, kernel_size=1, bias=True
+        )
         self.post_context.weight.data.fill_(0)
         self.post_context.bias.data.fill_(0)
 
         # ============ Normalization and Activation ============
         self.bn = nn.BatchNorm2d(out_channels)
-        self.act = (self.default_act
-                    if act is True else act if isinstance(act, nn.Module) else nn.Identity())
+        self.act = (
+            self.default_act
+            if act is True
+            else act
+            if isinstance(act, nn.Module)
+            else nn.Identity()
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass implementing switchable atrous convolution with context.
@@ -372,13 +394,15 @@ class BottleneckSAC(Bottleneck):
     Inherits from ultralytics.nn.modules.Bottleneck and overrides cv2 with SAC.
     """
 
-    def __init__(self,
-                 c1: int,
-                 c2: int,
-                 shortcut: bool = True,
-                 g: int = 1,
-                 k: tuple[int, int] = (1, 3),
-                 e: float = 0.5) -> None:
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        shortcut: bool = True,
+        g: int = 1,
+        k: tuple[int, int] = (1, 3),
+        e: float = 0.5,
+    ):
         """Initializes bottleneck layer with SAC for adaptive receptive fields.
 
         Args:
@@ -401,7 +425,7 @@ class BottleneckSAC(Bottleneck):
             c2,  # Output channels
             k[1],  # Kernel size (typically 3)
             1,  # Stride
-            g=g  # Groups
+            g=g,  # Groups
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -455,13 +479,15 @@ class C3SAC(C3):
     sequence (self.m) with BottleneckSAC blocks.
     """
 
-    def __init__(self,
-                 c1: int,
-                 c2: int,
-                 n: int = 1,
-                 shortcut: bool = True,
-                 g: int = 1,
-                 e: float = 0.5) -> None:
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        n: int = 1,
+        shortcut: bool = True,
+        g: int = 1,
+        e: float = 0.5,
+    ):
         """Initializes CSP Bottleneck with SAC blocks for adaptive receptive
         fields.
 

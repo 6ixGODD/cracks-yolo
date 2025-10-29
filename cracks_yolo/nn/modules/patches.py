@@ -4,23 +4,29 @@ import contextlib
 
 import torch.nn
 import ultralytics.nn.modules
+from ultralytics.nn.modules import AIFI
+from ultralytics.nn.modules import C1
+from ultralytics.nn.modules import C2
+from ultralytics.nn.modules import C2PSA
+from ultralytics.nn.modules import C3
+from ultralytics.nn.modules import C3TR
+from ultralytics.nn.modules import ELAN1
+from ultralytics.nn.modules import OBB
+from ultralytics.nn.modules import PSA
+from ultralytics.nn.modules import SPP
+from ultralytics.nn.modules import SPPELAN
+from ultralytics.nn.modules import SPPF
 from ultralytics.nn.modules import A2C2f
 from ultralytics.nn.modules import AConv
 from ultralytics.nn.modules import ADown
-from ultralytics.nn.modules import AIFI
 from ultralytics.nn.modules import Bottleneck
 from ultralytics.nn.modules import BottleneckCSP
-from ultralytics.nn.modules import C1
-from ultralytics.nn.modules import C2
 from ultralytics.nn.modules import C2f
 from ultralytics.nn.modules import C2fAttn
 from ultralytics.nn.modules import C2fCIB
 from ultralytics.nn.modules import C2fPSA
-from ultralytics.nn.modules import C2PSA
-from ultralytics.nn.modules import C3
 from ultralytics.nn.modules import C3Ghost
 from ultralytics.nn.modules import C3k2
-from ultralytics.nn.modules import C3TR
 from ultralytics.nn.modules import C3x
 from ultralytics.nn.modules import CBFuse
 from ultralytics.nn.modules import CBLinear
@@ -31,7 +37,6 @@ from ultralytics.nn.modules import ConvTranspose
 from ultralytics.nn.modules import Detect
 from ultralytics.nn.modules import DWConv
 from ultralytics.nn.modules import DWConvTranspose2d
-from ultralytics.nn.modules import ELAN1
 from ultralytics.nn.modules import Focus
 from ultralytics.nn.modules import GhostBottleneck
 from ultralytics.nn.modules import GhostConv
@@ -39,26 +44,21 @@ from ultralytics.nn.modules import HGBlock
 from ultralytics.nn.modules import HGStem
 from ultralytics.nn.modules import ImagePoolingAttn
 from ultralytics.nn.modules import Index
-from ultralytics.nn.modules import OBB
 from ultralytics.nn.modules import Pose
-from ultralytics.nn.modules import PSA
 from ultralytics.nn.modules import RepC3
 from ultralytics.nn.modules import RepNCSPELAN4
 from ultralytics.nn.modules import ResNetLayer
 from ultralytics.nn.modules import RTDETRDecoder
 from ultralytics.nn.modules import SCDown
 from ultralytics.nn.modules import Segment
-from ultralytics.nn.modules import SPP
-from ultralytics.nn.modules import SPPELAN
-from ultralytics.nn.modules import SPPF
 from ultralytics.nn.modules import TorchVision
-from ultralytics.nn.modules import v10Detect
 from ultralytics.nn.modules import WorldDetect
 from ultralytics.nn.modules import YOLOEDetect
 from ultralytics.nn.modules import YOLOESegment
+from ultralytics.nn.modules import v10Detect
 import ultralytics.nn.tasks
-from ultralytics.utils import colorstr
 from ultralytics.utils import LOGGER
+from ultralytics.utils import colorstr
 from ultralytics.utils.ops import make_divisible
 
 from cracks_yolo.nn.modules import C3SAC
@@ -84,17 +84,19 @@ def parse_model(d, ch, verbose=True):
     max_channels = float("inf")
     nc, act, scales = (d.get(x) for x in ("nc", "activation", "scales"))
     depth, width, kpt_shape = (
-        d.get(x, 1.0) for x in ("depth_multiple", "width_multiple", "kpt_shape"))
+        d.get(x, 1.0) for x in ("depth_multiple", "width_multiple", "kpt_shape")
+    )
     scale = d.get("scale")
     if scales:
         if not scale:
-            scale = tuple(scales.keys())[0]
+            scale = next(iter(scales.keys()))
             LOGGER.warning(f"no model scale passed. Assuming scale='{scale}'.")
         depth, width, max_channels = scales[scale]
 
     if act:
         Conv.default_act = eval(
-            act)  # redefine default activation, i.e. Conv.default_act = torch.nn.SiLU()
+            act
+        )  # redefine default activation, i.e. Conv.default_act = torch.nn.SiLU()
         if verbose:
             LOGGER.info(f"{colorstr('activation:')} {act}")  # print
 
@@ -160,9 +162,13 @@ def parse_model(d, ch, verbose=True):
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
-        m = (getattr(torch.nn, m[3:]) if "nn." in m else getattr(
-            __import__("torchvision").ops, m[16:]) if "torchvision.ops." in m else globals()[m]
-            )  # get module
+        m = (
+            getattr(torch.nn, m[3:])
+            if "nn." in m
+            else getattr(__import__("torchvision").ops, m[16:])
+            if "torchvision.ops." in m
+            else globals()[m]
+        )  # get module
         for j, a in enumerate(args):
             if isinstance(a, str):
                 with contextlib.suppress(ValueError):
@@ -175,8 +181,10 @@ def parse_model(d, ch, verbose=True):
             if m is C2fAttn:  # set 1) embed channels and 2) num heads
                 args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)
                 args[2] = int(
-                    max(round(min(args[2], max_channels // 2 // 32)) *
-                        width, 1) if args[2] > 1 else args[2])
+                    max(round(min(args[2], max_channels // 2 // 32)) * width, 1)
+                    if args[2] > 1
+                    else args[2]
+                )
 
             args = [c1, c2, *args[1:]]
             if m in repeat_modules:
@@ -207,8 +215,15 @@ def parse_model(d, ch, verbose=True):
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
         elif m in frozenset({
-                Detect, WorldDetect, YOLOEDetect, Segment, YOLOESegment, Pose, OBB,
-                ImagePoolingAttn, v10Detect
+            Detect,
+            WorldDetect,
+            YOLOEDetect,
+            Segment,
+            YOLOESegment,
+            Pose,
+            OBB,
+            ImagePoolingAttn,
+            v10Detect,
         }):
             args.append([ch[x] for x in f])
             if m is Segment or m is YOLOESegment:
@@ -235,9 +250,10 @@ def parse_model(d, ch, verbose=True):
         m_.np = sum(x.numel() for x in m_.parameters())  # number params
         m_.i, m_.f, m_.type = i, f, t  # attach index, 'from' index, type
         if verbose:
-            LOGGER.info(f"{i:>3}{str(f):>20}{n_:>3}{m_.np:10.0f}  {t:<45}{str(args):<30}")  # print
+            LOGGER.info(f"{i:>3}{f!s:>20}{n_:>3}{m_.np:10.0f}  {t:<45}{args!s:<30}")  # print
         save.extend(
-            x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
+            x % i for x in ([f] if isinstance(f, int) else f) if x != -1
+        )  # append to savelist
         layers.append(m_)
         if i == 0:
             ch = []
