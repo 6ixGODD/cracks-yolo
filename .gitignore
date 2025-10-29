@@ -87,3 +87,6 @@ dmypy.json
 # LSP config files
 pyrightconfig.json
 
+# Chore/Experimental code
+.chore/
+.experimental/
