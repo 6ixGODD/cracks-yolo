@@ -5,7 +5,6 @@ import typing as t
 import torch
 import torch.nn as nn
 import torch.nn.common_types as ct
-import torch.nn.functional as F  # noqa: N812
 from ultralytics.nn.modules import C3
 from ultralytics.nn.modules import Bottleneck
 
@@ -194,28 +193,7 @@ class ConvAWS2d(nn.Conv2d):
 
 @register_to_ultralytics
 class SAConv2d(ConvAWS2d):
-    """Switchable Atrous Convolution (SAC).
-
-    Dynamically switches between two convolution branches with different
-    receptive fields:
-    - Small receptive field: Standard convolution (dilation=d)
-    - Large receptive field: Dilated convolution (dilation=3*d)
-
-    The switch is learned based on input content, allowing the network to
-    adaptively select the appropriate receptive field for different spatial
-    contexts.
-
-    Also includes:
-    - Pre-context: Global context before convolution
-    - Post-context: Global context after convolution
-    - Weight standardization (inherited from ConvAWS2d)
-
-    Reference:
-        "Detectors: Detecting Objects with Recursive Feature Pyramid and
-        Switchable Atrous Convolution"
-    """
-
-    default_act = nn.SiLU()  # SiLU (Swish) activation
+    default_act = nn.SiLU()  # Swish activation
 
     def __init__(
         self,
@@ -229,21 +207,6 @@ class SAConv2d(ConvAWS2d):
         act: bool | nn.Module = True,
         bias: bool = True,
     ):
-        """Initializes Switchable Atrous Convolution with context modules and
-        switching mechanism.
-
-        Args:
-            in_channels: Number of input channels.
-            out_channels: Number of output channels.
-            kernel_size: Kernel size. Defaults to 3.
-            s: Stride. Defaults to 1.
-            p: Padding. If None, auto-calculated. Defaults to None.
-            g: Groups for grouped convolution. Defaults to 1.
-            d: Base dilation rate. Defaults to 1.
-            act: Activation function. True uses SiLU, False/None uses Identity,
-                or provide custom nn.Module. Defaults to True.
-            bias: Whether to use bias in convolution. Defaults to True.
-        """
         super().__init__(
             in_channels,
             out_channels,
@@ -254,36 +217,22 @@ class SAConv2d(ConvAWS2d):
             groups=g,
             bias=bias,
         )
-
-        # ============ Switching Mechanism ============
-        # 1x1 conv that outputs a scalar per spatial location (acts as attention weight)
-        # Initialized to output 1.0 everywhere (favoring small receptive field initially)
-        self.switch = nn.Conv2d(self.in_channels, 1, kernel_size=1, stride=s, bias=True)
-        self.switch.weight.data.fill_(0)  # Weight=0 makes output depend only on bias
-        self.switch.bias.data.fill_(1)  # Bias=1 means switch starts at 1.0 (small RF)
-
-        # ============ Dual Receptive Field Weights ============
-        # weight_diff: learnable difference between small and large receptive field kernels
-        # Large kernel = small kernel + weight_diff
-        self.weight_diff = nn.Parameter(torch.Tensor(self.weight.size()))
-        self.weight_diff.data.zero_()  # Initially, both kernels are identical
-
-        # ============ Context Modules ============
-        # Pre-context: Adds global context (via global pooling) before convolution
-        # 1x1 conv initialized to zero (identity at start of training)
-        self.pre_context = nn.Conv2d(self.in_channels, self.in_channels, kernel_size=1, bias=True)
+        self.switch = torch.nn.Conv2d(self.in_channels, 1, kernel_size=1, stride=s, bias=True)
+        self.switch.weight.data.fill_(0)
+        self.switch.bias.data.fill_(1)
+        self.weight_diff = torch.nn.Parameter(torch.Tensor(self.weight.size()))
+        self.weight_diff.data.zero_()
+        self.pre_context = torch.nn.Conv2d(
+            self.in_channels, self.in_channels, kernel_size=1, bias=True
+        )
         self.pre_context.weight.data.fill_(0)
         self.pre_context.bias.data.fill_(0)
-
-        # Post-context: Adds global context after convolution
-        # 1x1 conv initialized to zero (identity at start of training)
-        self.post_context = nn.Conv2d(
+        self.post_context = torch.nn.Conv2d(
             self.out_channels, self.out_channels, kernel_size=1, bias=True
         )
         self.post_context.weight.data.fill_(0)
         self.post_context.bias.data.fill_(0)
 
-        # ============ Normalization and Activation ============
         self.bn = nn.BatchNorm2d(out_channels)
         self.act = (
             self.default_act
@@ -293,74 +242,33 @@ class SAConv2d(ConvAWS2d):
             else nn.Identity()
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass implementing switchable atrous convolution with context.
-
-        Process:
-            1. Pre-context: Add global context to input
-            2. Compute switch weights based on local average
-            3. Compute small receptive field output (standard dilation)
-            4. Compute large receptive field output (3x dilation)
-            5. Interpolate between outputs using switch weights
-            6. Post-context: Add global context to output
-            7. Apply batch norm and activation
-
-        Args:
-            x: Input tensor of shape (B, C_in, H, W).
-
-        Returns:
-            Output tensor of shape (B, C_out, H, W).
-        """
-        # ============ Step 1: Pre-context ============
-        # Global average pooling to get channel-wise global information
-        avg_x = F.adaptive_avg_pool2d(x, output_size=1)  # (B, C, 1, 1)
-        # Transform global context
-        avg_x = self.pre_context(avg_x)  # (B, C, 1, 1)
-        # Broadcast and add to input (adds global context to every spatial location)
-        avg_x = avg_x.expand_as(x)  # (B, C, H, W)
+    def forward(self, x):
+        # pre-context
+        avg_x = torch.nn.functional.adaptive_avg_pool2d(x, output_size=1)
+        avg_x = self.pre_context(avg_x)
+        avg_x = avg_x.expand_as(x)
         x = x + avg_x
-
-        # ============ Step 2: Compute Switch Weights ============
-        # Compute local average using 5x5 window (reflects local spatial context)
-        avg_x = F.pad(x, pad=(2, 2, 2, 2), mode="reflect")  # Pad to maintain size
-        avg_x = F.avg_pool2d(avg_x, kernel_size=5, stride=1, padding=0)  # (B, C, H, W)
-        # Switch values in [0, 1] range (though not explicitly constrained)
-        switch = self.switch(avg_x)  # (B, 1, H, W)
-
-        # ============ Step 3: Small Receptive Field Branch ============
-        # Use standardized base weights with original dilation
+        # switch
+        avg_x = torch.nn.functional.pad(x, pad=(2, 2, 2, 2), mode="reflect")
+        avg_x = torch.nn.functional.avg_pool2d(avg_x, kernel_size=5, stride=1, padding=0)
+        switch = self.switch(avg_x)
+        # sac
         weight = self._get_weight(self.weight)
-        out_s = super()._conv_forward(x, weight, None)  # Small RF output
-
-        # ============ Step 4: Large Receptive Field Branch ============
-        # Temporarily modify padding and dilation (3x larger)
+        out_s = super()._conv_forward(x, weight, None)
         ori_p = self.padding
         ori_d = self.dilation
-        self.padding = tuple(3 * p for p in self.padding)  # 3x padding
-        self.dilation = tuple(3 * d for d in self.dilation)  # 3x dilation
-
-        # Add weight difference to create large RF kernel
-        weight += self.weight_diff
-        out_l = super()._conv_forward(x, weight, None)  # Large RF output
-
-        # Restore original padding and dilation
+        self.padding = tuple(3 * p for p in self.padding)
+        self.dilation = tuple(3 * d for d in self.dilation)
+        weight = weight + self.weight_diff
+        out_l = super()._conv_forward(x, weight, None)
+        out = switch * out_s + (1 - switch) * out_l
         self.padding = ori_p
         self.dilation = ori_d
-
-        # ============ Step 5: Interpolate Between Branches ============
-        # Weighted combination: switch=1 → small RF, switch=0 → large RF
-        out = switch * out_s + (1 - switch) * out_l
-
-        # ============ Step 6: Post-context ============
-        # Global average pooling on output
-        avg_x = F.adaptive_avg_pool2d(out, output_size=1)  # (B, C_out, 1, 1)
-        # Transform global context
+        # post-context
+        avg_x = torch.nn.functional.adaptive_avg_pool2d(out, output_size=1)
         avg_x = self.post_context(avg_x)
-        # Broadcast and add (adds global output context)
         avg_x = avg_x.expand_as(out)
         out = out + avg_x
-
-        # ============ Step 7: Normalize and Activate ============
         return self.act(self.bn(out))
 
 
