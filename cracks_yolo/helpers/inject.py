@@ -9,12 +9,17 @@ import ultralytics.nn.tasks
 C = t.TypeVar("C", bound=type[torch.nn.Module])
 
 
+_REGISTERED = set()
+
+
 def register_to_ultralytics(cls: C) -> C:
     module_name = cls.__name__
-    setattr(ultralytics.nn.modules, module_name, cls)  # register to ultralytics.nn.modules
-    if module_name not in ultralytics.nn.modules.__all__:
+    if module_name in _REGISTERED:
+        return cls  # already registered, skip
+
+    _REGISTERED.add(module_name)
+    setattr(ultralytics.nn.modules, module_name, cls)
+    if module_name not in getattr(ultralytics.nn.modules, "__all__", ()):
         ultralytics.nn.modules.__all__ += (module_name,)
-
-    setattr(ultralytics.nn.tasks, module_name, cls)  # register to ultralytics.nn.tasks
-
+    setattr(ultralytics.nn.tasks, module_name, cls)
     return cls
