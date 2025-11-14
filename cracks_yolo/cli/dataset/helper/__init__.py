@@ -243,3 +243,117 @@ def visualize_dataset(
                     display.info(f"  {i}/{num_to_sample}: {sample_path.name}")
                 except Exception as e:
                     display.warning(f"  {i}/{num_to_sample}: Failed - {e}")
+
+
+def load_dataset_info(
+    input_path: str | os.PathLike[str],
+    format: t.Literal["coco", "yolo"],
+    splits: list[t.Literal["train", "val", "test"]] | None = None,
+) -> dict[str, Dataset]:
+    """Load dataset(s) for info display, potentially multiple splits.
+
+    Args:
+        input_path: Path to dataset
+        format: Dataset format
+        splits: Specific splits to load, or None for all available
+
+    Returns:
+        Dict mapping split names to Dataset objects
+    """
+    from cracks_yolo.dataset.loader import load_coco
+    from cracks_yolo.dataset.loader import load_yolo
+
+    path = pathlib.Path(input_path)
+
+    if not path.exists():
+        raise DatasetNotFoundError(str(input_path))
+
+    datasets = {}
+
+    try:
+        if format == "coco":
+            # For COCO, look for annotations_<split>.json files
+            if not path.is_dir():
+                # Single annotation file, treat as single split
+                dataset = load_coco(input_path)
+                split_name = path.stem.replace("annotations_", "") or "dataset"
+                datasets[split_name] = dataset
+            else:
+                # Directory, look for split files
+                available_splits = []
+
+                # Determine which splits to load
+                if splits is None:
+                    # Auto-detect available splits
+                    for split in ["train", "val", "test"]:
+                        ann_file = path / f"annotations_{split}.json"
+                        if ann_file.exists():
+                            available_splits.append(split)
+
+                    if not available_splits:
+                        # No split files found, look for any annotations*.json
+                        ann_files = list(path.glob("annotations*.json"))
+                        if ann_files:
+                            # Use the first one
+                            dataset = load_coco(ann_files[0])
+                            datasets["dataset"] = dataset
+                        else:
+                            raise DatasetNotFoundError(f"No annotation files found in {input_path}")
+                else:
+                    available_splits = splits
+
+                # Load each split
+                for split in available_splits:
+                    ann_file = path / f"annotations_{split}.json"
+                    if ann_file.exists():
+                        dataset = load_coco(ann_file, name=f"{path.name}_{split}")
+                        datasets[split] = dataset
+                    else:
+                        display.warning(f"Annotation file not found for {split} split: {ann_file}")
+
+        elif format == "yolo":
+            if not path.is_dir():
+                raise DatasetFormatError(format, "Expected dataset directory")
+
+            if not (path / "data.yaml").exists():
+                raise DatasetFormatError(format, "data.yaml not found")
+
+            # For YOLO, load specified splits or all available
+            if splits is None:
+                # Load all available splits
+                available_splits = []
+                for split in ["train", "val", "test"]:
+                    if (path / "images" / split).exists():
+                        available_splits.append(split)
+
+                if not available_splits:
+                    raise DatasetFormatError(
+                        format, f"No split directories found in {input_path}/images"
+                    )
+
+                # Load each split separately
+                for split in available_splits:
+                    dataset = load_yolo(input_path, splits=split, name=f"{path.name}_{split}")
+                    datasets[split] = dataset
+            else:
+                # Load specific splits
+                for split in splits:
+                    if not (path / "images" / str(split)).exists():
+                        display.warning(f"Split directory not found: {split}")
+                        continue
+
+                    dataset = load_yolo(input_path, splits=split, name=f"{path.name}_{split}")
+                    datasets[split] = dataset
+
+        else:
+            raise DatasetFormatError(format)
+
+        if not datasets:
+            raise DatasetLoadError("No datasets loaded")
+
+        return datasets
+
+    except (DatasetNotFoundError, DatasetFormatError):
+        raise
+    except Exception as e:
+        raise DatasetLoadError(str(e)) from e
