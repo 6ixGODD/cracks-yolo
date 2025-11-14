@@ -151,7 +151,9 @@ def load_coco(
 
 def load_yolo(
     yolo_dir: str | os.PathLike[str],
-    split: t.Literal["train", "val", "test"] = "train",
+    splits: t.Literal["train", "val", "test"]
+    | list[t.Literal["train", "val", "test"]]
+    | None = None,
     yaml_file: str = "data.yaml",
     name: str | None = None,
 ) -> Dataset:
@@ -171,9 +173,12 @@ def load_yolo(
 
     Args:
         yolo_dir: Path to YOLOv5 root directory
-        split: Which split to load (train/val/test)
+        splits: Which split(s) to load. Can be:
+            - None: Load all available splits (train, val, test)
+            - Single split: "train", "val", or "test"
+            - List of splits: ["train", "val"]
         yaml_file: Name of YAML configuration file
-        name: Optional dataset name (default: use yolo_dir name + split)
+        name: Optional dataset name (default: use yolo_dir name)
 
     Returns:
         Loaded Dataset instance
@@ -188,10 +193,10 @@ def load_yolo(
     with yaml_path.open(mode="r") as f:
         yaml_config = yaml.safe_load(f)
 
-    dataset_name = name or f"{yolo_dir.name}_{split}"
+    dataset_name = name or yolo_dir.name
     dataset = Dataset(name=dataset_name)
 
-    logger.info(f"Loading YOLOv5 dataset from {yolo_dir}, split: {split}")
+    logger.info(f"Loading YOLOv5 dataset from {yolo_dir}")
 
     # Load categories
     if "names" in yaml_config:
@@ -210,109 +215,129 @@ def load_yolo(
 
     logger.info(f"Loaded {len(dataset.categories)} categories")
 
-    # Determine paths
-    images_dir = yolo_dir / "images" / split
-    labels_dir = yolo_dir / "labels" / split
+    # Determine which splits to load
+    if splits is None:
+        # Load all available splits
+        splits_to_load = ["train", "val", "test"]
+    elif isinstance(splits, str):
+        splits_to_load = [splits]
+    else:
+        splits_to_load = splits
 
-    if not images_dir.exists():
-        raise FileNotFoundError(f"Images directory not found: {images_dir}")
+    # Load each split
+    total_images = 0
+    total_annotations = 0
 
-    if not labels_dir.exists():
-        logger.warning(f"Labels directory not found: {labels_dir}")
-        labels_dir = None
+    for split in splits_to_load:
+        images_dir = yolo_dir / "images" / split
+        labels_dir = yolo_dir / "labels" / split
 
-    # Load images and annotations
-    image_files = sorted(images_dir.glob("*"))
-    image_files = [
-        f
-        for f in image_files
-        if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"]
-    ]
-
-    images_loaded = 0
-    annotations_loaded = 0
-
-    for img_path in image_files:
-        try:
-            with Image.open(img_path) as img:
-                width, height = img.size
-
-            img_id = str(images_loaded + 1)
-            img_info = ImageInfo(
-                image_id=img_id,
-                file_name=img_path.name,
-                width=width,
-                height=height,
-                path=img_path,
-            )
-            dataset.add_image(img_info, source_name=dataset_name)
-            images_loaded += 1
-
-            # Load corresponding label file
-            if labels_dir is not None:
-                label_path = labels_dir / (img_path.stem + ".txt")
-                if label_path.exists():
-                    with label_path.open(mode="r") as f:
-                        for line_num, line in enumerate(f, 1):
-                            line = line.strip()
-                            if not line:
-                                continue
-
-                            try:
-                                parts = line.split()
-                                if len(parts) != 5:
-                                    logger.warning(
-                                        f"Invalid annotation format in {label_path}:{line_num}"
-                                    )
-                                    continue
-
-                                class_idx = int(parts[0])
-                                cx_norm = float(parts[1])
-                                cy_norm = float(parts[2])
-                                w_norm = float(parts[3])
-                                h_norm = float(parts[4])
-
-                                # Convert normalized coordinates to absolute
-                                cx = cx_norm * width
-                                cy = cy_norm * height
-                                w = w_norm * width
-                                h = h_norm * height
-
-                                bbox = BBox.from_cxcywh(cx, cy, w, h)
-
-                                # Convert 0-indexed to 1-indexed category ID
-                                cat_id = class_idx + 1
-                                cat_name = dataset.get_category_name(cat_id)
-
-                                if cat_name is None:
-                                    logger.warning(
-                                        f"Unknown category ID: {cat_id} in {label_path}:{line_num}"
-                                    )
-                                    continue
-
-                                annotation = Annotation(
-                                    bbox=bbox,
-                                    category_id=cat_id,
-                                    category_name=cat_name,
-                                    image_id=img_id,
-                                    annotation_id=str(annotations_loaded + 1),
-                                    area=bbox.area,
-                                    iscrowd=0,
-                                )
-                                dataset.add_annotation(annotation)
-                                annotations_loaded += 1
-
-                            except (ValueError, IndexError) as e:
-                                logger.warning(
-                                    f"Error parsing annotation in {label_path}:{line_num}: {e}"
-                                )
-                                continue
-
-        except Exception as e:
-            logger.error(f"Error loading image {img_path}: {e}")
+        if not images_dir.exists():
+            logger.warning(f"Images directory not found for {split} split: {images_dir}")
             continue
 
-    logger.info(f"Loaded {images_loaded} images and {annotations_loaded} annotations")
+        if not labels_dir.exists():
+            logger.warning(f"Labels directory not found for {split} split: {labels_dir}")
+            labels_dir = None
+
+        logger.info(f"Loading {split} split...")
+
+        # Load images and annotations
+        image_files = sorted(images_dir.glob("*"))
+        image_files = [
+            f
+            for f in image_files
+            if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"]
+        ]
+
+        split_images = 0
+        split_annotations = 0
+
+        for img_path in image_files:
+            try:
+                with Image.open(img_path) as img:
+                    width, height = img.size
+
+                img_id = str(total_images + 1)
+                img_info = ImageInfo(
+                    image_id=img_id,
+                    file_name=img_path.name,
+                    width=width,
+                    height=height,
+                    path=img_path,
+                )
+                dataset.add_image(img_info, source_name=dataset_name)
+                total_images += 1
+                split_images += 1
+
+                # Load corresponding label file
+                if labels_dir is not None:
+                    label_path = labels_dir / (img_path.stem + ".txt")
+                    if label_path.exists():
+                        with label_path.open(mode="r") as f:
+                            for line_num, line in enumerate(f, 1):
+                                line = line.strip()
+                                if not line:
+                                    continue
+
+                                try:
+                                    parts = line.split()
+                                    if len(parts) != 5:
+                                        logger.warning(
+                                            f"Invalid annotation format in {label_path}:{line_num}"
+                                        )
+                                        continue
+
+                                    class_idx = int(parts[0])
+                                    cx_norm = float(parts[1])
+                                    cy_norm = float(parts[2])
+                                    w_norm = float(parts[3])
+                                    h_norm = float(parts[4])
+
+                                    # Convert normalized coordinates to absolute
+                                    cx = cx_norm * width
+                                    cy = cy_norm * height
+                                    w = w_norm * width
+                                    h = h_norm * height
+
+                                    bbox = BBox.from_cxcywh(cx, cy, w, h)
+
+                                    # Convert 0-indexed to 1-indexed category ID
+                                    cat_id = class_idx + 1
+                                    cat_name = dataset.get_category_name(cat_id)
+
+                                    if cat_name is None:
+                                        logger.warning(
+                                            f"Unknown category ID: {cat_id} in {label_path}:{line_num}"
+                                        )
+                                        continue
+
+                                    annotation = Annotation(
+                                        bbox=bbox,
+                                        category_id=cat_id,
+                                        category_name=cat_name,
+                                        image_id=img_id,
+                                        annotation_id=str(total_annotations + 1),
+                                        area=bbox.area,
+                                        iscrowd=0,
+                                    )
+                                    dataset.add_annotation(annotation)
+                                    total_annotations += 1
+                                    split_annotations += 1
+
+                                except (ValueError, IndexError) as e:
+                                    logger.warning(
+                                        f"Error parsing annotation in {label_path}:{line_num}: {e}"
+                                    )
+                                    continue
+
+            except Exception as e:
+                logger.error(f"Error loading image {img_path}: {e}")
+                continue
+
+        logger.info(f"Loaded {split} split: {split_images} images, {split_annotations} annotations")
+
+    logger.info(f"Total loaded: {total_images} images and {total_annotations} annotations")
 
     return dataset
 
