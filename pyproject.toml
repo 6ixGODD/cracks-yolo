@@ -19,11 +19,8 @@ classifiers = [
 dependencies = [
   "matplotlib>=3.10.7,<4",
   "numpy==2.2.6",
-  #    "ultralytics (>=8.3.208,<9.0.0)",
-  #    "torch (>=2.8.0,<3.0.0)",
-  #    "mmdet (>=3.3.0,<4.0.0)",
-  #    "torchvision (>=0.23.0,<0.24.0)",
-  #    "grad-cam (>=1.5.5,<2.0.0)",
+  "torch>=1.8.0",
+  "torchvision>=0.9.0",
   "pycocotools>=2.0.10,<3",
   "pydantic>=2.12,<3",
   "seaborn>=0.13.2,<0.14",
