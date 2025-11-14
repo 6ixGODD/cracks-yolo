@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import argparse
 import pathlib
-import random
 import typing as t
 
 from cracks_yolo.cli.args import BaseArgs
 from cracks_yolo.cli.helper import display
-from cracks_yolo.dataset import Dataset
 
 if t.TYPE_CHECKING:
     from argparse import _SubParsersAction
@@ -17,42 +15,58 @@ class Args(BaseArgs):
     input: str
     format: t.Literal["coco", "yolo"]
     output: str
-    split: str = "train"
+    splits: list[t.Literal["train", "val", "test"]] | None = None
     samples: int = 5
-    category_dist: bool = True
+    no_category_dist: bool = False
+    show_source_dist: bool = False
+    show_heatmap: bool = False
     seed: int | None = None
 
     def run(self) -> None:
-        from cracks_yolo.cli.dataset.helper import load_dataset
+        from cracks_yolo.cli.dataset.helper import load_dataset_info
+        from cracks_yolo.cli.dataset.helper.visualizer import DatasetVisualizer
 
         try:
             display.header("Dataset Visualization")
 
-            # Load dataset
+            # Load dataset(s)
             with display.loading(f"Loading {self.format.upper()} dataset"):
-                dataset = load_dataset(
+                datasets = load_dataset_info(
                     input_path=self.input,
                     format=self.format,
-                    yolo_splits=self.split if self.format == "yolo" else None,
+                    splits=self.splits,
                 )
 
-            display.success(f"Loaded: {len(dataset)} images, {dataset.num_categories()} categories")
+            total_images = sum(len(ds) for ds in datasets.values())
+            display.success(f"Loaded {len(datasets)} split(s): {total_images} total images")
 
             # Create output directory
             output_dir = pathlib.Path(self.output)
-            output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Visualize
-            visualize_dataset(
-                dataset=dataset,
+            # Initialize visualizer
+            visualizer = DatasetVisualizer(
+                datasets=datasets,
                 output_dir=output_dir,
-                num_samples=self.samples,
-                show_distribution=self.category_dist,
                 seed=self.seed,
             )
 
+            # Generate visualizations
+            display.info("Generating visualizations...")
+
+            outputs = visualizer.visualize_all(
+                num_samples=self.samples,
+                show_distribution=not self.no_category_dist,
+                show_source_dist=self.show_source_dist,
+                show_heatmap=self.show_heatmap,
+            )
+
+            # Display results
+            display.separator()
             display.success("Visualization completed!")
             display.info(f"Output directory: {output_dir}")
+            print("\nGenerated files:")
+            for name, path in outputs.items():
+                display.info(f"  • {name}: {path.name}")
 
         except Exception as e:
             display.error(f"Visualization failed: {e}")
@@ -63,7 +77,7 @@ class Args(BaseArgs):
         parser.add_argument(
             "input",
             type=str,
-            help="Path to dataset",
+            help="Path to dataset (COCO: directory, YOLO: root directory)",
         )
 
         parser.add_argument(
@@ -84,12 +98,12 @@ class Args(BaseArgs):
         )
 
         parser.add_argument(
-            "--split",
+            "--splits",
             "-s",
             type=str,
-            default="train",
+            nargs="+",
             choices=["train", "val", "test"],
-            help="Split to visualize (for YOLO format only)",
+            help="Specific splits to visualize (default: all available)",
         )
 
         parser.add_argument(
@@ -97,7 +111,7 @@ class Args(BaseArgs):
             "-n",
             type=int,
             default=5,
-            help="Number of sample images to visualize (default: 5)",
+            help="Number of sample images per split (default: 5)",
         )
 
         parser.add_argument(
@@ -107,83 +121,40 @@ class Args(BaseArgs):
         )
 
         parser.add_argument(
-            "--seed",
-            type=int,
-            default=None,
-            help="Random seed for sample selection",
+            "--show-source-dist",
+            action="store_true",
+            help="Generate source distribution plot (for merged datasets)",
         )
 
+        parser.add_argument(
+            "--show-heatmap",
+            action="store_true",
+            help="Generate annotation density heatmap",
+        )
 
-def visualize_dataset(
-    dataset: Dataset,
-    output_dir: pathlib.Path,
-    num_samples: int = 5,
-    show_distribution: bool = True,
-    seed: int | None = None,
-) -> None:
-    """Generate visualizations for a dataset.
-
-    Args:
-        dataset: Dataset to visualize
-        output_dir: Output directory
-        num_samples: Number of sample images to visualize
-        show_distribution: Whether to show category distribution
-        seed: Random seed for sample selection
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Visualize category distribution
-    if show_distribution:
-        display.step("Generating category distribution", step=1)
-        dist_path = output_dir / "category_distribution.png"
-
-        with display.loading("Creating distribution chart"):
-            dataset.visualize_category_distribution(
-                figsize=(14, 6),
-                save_path=dist_path,
-            )
-
-        display.success(f"Saved: {dist_path}")
-
-    # Visualize sample images
-    if num_samples > 0:
-        display.step(f"Visualizing {num_samples} sample images", step=2)
-
-        # Select random samples
-        image_ids = list(dataset.images.keys())
-        if seed is not None:
-            random.seed(seed)
-
-        num_to_sample = min(num_samples, len(image_ids))
-        sampled_ids = random.sample(image_ids, num_to_sample)
-
-        for i, img_id in enumerate(sampled_ids, 1):
-            img_info = dataset.get_image(img_id)
-            if img_info and img_info.path:
-                sample_path = output_dir / f"sample_{i:03d}_{img_info.file_name}"
-
-                try:
-                    with display.loading(f"Processing sample {i}/{num_to_sample}"):
-                        dataset.visualize_sample(
-                            image_id=img_id,
-                            figsize=(12, 8),
-                            show_labels=True,
-                            save_path=sample_path,
-                        )
-
-                    display.info(f"  Saved: {sample_path.name}")
-                except Exception as e:
-                    display.warning(f"  Failed to visualize {img_info.file_name}: {e}")
-
-        display.success(f"Visualized {num_to_sample} samples")
+        parser.add_argument(
+            "--seed",
+            type=int,
+            help="Random seed for sample selection",
+        )
 
 
 def register(subparser: _SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparser.add_parser(
         "visualize",
         help="Generate dataset visualizations",
-        description="Create visual representations of dataset including sample images "
-        "and category distribution charts",
+        description="Create comprehensive visual representations of dataset including "
+        "sample images, category distribution, split comparison, and annotation heatmaps",
+        epilog="Examples:\n"
+        "  # Visualize all splits\n"
+        "  cracks-yolo dataset visualize data/coco --format coco -o viz\n\n"
+        "  # Visualize with heatmap and source distribution\n"
+        "  cracks-yolo dataset visualize data/merged --format yolo -o viz \\\n"
+        "    --show-heatmap --show-source-dist\n\n"
+        "  # Visualize specific splits with more samples\n"
+        "  cracks-yolo dataset visualize data/yolo --format yolo -o viz \\\n"
+        "    --splits train val --samples 10",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     Args.build_args(parser)
     parser.set_defaults(func=Args.func)
