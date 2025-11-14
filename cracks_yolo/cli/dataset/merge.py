@@ -22,7 +22,7 @@ class DatasetInput(t.NamedTuple):
 
 
 class Args(BaseArgs):
-    inputs: list[str]
+    inputs: list[list[str]]  # 改成 list[list[str]]
     """Raw input arguments from -i flags."""
 
     output: str
@@ -43,14 +43,7 @@ class Args(BaseArgs):
     fix_duplicates: bool = True
     """Whether to fix duplicate categories."""
 
-    naming: t.Literal[
-        "original",
-        "prefix",
-        "uuid",
-        "uuid_prefix",
-        "sequential",
-        "sequential_prefix",
-    ] = "original"
+    naming: str = "original"
     """File naming strategy."""
 
     train_ratio: float = 0.8
@@ -71,7 +64,7 @@ class Args(BaseArgs):
     no_copy: bool = False
     """Do not copy image files."""
 
-    yolo_splits: list[t.Literal["train", "test", "val"]] | None = None
+    yolo_splits: list[str] | None = None
     """Which splits to load for YOLO datasets (train, val, test)."""
 
     def run(self) -> None:
@@ -104,9 +97,9 @@ class Args(BaseArgs):
                 with display.loading(f"Loading {ds_input.format.upper()} dataset"):
                     dataset = load_dataset(
                         input_path=ds_input.path,
-                        yolo_splits=yolo_splits,
                         format=ds_input.format,
                         name=ds_input.name,
+                        yolo_splits=yolo_splits,
                     )
                     datasets.append(dataset)
 
@@ -167,28 +160,28 @@ class Args(BaseArgs):
 
             # Export merged dataset
             output_path = pathlib.Path(self.output)
-            display.info(f"Exporting to: {output_path}")
 
-            naming_strategy = get_naming_strategy(self.naming)
+            with display.loading(f"Exporting to: {output_path}"):
+                naming_strategy = get_naming_strategy(self.naming)
 
-            # Prepare split ratio
-            split_ratio = None
-            if not self.no_split:
-                split_ratio = SplitRatio(
-                    train=self.train_ratio,
-                    val=self.val_ratio,
-                    test=self.test_ratio,
+                # Prepare split ratio
+                split_ratio = None
+                if not self.no_split:
+                    split_ratio = SplitRatio(
+                        train=self.train_ratio,
+                        val=self.val_ratio,
+                        test=self.test_ratio,
+                    )
+
+                export_dataset(
+                    dataset=merged,
+                    output_dir=output_path,
+                    format=self.output_format,
+                    split_ratio=split_ratio,
+                    naming_strategy=naming_strategy,
+                    seed=self.seed,
+                    copy_images=not self.no_copy,
                 )
-
-            export_dataset(
-                dataset=merged,
-                output_dir=output_path,
-                format=self.output_format,
-                split_ratio=split_ratio,
-                naming_strategy=naming_strategy,
-                seed=self.seed,
-                copy_images=not self.no_copy,
-            )
 
             display.separator()
             display.success("Dataset merge completed successfully!")
@@ -201,52 +194,35 @@ class Args(BaseArgs):
     def _parse_inputs(self) -> list[DatasetInput]:
         """Parse input arguments into DatasetInput objects.
 
-        Expected format: -i <path> <format> [name]
-        Examples:
-            -i ann1.json coco dataset1
-            -i ann2.json coco
-            -i yolo_dir yolo my_yolo
+        inputs is a list of lists: [['path1', 'format1', 'name1'], ['path2', 'format2'], ...]
 
         Returns:
             List of DatasetInput objects
         """
-        inputs = []
-        i = 0
+        dataset_inputs = []
 
-        while i < len(self.inputs):
-            if i + 1 >= len(self.inputs):
+        for input_args in self.inputs:
+            if len(input_args) < 2:
                 raise ValueError(
-                    f"Invalid input specification at position {i}: "
-                    f"expected at least 2 arguments (path and format)"
+                    f"Invalid input specification: {input_args}. "
+                    f"Expected at least 2 arguments (path and format)"
                 )
 
-            path = self.inputs[i]
-            format_str = self.inputs[i + 1]
+            path = input_args[0]
+            format_str = input_args[1]
 
             # Validate format
             if format_str not in ("coco", "yolo"):
-                raise ValueError(
-                    f"Invalid format '{format_str}' at position {i + 1}. Must be 'coco' or 'yolo'"
-                )
+                raise ValueError(f"Invalid format '{format_str}'. Must be 'coco' or 'yolo'")
 
             format = t.cast(t.Literal["coco", "yolo"], format_str)
 
-            # Check if there's a name
-            name = None
-            if i + 2 < len(self.inputs):
-                next_arg = self.inputs[i + 2]
-                # If it's not a valid format and not a path-like string, treat as name
-                if next_arg not in ("coco", "yolo") and not pathlib.Path(next_arg).exists():
-                    name = next_arg
-                    i += 3
-                else:
-                    i += 2
-            else:
-                i += 2
+            # Check if there's a name (3rd argument)
+            name = input_args[2] if len(input_args) >= 3 else None
 
-            inputs.append(DatasetInput(path=path, format=format, name=name))
+            dataset_inputs.append(DatasetInput(path=path, format=format, name=name))
 
-        return inputs
+        return dataset_inputs
 
     @classmethod
     def build_args(cls, parser: argparse.ArgumentParser) -> None:
@@ -257,10 +233,10 @@ class Args(BaseArgs):
             action="append",
             nargs="+",
             required=True,
-            metavar=("PATH", "FORMAT", "NAME"),
-            help="Input dataset: -i <path> <format> [name]. "
+            help="Input dataset: <path> <format> [name]. "
             "Format must be 'coco' or 'yolo'. Name is optional. "
-            "Can be specified multiple times.",
+            "Can be specified multiple times. "
+            "Example: -i data/ann.json coco my_dataset",
         )
 
         parser.add_argument(
@@ -385,17 +361,16 @@ def register(subparser: _SubParsersAction[argparse.ArgumentParser]) -> None:
         "    -i data/coco2/ann.json coco dataset2 \\\n"
         "    -o output/merged \\\n"
         "    --train-ratio 0.7 --val-ratio 0.2 --test-ratio 0.1\n\n"
+        "  # Merge without names\n"
+        "  cracks-yolo dataset merge \\\n"
+        "    -i data/ann1.json coco \\\n"
+        "    -i data/ann2.json coco \\\n"
+        "    -o output/merged\n\n"
         "  # Merge YOLO datasets (all splits)\n"
         "  cracks-yolo dataset merge \\\n"
         "    -i data/yolo1 yolo dataset1 \\\n"
         "    -i data/yolo2 yolo dataset2 \\\n"
-        "    -o output/merged --output-format yolo\n\n"
-        "  # Merge YOLO datasets (specific splits only)\n"
-        "  cracks-yolo dataset merge \\\n"
-        "    -i data/yolo yolo my_yolo \\\n"
-        "    -i data/coco/ann.json coco my_coco \\\n"
-        "    --yolo-splits train val \\\n"
-        "    -o output/merged",
+        "    -o output/merged --output-format yolo",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     Args.build_args(parser)

@@ -62,7 +62,7 @@ def load_dataset(
             if yolo_splits is not None:
                 dataset = load_yolo(
                     input_path,
-                    splits=yolo_splits,
+                    splits=yolo_splits,  # type: ignore
                     name=name,
                 )
             else:
