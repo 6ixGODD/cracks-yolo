@@ -5,7 +5,7 @@ import os
 import sys
 
 
-class AnsiFormatter:
+class ANSI:
     """Enhanced formatter for ANSI color and style formatting in console
     output.
 

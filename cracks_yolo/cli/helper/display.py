@@ -9,7 +9,7 @@ import typing as t
 
 import halo
 
-from cracks_yolo.cli.helper.ansi import AnsiFormatter as Ansi
+from cracks_yolo.cli.helper.ansi import ANSI
 
 # Initialize spinner
 spinner = halo.Halo(spinner="dots")
@@ -34,35 +34,35 @@ class Box:
 
 def success(message: str, /, prefix: str = "✓") -> None:
     """Print a success message."""
-    print(f"{Ansi.success(prefix)} {message}")
+    print(f"{ANSI.success(prefix)} {message}")
 
 
 def error(message: str, /, prefix: str = "✗") -> None:
     """Print an error message."""
-    print(f"{Ansi.error(prefix)} {message}", file=sys.stderr)
+    print(f"{ANSI.error(prefix)} {message}", file=sys.stderr)
 
 
 def warning(message: str, /, prefix: str = "⚠") -> None:
     """Print a warning message."""
-    print(f"{Ansi.warning(prefix)} {message}")
+    print(f"{ANSI.warning(prefix)} {message}")
 
 
 def info(message: str, /, prefix: str = "ℹ") -> None:
     """Print an info message."""
-    print(f"{Ansi.info(prefix)} {message}")
+    print(f"{ANSI.info(prefix)} {message}")
 
 
 def debug(message: str, /, prefix: str = "→") -> None:
     """Print a debug message (dimmed)."""
-    print(Ansi.format(f"{prefix} {message}", Ansi.STYLE.DIM))
+    print(ANSI.format(f"{prefix} {message}", ANSI.STYLE.DIM))
 
 
 def step(message: str, /, step: int | None = None) -> None:
     """Print a step message in a process."""
     if step is not None:
-        prefix = Ansi.format(f"[{step}]", Ansi.FG.CYAN, Ansi.STYLE.BOLD)
+        prefix = ANSI.format(f"[{step}]", ANSI.FG.CYAN, ANSI.STYLE.BOLD)
     else:
-        prefix = Ansi.format("►", Ansi.FG.CYAN)
+        prefix = ANSI.format("►", ANSI.FG.CYAN)
     print(f"{prefix} {message}")
 
 
@@ -83,21 +83,21 @@ def path(
 
     # Determine path type and color
     if path.is_dir():
-        colored_path = Ansi.format(str(path), Ansi.FG.BLUE, Ansi.STYLE.BOLD)
+        colored_path = ANSI.format(str(path), ANSI.FG.BLUE, ANSI.STYLE.BOLD)
         icon = "📁"
     elif path.is_file():
-        colored_path = Ansi.format(str(path), Ansi.FG.CYAN)
+        colored_path = ANSI.format(str(path), ANSI.FG.CYAN)
         icon = "📄"
     else:
-        colored_path = Ansi.format(str(path), Ansi.FG.GRAY)
+        colored_path = ANSI.format(str(path), ANSI.FG.GRAY)
         icon = "📍"
 
     parts = []
     if label:
-        parts.append(Ansi.format(label + ":", Ansi.STYLE.BOLD))
+        parts.append(ANSI.format(label + ":", ANSI.STYLE.BOLD))
 
     if exists is not None:
-        indicator = Ansi.success("✓") if exists else Ansi.error("✗")
+        indicator = ANSI.success("✓") if exists else ANSI.error("✗")
         parts.append(indicator)
 
     parts.append(f"{icon}  {colored_path}")
@@ -106,7 +106,7 @@ def path(
 
 def command(cmd: str, /) -> None:
     """Print a command being executed."""
-    print(Ansi.format(f"$ {cmd}", Ansi.FG.GRAY, Ansi.STYLE.ITALIC))
+    print(ANSI.format(f"$ {cmd}", ANSI.FG.GRAY, ANSI.STYLE.ITALIC))
 
 
 def header(text: str, /, char: str = "═", width: int | None = None) -> None:
@@ -124,22 +124,22 @@ def header(text: str, /, char: str = "═", width: int | None = None) -> None:
     header_line = char * width
 
     print()
-    print(Ansi.format(header_line, Ansi.FG.CYAN))
-    print(Ansi.format(f"{' ' * padding}{text}{' ' * padding}", Ansi.FG.CYAN, Ansi.STYLE.BOLD))
-    print(Ansi.format(header_line, Ansi.FG.CYAN))
+    print(ANSI.format(header_line, ANSI.FG.CYAN))
+    print(ANSI.format(f"{' ' * padding}{text}{' ' * padding}", ANSI.FG.CYAN, ANSI.STYLE.BOLD))
+    print(ANSI.format(header_line, ANSI.FG.CYAN))
     print()
 
 
 def separator(char: str = "─", width: int = 60) -> None:
     """Print a separator line."""
-    print(Ansi.format(char * width, Ansi.FG.GRAY, Ansi.STYLE.DIM))
+    print(ANSI.format(char * width, ANSI.FG.GRAY, ANSI.STYLE.DIM))
 
 
 def table(
     headers: list[str],
     rows: list[list[str]],
     /,
-    colors: list[Ansi.FG | None] | None = None,
+    colors: list[ANSI.FG | None] | None = None,
 ) -> None:
     """Print a formatted table with borders.
 
@@ -168,23 +168,23 @@ def table(
             width = col_widths[i]
             padded = str(cell).ljust(width)
             if is_header:
-                formatted.append(Ansi.format(padded, Ansi.STYLE.BOLD))
+                formatted.append(ANSI.format(padded, ANSI.STYLE.BOLD))
             elif colors[i]:
-                formatted.append(Ansi.format(padded, colors[i]))
+                formatted.append(ANSI.format(padded, colors[i]))
             else:
                 formatted.append(padded)
         return f"{Box.V} {f' {Box.V} '.join(formatted)} {Box.V}"
 
     # Top border
     top = Box.TL + Box.HD.join(Box.H * (w + 2) for w in col_widths) + Box.TR
-    print(Ansi.format(top, Ansi.FG.GRAY))
+    print(ANSI.format(top, ANSI.FG.GRAY))
 
     # Header
     print(format_row(headers, is_header=True))
 
     # Header separator
     sep = Box.VR + Box.X.join(Box.H * (w + 2) for w in col_widths) + Box.VL
-    print(Ansi.format(sep, Ansi.FG.GRAY))
+    print(ANSI.format(sep, ANSI.FG.GRAY))
 
     # Rows
     for row in rows:
@@ -192,14 +192,14 @@ def table(
 
     # Bottom border
     bottom = Box.BL + Box.HU.join(Box.H * (w + 2) for w in col_widths) + Box.BR
-    print(Ansi.format(bottom, Ansi.FG.GRAY))
+    print(ANSI.format(bottom, ANSI.FG.GRAY))
 
 
 def list_items(
     items: list[str],
     /,
     bullet: str = "•",
-    color: Ansi.FG | None = None,
+    color: ANSI.FG | None = None,
     indent: int = 0,
 ) -> None:
     """Print a bulleted list of items.
@@ -211,7 +211,7 @@ def list_items(
         indent: Indentation level
     """
     indent_str = "  " * indent
-    colored_bullet = Ansi.format(bullet, color) if color else bullet
+    colored_bullet = ANSI.format(bullet, color) if color else bullet
 
     for item in items:
         print(f"{indent_str}{colored_bullet} {item}")
@@ -221,7 +221,7 @@ def key_value(
     data: dict[str, t.Any],
     /,
     indent: int = 0,
-    key_color: Ansi.FG = Ansi.FG.CYAN,
+    key_color: ANSI.FG = ANSI.FG.CYAN,
 ) -> None:
     """Print key-value pairs in a formatted style.
 
@@ -237,7 +237,7 @@ def key_value(
     indent_str = "  " * indent
 
     for key, value in data.items():
-        colored_key = Ansi.format(str(key).ljust(max_key_len), key_color, Ansi.STYLE.BOLD)
+        colored_key = ANSI.format(str(key).ljust(max_key_len), key_color, ANSI.STYLE.BOLD)
         print(f"{indent_str}{colored_key} : {value}")
 
 
@@ -261,8 +261,8 @@ def progress_bar(
     percent = current / total if total > 0 else 0
     filled = int(width * percent)
 
-    colored_bar = Ansi.format("█" * filled, Ansi.FG.GREEN) + Ansi.format(
-        "░" * (width - filled), Ansi.FG.GRAY
+    colored_bar = ANSI.format("█" * filled, ANSI.FG.GREEN) + ANSI.format(
+        "░" * (width - filled), ANSI.FG.GRAY
     )
 
     parts = []
@@ -272,7 +272,7 @@ def progress_bar(
 
     if show_percent:
         percent_str = f"{percent * 100:>5.1f}%"
-        parts.append(Ansi.format(percent_str, Ansi.FG.CYAN, Ansi.STYLE.BOLD))
+        parts.append(ANSI.format(percent_str, ANSI.FG.CYAN, ANSI.STYLE.BOLD))
 
     parts.append(f"({current}/{total})")
 
@@ -336,7 +336,7 @@ def section(title: str, /) -> t.Generator[None, None, None]:
     border = Box.H * (width - len(title) - 4)
     header = f"{Box.TL}{Box.H * 2} {title} {border}{Box.TR}"
     print()
-    print(Ansi.format(header, Ansi.FG.CYAN, Ansi.STYLE.BOLD))
+    print(ANSI.format(header, ANSI.FG.CYAN, ANSI.STYLE.BOLD))
     print()
 
     try:
@@ -345,7 +345,7 @@ def section(title: str, /) -> t.Generator[None, None, None]:
         # Print section footer
         footer = Box.BL + Box.H * (width - 2) + Box.BR
         print()
-        print(Ansi.format(footer, Ansi.FG.CYAN))
+        print(ANSI.format(footer, ANSI.FG.CYAN))
         print()
 
 
@@ -360,12 +360,12 @@ def banner(text: str, /, subtitle: str | None = None, version: str | None = None
     width = 70
 
     print()
-    print(Ansi.format(Box.TL + Box.H * (width - 2) + Box.TR, Ansi.FG.CYAN))
+    print(ANSI.format(Box.TL + Box.H * (width - 2) + Box.TR, ANSI.FG.CYAN))
 
     # Main text - centered
     padding = (width - len(text) - 2) // 2
     line = f"{Box.V}{' ' * padding}{text}{' ' * (width - padding - len(text) - 2)}{Box.V}"
-    print(Ansi.format(line, Ansi.FG.CYAN, Ansi.STYLE.BOLD))
+    print(ANSI.format(line, ANSI.FG.CYAN, ANSI.STYLE.BOLD))
 
     # Subtitle
     if subtitle:
@@ -373,16 +373,16 @@ def banner(text: str, /, subtitle: str | None = None, version: str | None = None
         line = (
             f"{Box.V}{' ' * padding}{subtitle}{' ' * (width - padding - len(subtitle) - 2)}{Box.V}"
         )
-        print(Ansi.format(line, Ansi.FG.GRAY))
+        print(ANSI.format(line, ANSI.FG.GRAY))
 
     # Version in bottom right
     if version:
         version_text = f"v{version}"
         padding = width - len(version_text) - 4
         line = f"{Box.V}{' ' * padding}{version_text}  {Box.V}"
-        print(Ansi.format(line, Ansi.FG.GRAY, Ansi.STYLE.DIM))
+        print(ANSI.format(line, ANSI.FG.GRAY, ANSI.STYLE.DIM))
 
-    print(Ansi.format(Box.BL + Box.H * (width - 2) + Box.BR, Ansi.FG.CYAN))
+    print(ANSI.format(Box.BL + Box.H * (width - 2) + Box.BR, ANSI.FG.CYAN))
     print()
 
 
@@ -407,8 +407,8 @@ def tree(data: dict[str, t.Any], /, prefix: str = "") -> None:
             extension = "│   "
 
         # Format and print the key
-        colored_connector = Ansi.format(connector, Ansi.FG.GRAY)
-        colored_key = Ansi.format(str(key), Ansi.FG.CYAN, Ansi.STYLE.BOLD)
+        colored_connector = ANSI.format(connector, ANSI.FG.GRAY)
+        colored_key = ANSI.format(str(key), ANSI.FG.CYAN, ANSI.STYLE.BOLD)
 
         if isinstance(value, dict):
             print(f"{prefix}{colored_connector}{colored_key}")
@@ -417,7 +417,7 @@ def tree(data: dict[str, t.Any], /, prefix: str = "") -> None:
         elif isinstance(value, list):
             print(f"{prefix}{colored_connector}{colored_key}")
             for item in value:
-                item_connector = Ansi.format("    • ", Ansi.FG.GRAY)
+                item_connector = ANSI.format("    • ", ANSI.FG.GRAY)
                 print(f"{prefix}{extension}{item_connector}{item}")
         else:
             print(f"{prefix}{colored_connector}{colored_key}: {value}")
@@ -434,7 +434,7 @@ def confirm(prompt: str, /, default: bool = False) -> bool:
         True if user confirms, False otherwise
     """
     suffix = " [Y/n]" if default else " [y/N]"
-    colored_prompt = Ansi.format(prompt + suffix + " ", Ansi.FG.YELLOW, Ansi.STYLE.BOLD)
+    colored_prompt = ANSI.format(prompt + suffix + " ", ANSI.FG.YELLOW, ANSI.STYLE.BOLD)
 
     while True:
         response = input(colored_prompt).strip().lower()
