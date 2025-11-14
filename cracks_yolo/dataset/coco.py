@@ -80,7 +80,7 @@ class COCODataset(BaseDataset):
                     f"Image paths will be set to None."
                 )
 
-        with annotation_path.open(mode="w") as f:
+        with annotation_path.open(mode="r") as f:
             coco_data = json.load(f)
 
         dataset_name = annotation_path.stem
