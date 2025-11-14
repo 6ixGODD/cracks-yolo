@@ -7,6 +7,8 @@ import pathlib
 import shutil
 import typing as t
 
+import yaml
+
 from cracks_yolo.dataset import BaseDataset
 from cracks_yolo.dataset.types import Annotation
 from cracks_yolo.dataset.types import BBox
@@ -16,188 +18,188 @@ from cracks_yolo.dataset.types import SplitRatio
 logger = logging.getLogger(__name__)
 
 
-class COCODataset(BaseDataset):
-    """COCO format dataset implementation. Supports loading, exporting, and
-    manipulating COCO-style datasets.
+class YOLOv5Dataset(BaseDataset):
+    """YOLOv5 format dataset implementation. Supports loading, exporting, and
+    manipulating YOLOv5-style datasets.
 
     Args:
         name: Dataset name identifier
     """
 
-    __slots__ = (*BaseDataset.__slots__, "info", "licenses")
+    __slots__ = (*BaseDataset.__slots__, "yaml_config")
 
-    def __init__(self, name: str = "coco_dataset") -> None:
+    def __init__(self, name: str = "yolov5_dataset") -> None:
         super().__init__(name)
-        self.info: dict[str, t.Any] = {}
-        self.licenses: list[dict[str, t.Any]] = []
+        self.yaml_config: dict[str, t.Any] = {}
 
     @classmethod
-    def from_coco_file(
+    def from_yolo_dir(
         cls,
-        annotation_path: str | os.PathLike[str],
-        images_dir: str | os.PathLike[str] | None = None,
-    ) -> COCODataset:
-        """Load dataset from COCO annotation file.
+        yolo_dir: str | os.PathLike[str],
+        split: t.Literal["train", "val", "test"] = "train",
+        yaml_file: str = "data.yaml",
+    ) -> YOLOv5Dataset:
+        """Load dataset from YOLOv5 directory structure.
+
+        Expected structure:
+        yolo_dir/
+        ├── data.yaml
+        ├── images/
+        │   ├── train/
+        │   ├── val/
+        │   └── test/
+        └── labels/
+            ├── train/
+            ├── val/
+            └── test/
 
         Args:
-            annotation_path: Path to COCO annotation JSON file
-            images_dir: Optional custom path to images directory.
-                        If None, will try to find images in common locations.
+            yolo_dir: Path to YOLOv5 root directory
+            split: Which split to load (train/val/test)
+            yaml_file: Name of YAML configuration file
 
         Returns:
-            Loaded COCODataset instance
+            Loaded YOLOv5Dataset instance
         """
-        annotation_path = pathlib.Path(annotation_path)
+        yolo_dir = pathlib.Path(yolo_dir)
+        yaml_path = yolo_dir / yaml_file
 
-        if not annotation_path.exists():
-            raise FileNotFoundError(f"Annotation file not found: {annotation_path}")
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"YAML file not found: {yaml_path}")
 
-        # Try to locate images directory
-        if images_dir is not None:
-            images_dir = pathlib.Path(images_dir)
-            if not images_dir.exists():
-                raise FileNotFoundError(f"Images directory not found: {images_dir}")
-        else:
-            # Try common locations
-            possible_locations = [
-                annotation_path.parent / "images",  # Same level as annotation
-                annotation_path.parent.parent / "images",  # One level up
-                annotation_path.parent,  # Annotation and images in same dir
-            ]
+        # Load YAML configuration
+        with yaml_path.open(mode="r") as f:
+            yaml_config = yaml.safe_load(f)
 
-            images_dir = None
-            for loc in possible_locations:
-                if loc.exists() and loc.is_dir():
-                    images_dir = loc
-                    logger.info(f"Found images directory: {images_dir}")
-                    break
+        dataset = cls(name=f"yolov5_{split}")
+        dataset.yaml_config = yaml_config
 
-            if images_dir is None:
-                logger.warning(
-                    f"Could not find images directory near {annotation_path}. "
-                    f"Image paths will be set to None."
-                )
-
-        with annotation_path.open(mode="r") as f:
-            coco_data = json.load(f)
-
-        dataset_name = annotation_path.stem
-        dataset = cls(name=dataset_name)
-
-        dataset.info = coco_data.get("info", {})
-        dataset.licenses = coco_data.get("licenses", [])
-
-        logger.info(f"Loading COCO dataset from {annotation_path}")
+        logger.info(f"Loading YOLOv5 dataset from {yolo_dir}, split: {split}")
 
         # Load categories
-        for cat in coco_data.get("categories", []):
-            dataset.add_category(cat["id"], cat["name"])
+        if "names" in yaml_config:
+            names = yaml_config["names"]
+            if isinstance(names, dict):
+                # Format: {0: 'class1', 1: 'class2'}
+                for cat_id, cat_name in names.items():
+                    # YOLOv5 uses 0-indexed, we convert to 1-indexed for consistency
+                    dataset.add_category(int(cat_id) + 1, cat_name)
+            elif isinstance(names, list):
+                # Format: ['class1', 'class2']
+                for i, cat_name in enumerate(names):
+                    dataset.add_category(i + 1, cat_name)
+        else:
+            raise ValueError("YAML configuration must contain 'names' field")
 
         logger.info(f"Loaded {len(dataset.categories)} categories")
 
-        # Load images
-        images_found = 0
-        images_missing = 0
+        # Determine paths
+        images_dir = yolo_dir / "images" / split
+        labels_dir = yolo_dir / "labels" / split
 
-        for img in coco_data.get("images", []):
-            img_path = None
+        if not images_dir.exists():
+            raise FileNotFoundError(f"Images directory not found: {images_dir}")
 
-            if images_dir is not None:
-                # Try to locate the actual image file
-                potential_path = images_dir / img["file_name"]
+        if not labels_dir.exists():
+            logger.warning(f"Labels directory not found: {labels_dir}")
+            labels_dir = None
 
-                if potential_path.exists():
-                    img_path = potential_path
-                    images_found += 1
-                else:
-                    # Try without subdirectories (flatten path)
-                    flat_filename = pathlib.Path(img["file_name"]).name
-                    flat_path = images_dir / flat_filename
+        # Load images and annotations
+        image_files = sorted(images_dir.glob("*"))
+        image_files = [
+            f
+            for f in image_files
+            if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"]
+        ]
 
-                    if flat_path.exists():
-                        img_path = flat_path
-                        images_found += 1
-                    else:
-                        images_missing += 1
-                        logger.debug(f"Image not found: {img['file_name']}")
+        images_loaded = 0
+        annotations_loaded = 0
 
-            img_info = ImageInfo(
-                image_id=str(img["id"]),
-                file_name=img["file_name"],
-                width=img["width"],
-                height=img["height"],
-                path=img_path,
-            )
-            dataset.add_image(img_info)
+        for img_path in image_files:
+            try:
+                from PIL import Image
 
-        logger.info(
-            f"Loaded {len(dataset.images)} images "
-            f"(found: {images_found}, missing: {images_missing})"
-        )
+                with Image.open(img_path) as img:
+                    width, height = img.size
 
-        # Load annotations
-        for ann in coco_data.get("annotations", []):
-            bbox_xywh = ann["bbox"]
-            bbox = BBox.from_xywh(*bbox_xywh)
+                img_id = str(images_loaded + 1)
+                img_info = ImageInfo(
+                    image_id=img_id,
+                    file_name=img_path.name,
+                    width=width,
+                    height=height,
+                    path=img_path,
+                )
+                dataset.add_image(img_info)
+                images_loaded += 1
 
-            cat_name = dataset.get_category_name(ann["category_id"])
-            if cat_name is None:
-                logger.warning(f"Unknown category ID: {ann['category_id']}, skipping annotation")
+                # Load corresponding label file
+                if labels_dir is not None:
+                    label_path = labels_dir / (img_path.stem + ".txt")
+                    if label_path.exists():
+                        with label_path.open(mode="r") as f:
+                            for line_num, line in enumerate(f, 1):
+                                line = line.strip()
+                                if not line:
+                                    continue
+
+                                try:
+                                    parts = line.split()
+                                    if len(parts) != 5:
+                                        logger.warning(
+                                            f"Invalid annotation format in {label_path}:{line_num}"
+                                        )
+                                        continue
+
+                                    class_idx = int(parts[0])
+                                    cx_norm = float(parts[1])
+                                    cy_norm = float(parts[2])
+                                    w_norm = float(parts[3])
+                                    h_norm = float(parts[4])
+
+                                    # Convert normalized coordinates to absolute
+                                    cx = cx_norm * width
+                                    cy = cy_norm * height
+                                    w = w_norm * width
+                                    h = h_norm * height
+
+                                    bbox = BBox.from_cxcywh(cx, cy, w, h)
+
+                                    # Convert 0-indexed to 1-indexed category ID
+                                    cat_id = class_idx + 1
+                                    cat_name = dataset.get_category_name(cat_id)
+
+                                    if cat_name is None:
+                                        logger.warning(
+                                            f"Unknown category ID: {cat_id} in {label_path}:{line_num}"
+                                        )
+                                        continue
+
+                                    annotation = Annotation(
+                                        bbox=bbox,
+                                        category_id=cat_id,
+                                        category_name=cat_name,
+                                        image_id=img_id,
+                                        annotation_id=str(annotations_loaded + 1),
+                                        area=bbox.area,
+                                        iscrowd=0,
+                                    )
+                                    dataset.add_annotation(annotation)
+                                    annotations_loaded += 1
+
+                                except (ValueError, IndexError) as e:
+                                    logger.warning(
+                                        f"Error parsing annotation in {label_path}:{line_num}: {e}"
+                                    )
+                                    continue
+
+            except Exception as e:
+                logger.error(f"Error loading image {img_path}: {e}")
                 continue
 
-            annotation = Annotation(
-                bbox=bbox,
-                category_id=ann["category_id"],
-                category_name=cat_name,
-                image_id=str(ann["image_id"]),
-                annotation_id=str(ann["id"]),
-                area=ann.get("area", bbox.area),
-                iscrowd=ann.get("iscrowd", 0),
-            )
-            dataset.add_annotation(annotation)
-
-        logger.info(f"Loaded {dataset.num_annotations()} annotations")
-
-        if images_missing > 0:
-            logger.warning(
-                f"{images_missing} images were not found. "
-                f"Export operations may fail for these images."
-            )
+        logger.info(f"Loaded {images_loaded} images and {annotations_loaded} annotations")
 
         return dataset
-
-    @classmethod
-    def from_coco_dir(
-        cls, coco_dir: str | os.PathLike[str], annotation_file: str = "annotations.json"
-    ) -> COCODataset:
-        """Load dataset from COCO directory structure.
-
-        Expected structure:
-        coco_dir/
-        ├── annotations.json
-        └── images/
-            ├── image1.jpg
-            └── image2.jpg
-
-        Args:
-            coco_dir: Path to COCO directory
-            annotation_file: Name of annotation JSON file
-
-        Returns:
-            Loaded COCODataset instance
-        """
-        coco_dir = pathlib.Path(coco_dir)
-        annotation_path = coco_dir / annotation_file
-        images_dir = coco_dir / "images"
-
-        # Check if images dir exists, if not, try parent/images
-        if not images_dir.exists():
-            images_dir = coco_dir.parent / "images"
-
-        return cls.from_coco_file(
-            annotation_path,
-            images_dir=images_dir if images_dir.exists() else None,
-        )
 
     def _export_coco_split(
         self,
@@ -218,16 +220,14 @@ class COCODataset(BaseDataset):
         images_dir.mkdir(exist_ok=True)
 
         coco_output = {
-            "info": self.info
-            if self.info
-            else {
+            "info": {
                 "description": self.name,
                 "version": "1.0",
                 "year": 2025,
                 "contributor": "6ixGODD",
-                "date_created": "2025-10-28",
+                "date_created": "2025-11-14",
             },
-            "licenses": self.licenses if self.licenses else [],
+            "licenses": [],
             "images": [],
             "annotations": [],
             "categories": [],
@@ -259,7 +259,6 @@ class COCODataset(BaseDataset):
 
             # Copy image file if it exists
             if img_info.path and img_info.path.exists():
-                # Use only the filename, not any subdirectory structure
                 dest_filename = pathlib.Path(img_info.file_name).name
                 dest_path = images_dir / dest_filename
 
@@ -369,7 +368,6 @@ class COCODataset(BaseDataset):
 
             # Copy image file
             if img_info.path and img_info.path.exists():
-                # Use only the filename, not any subdirectory structure
                 dest_filename = pathlib.Path(img_info.file_name).name
                 dest_img_path = images_dir / dest_filename
 

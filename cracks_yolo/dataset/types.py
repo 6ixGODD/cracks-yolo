@@ -18,6 +18,11 @@ class BBox(t.NamedTuple):
     """Maximum Y coordinate of the bounding box."""
 
     @property
+    def xyxy(self) -> tuple[float, float, float, float]:
+        """Return bounding box in XYXY format (x_min, y_min, x_max, y_max)."""
+        return self.x_min, self.y_min, self.x_max, self.y_max
+
+    @property
     def xywh(self) -> tuple[float, float, float, float]:
         """Convert to XYWH format (x, y, width, height)."""
         return self.x_min, self.y_min, self.x_max - self.x_min, self.y_max - self.y_min
