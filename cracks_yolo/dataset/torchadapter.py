@@ -5,10 +5,10 @@ import typing as t
 
 import PIL.Image as Image
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset as TorchDataset
 from torchvision import transforms as T  # noqa: N812
 
-from cracks_yolo.dataset import BaseDataset
+from cracks_yolo.dataset import Dataset
 from cracks_yolo.dataset.types import Annotation
 
 logger = logging.getLogger(__name__)
@@ -31,9 +31,11 @@ class Target(t.TypedDict):
     """Crowd flag for each bounding box."""
 
 
+ImageTargetPair: t.TypeAlias = tuple[t.Any, Target]
+"""Type alias for a tuple of (image, target)."""
 
 
-class TorchDatasetAdapter(Dataset[tuple[t.Any, Target]]):
+class TorchDatasetAdapter(TorchDataset[ImageTargetPair]):
     """Adapter to convert custom datasets to torchvision-compatible format.
 
     This adapter wraps BaseDataset instances and provides a PyTorch Dataset interface
@@ -48,8 +50,8 @@ class TorchDatasetAdapter(Dataset[tuple[t.Any, Target]]):
 
     def __init__(
         self,
-        dataset: BaseDataset,
-        transform: t.Callable[..., t.Any] | None = None,
+        dataset: Dataset,
+        transform: t.Callable[..., torch.Tensor] | None = None,
         target_transform: t.Callable[[Target], Target] | None = None,
         return_format: t.Literal["xyxy", "xywh", "cxcywh"] = "xyxy",
     ) -> None:
@@ -70,7 +72,7 @@ class TorchDatasetAdapter(Dataset[tuple[t.Any, Target]]):
         """Return the total number of samples."""
         return len(self.image_ids)
 
-    def __getitem__(self, idx: int) -> tuple[t.Any, Target]:
+    def __getitem__(self, idx: int) -> ImageTargetPair:
         """Get a sample by index.
 
         Args:
@@ -156,10 +158,7 @@ class TorchDatasetAdapter(Dataset[tuple[t.Any, Target]]):
 
         return target
 
-    def collate(
-        self,
-        batch: list[tuple[t.Any, Target]],
-    ) -> tuple[list[t.Any], list[Target]]:
+    def collate(self, batch: list[ImageTargetPair]) -> tuple[list[torch.Tensor], list[Target]]:
         """Custom collate function for DataLoader.
 
         This is useful when images have different numbers of objects.
@@ -176,7 +175,7 @@ class TorchDatasetAdapter(Dataset[tuple[t.Any, Target]]):
 
 
 def build_torchdataset(
-    dataset: BaseDataset,
+    dataset: Dataset,
     image_size: int | tuple[int, int] | None = None,
     augment: bool = False,
     normalize: bool = False,
