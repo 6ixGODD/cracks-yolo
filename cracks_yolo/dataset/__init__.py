@@ -450,6 +450,55 @@ class Dataset:
         logger.info(f"Merge completed: {merged.num_images()} images")
         return merged
 
+    def visualize_category_distribution(
+        self,
+        figsize: tuple[int, int] = (12, 6),
+        save_path: pathlib.Path | None = None,
+    ) -> None:
+        """Visualize category distribution as a bar chart.
+
+        Args:
+            figsize: Figure size for matplotlib
+            save_path: Optional path to save the visualization
+        """
+        logger.info(f"Visualizing category distribution for dataset: {self.name}")
+
+        stats = self.get_statistics(by_source=False)
+        cat_dist = stats["category_distribution"]
+
+        if not cat_dist:
+            logger.warning("No categories to visualize")
+            return
+
+        categories = list(cat_dist.keys())
+        counts = list(cat_dist.values())
+
+        _fig, ax = plt.subplots(1, figsize=figsize)
+        bars = ax.bar(categories, counts, color="skyblue", edgecolor="navy", alpha=0.7)
+
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                height,
+                f"{int(height)}",
+                ha="center",
+                va="bottom",
+                fontsize=10,
+            )
+
+        ax.set_xlabel("Category", fontsize=12)
+        ax.set_ylabel("Count", fontsize=12)
+        ax.set_title(f"Category Distribution - {self.name}", fontsize=14, fontweight="bold")
+        ax.tick_params(axis="x", rotation=45)
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path, bbox_inches="tight", dpi=150)
+            logger.info(f"Category distribution saved to: {save_path}")
+
+        plt.show()
+
     def split(self, split_ratio: SplitRatio, seed: int | None = None) -> dict[str, list[str]]:
         split_ratio.validate()
 
