@@ -7,20 +7,29 @@ import typing as t
 from cracks_yolo.cli.args import BaseArgs
 from cracks_yolo.cli.helper import display
 from cracks_yolo.dataset import loader
+from cracks_yolo.dataset.types import SplitRatio
 
 if t.TYPE_CHECKING:
     from argparse import _SubParsersAction
 
 
+class DatasetInput(t.NamedTuple):
+    """Dataset input specification."""
+
+    path: str
+    format: t.Literal["coco", "yolo"]
+    name: str | None = None
+
+
 class Args(BaseArgs):
     inputs: list[str]
-    """Input dataset paths (COCO: annotation files, YOLO: root directories)."""
-
-    formats: list[t.Literal["coco", "yolo"]]
-    """Dataset formats (one for all, or one per input)."""
+    """Raw input arguments from -i flags."""
 
     output: str
     """Output directory for merged dataset."""
+
+    output_format: t.Literal["coco", "yolo"] = "coco"
+    """Output format for merged dataset."""
 
     name: str = "merged_dataset"
     """Name for the merged dataset."""
@@ -34,39 +43,75 @@ class Args(BaseArgs):
     fix_duplicates: bool = True
     """Whether to fix duplicate categories."""
 
+    naming: t.Literal[
+        "original",
+        "prefix",
+        "uuid",
+        "uuid_prefix",
+        "sequential",
+        "sequential_prefix",
+    ] = "original"
+    """File naming strategy."""
+
+    train_ratio: float = 0.8
+    """Training set ratio."""
+
+    val_ratio: float = 0.1
+    """Validation set ratio."""
+
+    test_ratio: float = 0.1
+    """Test set ratio."""
+
+    no_split: bool = False
+    """Do not split dataset."""
+
+    seed: int | None = None
+    """Random seed for reproducibility."""
+
+    no_copy: bool = False
+    """Do not copy image files."""
+
+    yolo_splits: list[t.Literal["train", "test", "val"]] | None = None
+    """Which splits to load for YOLO datasets (train, val, test)."""
+
     def run(self) -> None:
+        from cracks_yolo.cli.dataset.helper import export_dataset
+        from cracks_yolo.cli.dataset.helper import get_naming_strategy
         from cracks_yolo.cli.dataset.helper import load_dataset
 
         try:
-            # Validate inputs
-            if len(self.inputs) < 2:
+            # Parse inputs
+            dataset_inputs = self._parse_inputs()
+
+            if len(dataset_inputs) < 2:
                 display.error("At least 2 datasets are required for merging")
                 return
-
-            if len(self.formats) == 1:
-                # Use same format for all inputs
-                formats = self.formats * len(self.inputs)
-            elif len(self.formats) != len(self.inputs):
-                display.error("Number of formats must match number of inputs or be 1")
-                return
-            else:
-                formats = self.formats
 
             display.header("Dataset Merge Operation")
 
             # Load datasets
-            display.info(f"Loading {len(self.inputs)} datasets...")
+            display.info(f"Loading {len(dataset_inputs)} datasets...")
             datasets = []
 
-            for i, (input_path, fmt) in enumerate(zip(self.inputs, formats, strict=True), 1):
-                display.step(f"Loading dataset {i}/{len(self.inputs)}: {input_path}", step=i)
+            for i, ds_input in enumerate(dataset_inputs, 1):
+                display.step(f"Loading dataset {i}/{len(dataset_inputs)}: {ds_input.path}", step=i)
 
-                with display.loading(f"Loading {fmt.upper()} dataset"):
-                    dataset = load_dataset(input_path, fmt)
+                # Determine splits for YOLO
+                yolo_splits = None
+                if ds_input.format == "yolo" and self.yolo_splits:
+                    yolo_splits = self.yolo_splits
+
+                with display.loading(f"Loading {ds_input.format.upper()} dataset"):
+                    dataset = load_dataset(
+                        input_path=ds_input.path,
+                        yolo_splits=yolo_splits,
+                        format=ds_input.format,
+                        name=ds_input.name,
+                    )
                     datasets.append(dataset)
 
                 display.success(
-                    f"Loaded {dataset.name}: "
+                    f"Loaded '{dataset.name}': "
                     f"{len(dataset)} images, "
                     f"{dataset.num_annotations()} annotations, "
                     f"{dataset.num_categories()} categories"
@@ -84,6 +129,13 @@ class Args(BaseArgs):
             print(f"  • Conflict resolution: {self.resolve_conflicts}")
             print(f"  • Preserve sources: {self.preserve_sources}")
             print(f"  • Fix duplicates: {self.fix_duplicates}")
+            print(f"  • Output format: {self.output_format}")
+
+            if not self.no_split:
+                print(
+                    f"  • Split ratio: train={self.train_ratio:.2f}, "
+                    f"val={self.val_ratio:.2f}, test={self.test_ratio:.2f}"
+                )
 
             display.separator()
 
@@ -109,14 +161,34 @@ class Args(BaseArgs):
                 f"{merged.num_categories()} categories"
             )
 
+            if self.preserve_sources:
+                sources = merged.get_sources()
+                display.info(f"Sources: {', '.join(sources)}")
+
             # Export merged dataset
             output_path = pathlib.Path(self.output)
-            display.info(f"Exporting merged dataset to: {output_path}")
+            display.info(f"Exporting to: {output_path}")
 
-            # Import here to avoid circular dependency
-            from cracks_yolo.cli.dataset.helper import export_dataset
+            naming_strategy = get_naming_strategy(self.naming)
 
-            export_dataset(merged, output_path)
+            # Prepare split ratio
+            split_ratio = None
+            if not self.no_split:
+                split_ratio = SplitRatio(
+                    train=self.train_ratio,
+                    val=self.val_ratio,
+                    test=self.test_ratio,
+                )
+
+            export_dataset(
+                dataset=merged,
+                output_dir=output_path,
+                format=self.output_format,
+                split_ratio=split_ratio,
+                naming_strategy=naming_strategy,
+                seed=self.seed,
+                copy_images=not self.no_copy,
+            )
 
             display.separator()
             display.success("Dataset merge completed successfully!")
@@ -126,23 +198,69 @@ class Args(BaseArgs):
             display.error(f"Merge failed: {e}")
             raise
 
+    def _parse_inputs(self) -> list[DatasetInput]:
+        """Parse input arguments into DatasetInput objects.
+
+        Expected format: -i <path> <format> [name]
+        Examples:
+            -i ann1.json coco dataset1
+            -i ann2.json coco
+            -i yolo_dir yolo my_yolo
+
+        Returns:
+            List of DatasetInput objects
+        """
+        inputs = []
+        i = 0
+
+        while i < len(self.inputs):
+            if i + 1 >= len(self.inputs):
+                raise ValueError(
+                    f"Invalid input specification at position {i}: "
+                    f"expected at least 2 arguments (path and format)"
+                )
+
+            path = self.inputs[i]
+            format_str = self.inputs[i + 1]
+
+            # Validate format
+            if format_str not in ("coco", "yolo"):
+                raise ValueError(
+                    f"Invalid format '{format_str}' at position {i + 1}. Must be 'coco' or 'yolo'"
+                )
+
+            format = t.cast(t.Literal["coco", "yolo"], format_str)
+
+            # Check if there's a name
+            name = None
+            if i + 2 < len(self.inputs):
+                next_arg = self.inputs[i + 2]
+                # If it's not a valid format and not a path-like string, treat as name
+                if next_arg not in ("coco", "yolo") and not pathlib.Path(next_arg).exists():
+                    name = next_arg
+                    i += 3
+                else:
+                    i += 2
+            else:
+                i += 2
+
+            inputs.append(DatasetInput(path=path, format=format, name=name))
+
+        return inputs
+
     @classmethod
     def build_args(cls, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
-            "inputs",
-            type=str,
+            "-i",
+            "--input",
+            dest="inputs",
+            action="append",
             nargs="+",
-            help="Input dataset paths (COCO: annotation files, YOLO: root directories)",
-        )
-
-        parser.add_argument(
-            "--formats",
-            "-f",
-            type=str,
-            nargs="+",
-            choices=["coco", "yolo"],
             required=True,
-            help="Dataset formats (one for all, or one per input)",
+            metavar=("PATH", "FORMAT", "NAME"),
+            help="Input dataset: -i <path> <format> [name]. "
+            "Format must be 'coco' or 'yolo'. Name is optional. "
+            "Can be specified multiple times.",
         )
 
         parser.add_argument(
@@ -151,6 +269,15 @@ class Args(BaseArgs):
             type=str,
             required=True,
             help="Output directory for merged dataset",
+        )
+
+        parser.add_argument(
+            "--output-format",
+            "-of",
+            type=str,
+            choices=["coco", "yolo"],
+            default="coco",
+            help="Output format (default: coco)",
         )
 
         parser.add_argument(
@@ -182,6 +309,68 @@ class Args(BaseArgs):
             help="Do not fix duplicate categories",
         )
 
+        parser.add_argument(
+            "--naming",
+            type=str,
+            choices=[
+                "original",
+                "prefix",
+                "uuid",
+                "uuid_prefix",
+                "sequential",
+                "sequential_prefix",
+            ],
+            default="original",
+            help="File naming strategy (default: original)",
+        )
+
+        parser.add_argument(
+            "--train-ratio",
+            type=float,
+            default=0.8,
+            help="Training set ratio (default: 0.8)",
+        )
+
+        parser.add_argument(
+            "--val-ratio",
+            type=float,
+            default=0.1,
+            help="Validation set ratio (default: 0.1)",
+        )
+
+        parser.add_argument(
+            "--test-ratio",
+            type=float,
+            default=0.1,
+            help="Test set ratio (default: 0.1)",
+        )
+
+        parser.add_argument(
+            "--no-split",
+            action="store_true",
+            help="Do not split dataset (export as single dataset)",
+        )
+
+        parser.add_argument(
+            "--seed",
+            type=int,
+            help="Random seed for reproducibility",
+        )
+
+        parser.add_argument(
+            "--no-copy",
+            action="store_true",
+            help="Do not copy image files (only generate annotations)",
+        )
+
+        parser.add_argument(
+            "--yolo-splits",
+            type=str,
+            nargs="+",
+            choices=["train", "val", "test"],
+            help="Which splits to load for YOLO datasets (default: all available)",
+        )
+
 
 def register(subparser: _SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparser.add_parser(
@@ -189,6 +378,25 @@ def register(subparser: _SubParsersAction[argparse.ArgumentParser]) -> None:
         help="Merge multiple datasets into one",
         description="Merge multiple COCO or YOLO datasets with conflict resolution "
         "and source tracking",
+        epilog="Examples:\n"
+        "  # Merge with custom names and split\n"
+        "  cracks-yolo dataset merge \\\n"
+        "    -i data/coco1/ann.json coco dataset1 \\\n"
+        "    -i data/coco2/ann.json coco dataset2 \\\n"
+        "    -o output/merged \\\n"
+        "    --train-ratio 0.7 --val-ratio 0.2 --test-ratio 0.1\n\n"
+        "  # Merge YOLO datasets (all splits)\n"
+        "  cracks-yolo dataset merge \\\n"
+        "    -i data/yolo1 yolo dataset1 \\\n"
+        "    -i data/yolo2 yolo dataset2 \\\n"
+        "    -o output/merged --output-format yolo\n\n"
+        "  # Merge YOLO datasets (specific splits only)\n"
+        "  cracks-yolo dataset merge \\\n"
+        "    -i data/yolo yolo my_yolo \\\n"
+        "    -i data/coco/ann.json coco my_coco \\\n"
+        "    --yolo-splits train val \\\n"
+        "    -o output/merged",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     Args.build_args(parser)
     parser.set_defaults(func=Args.func)

@@ -19,7 +19,7 @@ class Args(BaseArgs):
     input_format: t.Literal["coco", "yolo"]
     output: str
     output_format: t.Literal["coco", "yolo"]
-    split: str = "train"
+    split: t.Literal["train", "test", "val"] = "train"
     naming: str = "original"
     train_ratio: float = 0.8
     val_ratio: float = 0.1
@@ -45,7 +45,7 @@ class Args(BaseArgs):
                 dataset = load_dataset(
                     input_path=self.input,
                     format=self.input_format,
-                    split=self.split if self.input_format == "yolo" else None,
+                    yolo_splits=self.split if self.input_format == "yolo" else None,
                 )
 
             display.success(

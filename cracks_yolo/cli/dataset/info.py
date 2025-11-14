@@ -29,7 +29,7 @@ class Args(BaseArgs):
             dataset = load_dataset(
                 input_path=self.input,
                 format=self.format,
-                split=self.split if self.format == "yolo" else None,
+                yolo_splits=self.split if self.format == "yolo" else None,
             )
 
             # Print information
