@@ -19,7 +19,7 @@ classifiers = [
 dependencies = [
   "halo>=0.0.31,<0.0.32",
   "matplotlib>=3.10.7,<4",
-  "numpy==2.2.6",
+  "numpy==2.3.4",
   "openpyxl>=3.1.5,<4",
   "pandas>=2.3.3,<3",
   # "torch>=1.8.0",  # fuck poetry
