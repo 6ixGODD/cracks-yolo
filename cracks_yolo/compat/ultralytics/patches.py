@@ -61,7 +61,7 @@ from ultralytics.utils import LOGGER
 from ultralytics.utils import colorstr
 from ultralytics.utils.ops import make_divisible
 
-from cracks_yolo.nn.modules import C3SAC
+from cracks_yolo.compat.ultralytics import C3SAC
 
 
 def parse_model(d, ch, verbose=True):

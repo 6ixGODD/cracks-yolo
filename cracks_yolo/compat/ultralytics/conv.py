@@ -5,10 +5,8 @@ import typing as t
 import torch
 import torch.nn as nn
 import torch.nn.common_types as ct
-from ultralytics.nn.modules import C3
-from ultralytics.nn.modules import Bottleneck
 
-from cracks_yolo.helpers.inject import register_to_ultralytics
+from cracks_yolo.compat.ultralytics.helpers.inject import register_to_ultralytics
 
 
 def autopad(
@@ -289,6 +287,9 @@ class SAConv2d(ConvAWS2d):
 #         k (tuple): Kernel sizes for convolutions, e.g., (1, 3) or (3, 3).
 #         e (float): Expansion ratio for hidden channels.
 #     """
+
+from ultralytics.nn.modules import C3
+from ultralytics.nn.modules import Bottleneck
 
 
 @register_to_ultralytics
