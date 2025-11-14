@@ -3,6 +3,8 @@ from __future__ import annotations
 import pathlib
 import typing as t
 
+from cracks_yolo.exceptions import ValidationError
+
 
 class BBox(t.NamedTuple):
     x_min: float
@@ -139,4 +141,4 @@ class SplitRatio(t.NamedTuple):
     def validate(self) -> None:
         total = self.train + self.val + self.test
         if not abs(total - 1.0) < 1e-6:
-            raise ValueError(f"Split ratios must sum to 1.0, got {total}")
+            raise ValidationError(f"Split ratios must sum to 1.0, got {total}")

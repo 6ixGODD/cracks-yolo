@@ -15,6 +15,8 @@ from cracks_yolo.dataset.types import Annotation
 from cracks_yolo.dataset.types import DatasetStatistics
 from cracks_yolo.dataset.types import ImageInfo
 from cracks_yolo.dataset.types import SplitRatio
+from cracks_yolo.exceptions import CategoryConflictError
+from cracks_yolo.exceptions import DatasetError
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +309,7 @@ class Dataset:
         """Visualize a single image with its annotations."""
         img_info = self.get_image(image_id)
         if img_info is None or img_info.path is None:
-            raise ValueError(f"Image {image_id} not found or has no path")
+            raise DatasetError(f"Image {image_id} not found or has no path")
 
         img = Image.open(img_info.path)
         anns = self.get_annotations(image_id)
@@ -394,7 +396,7 @@ class Dataset:
                     category_mapping[cat_id] = next_category_id
                     next_category_id += 1
                 elif resolve_conflicts == "error":
-                    raise ValueError(f"Category name conflict: {cat_name}")
+                    raise CategoryConflictError(cat_name, f"Category name conflict: {cat_name}")
             else:
                 merged.add_category(cat_id, cat_name)
                 category_mapping[cat_id] = cat_id
@@ -434,7 +436,7 @@ class Dataset:
             for ann in other.get_annotations(img_id):
                 new_cat_name = merged.get_category_name(category_mapping[ann.category_id])
                 if new_cat_name is None:
-                    raise ValueError(f"Category mapping failed for {ann.category_id}")
+                    raise DatasetError(f"Category mapping failed for {ann.category_id}")
 
                 new_ann = Annotation(
                     bbox=ann.bbox,

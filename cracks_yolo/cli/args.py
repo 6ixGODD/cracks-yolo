@@ -5,6 +5,7 @@ import argparse
 import typing as t
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 
 
 class BaseArgs(BaseModel, abc.ABC):
@@ -25,3 +26,5 @@ class BaseArgs(BaseModel, abc.ABC):
     @classmethod
     def parse_args(cls, args: argparse.Namespace) -> t.Self:
         return cls.model_validate(vars(args), strict=True)
+
+    model_config = ConfigDict(extra="ignore")

@@ -10,6 +10,9 @@ from torchvision import transforms as T  # noqa: N812
 
 from cracks_yolo.dataset import Dataset
 from cracks_yolo.dataset.types import Annotation
+from cracks_yolo.exceptions import DatasetError
+from cracks_yolo.exceptions import DatasetNotFoundError
+from cracks_yolo.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +93,10 @@ class TorchDatasetAdapter(TorchDataset[ImageTargetPair]):
         img_info = self.dataset.get_image(image_id)
 
         if img_info is None:
-            raise ValueError(f"Image {image_id} not found in dataset")
+            raise DatasetError(f"Image {image_id} not found in dataset")
 
         if img_info.path is None or not img_info.path.exists():
-            raise FileNotFoundError(f"Image file not found: {img_info.path}")
+            raise DatasetNotFoundError(str(img_info.path), f"Image file not found: {img_info.path}")
 
         # Load image
         img = Image.open(img_info.path).convert("RGB")
@@ -137,7 +140,7 @@ class TorchDatasetAdapter(TorchDataset[ImageTargetPair]):
             elif self.return_format == "cxcywh":
                 box = ann.bbox.cxcywh
             else:
-                raise ValueError(f"Unknown return format: {self.return_format}")
+                raise ValidationError(f"Unknown return format: {self.return_format}")
 
             boxes.append(box)
             labels.append(ann.category_id)

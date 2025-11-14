@@ -1,10 +1,12 @@
-# ruff: noqa: RUF001
+"""CLI display utilities with simplified styling."""
+
 from __future__ import annotations
 
 import contextlib
 import os
 import pathlib
 import sys
+import traceback
 import typing as t
 
 import halo
@@ -13,23 +15,6 @@ from cracks_yolo.cli.helper.ansi import ANSI
 
 # Initialize spinner
 spinner = halo.Halo(spinner="dots")
-
-
-# Box drawing characters
-class Box:
-    """Unicode box drawing characters."""
-
-    TL = "┌"  # Top-left
-    TR = "┐"  # Top-right
-    BL = "└"  # Bottom-left
-    BR = "┘"  # Bottom-right
-    H = "─"  # Horizontal
-    V = "│"  # Vertical
-    VR = "├"  # Vertical-right
-    VL = "┤"  # Vertical-left
-    HU = "┴"  # Horizontal-up
-    HD = "┬"  # Horizontal-down
-    X = "┼"  # Cross
 
 
 def success(message: str, /, prefix: str = "✓") -> None:
@@ -47,7 +32,7 @@ def warning(message: str, /, prefix: str = "⚠") -> None:
     print(f"{ANSI.warning(prefix)} {message}")
 
 
-def info(message: str, /, prefix: str = "ℹ") -> None:
+def info(message: str, /, prefix: str = "•") -> None:
     """Print an info message."""
     print(f"{ANSI.info(prefix)} {message}")
 
@@ -61,9 +46,9 @@ def step(message: str, /, step: int | None = None) -> None:
     """Print a step message in a process."""
     if step is not None:
         prefix = ANSI.format(f"[{step}]", ANSI.FG.CYAN, ANSI.STYLE.BOLD)
+        print(f"{prefix} {message}")
     else:
-        prefix = ANSI.format("►", ANSI.FG.CYAN)
-    print(f"{prefix} {message}")
+        print(f"► {message}")
 
 
 def path(
@@ -81,72 +66,50 @@ def path(
     """
     path = pathlib.Path(path)
 
-    # Determine path type and color
-    if path.is_dir():
-        colored_path = ANSI.format(str(path), ANSI.FG.BLUE, ANSI.STYLE.BOLD)
-        icon = "📁"
-    elif path.is_file():
-        colored_path = ANSI.format(str(path), ANSI.FG.CYAN)
-        icon = "📄"
-    else:
-        colored_path = ANSI.format(str(path), ANSI.FG.GRAY)
-        icon = "📍"
-
     parts = []
     if label:
-        parts.append(ANSI.format(label + ":", ANSI.STYLE.BOLD))
+        parts.append(f"{label}:")
 
     if exists is not None:
-        indicator = ANSI.success("✓") if exists else ANSI.error("✗")
+        indicator = "✓" if exists else "✗"
         parts.append(indicator)
 
-    parts.append(f"{icon}  {colored_path}")
+    parts.append(str(path))
     print(" ".join(parts))
 
 
 def command(cmd: str, /) -> None:
     """Print a command being executed."""
-    print(ANSI.format(f"$ {cmd}", ANSI.FG.GRAY, ANSI.STYLE.ITALIC))
+    print(ANSI.format(f"$ {cmd}", ANSI.FG.GRAY))
 
 
-def header(text: str, /, char: str = "═", width: int | None = None) -> None:
-    """Print a section header with decorative border.
+def header(text: str, /, width: int = 60) -> None:
+    """Print a section header.
 
     Args:
         text: Header text
-        char: Character to use for border
-        width: Width of header (auto-detect if None)
+        width: Width of header
     """
-    if width is None:
-        width = max(len(text) + 4, 60)
-
-    padding = (width - len(text) - 2) // 2
-    header_line = char * width
-
     print()
-    print(ANSI.format(header_line, ANSI.FG.CYAN))
-    print(ANSI.format(f"{' ' * padding}{text}{' ' * padding}", ANSI.FG.CYAN, ANSI.STYLE.BOLD))
-    print(ANSI.format(header_line, ANSI.FG.CYAN))
-    print()
+    print(text)
+    print("-" * min(len(text), width))
 
 
-def separator(char: str = "─", width: int = 60) -> None:
+def separator(width: int = 60) -> None:
     """Print a separator line."""
-    print(ANSI.format(char * width, ANSI.FG.GRAY, ANSI.STYLE.DIM))
+    print("-" * width)
 
 
 def table(
     headers: list[str],
     rows: list[list[str]],
     /,
-    colors: list[ANSI.FG | None] | None = None,
 ) -> None:
-    """Print a formatted table with borders.
+    """Print a simple table.
 
     Args:
         headers: Column headers
         rows: Table rows
-        colors: Optional colors for each column
     """
     if not headers or not rows:
         return
@@ -158,48 +121,20 @@ def table(
             if i < len(col_widths):
                 col_widths[i] = max(col_widths[i], len(str(cell)))
 
-    # Apply colors if provided
-    if colors is None:
-        colors = [None] * len(headers)
+    # Print header
+    header_row = " | ".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
+    print(header_row)
+    print("-" * len(header_row))
 
-    def format_row(cells: list[str], is_header: bool = False) -> str:
-        formatted = []
-        for i, cell in enumerate(cells):
-            width = col_widths[i]
-            padded = str(cell).ljust(width)
-            if is_header:
-                formatted.append(ANSI.format(padded, ANSI.STYLE.BOLD))
-            elif colors[i]:
-                formatted.append(ANSI.format(padded, colors[i]))
-            else:
-                formatted.append(padded)
-        return f"{Box.V} {f' {Box.V} '.join(formatted)} {Box.V}"
-
-    # Top border
-    top = Box.TL + Box.HD.join(Box.H * (w + 2) for w in col_widths) + Box.TR
-    print(ANSI.format(top, ANSI.FG.GRAY))
-
-    # Header
-    print(format_row(headers, is_header=True))
-
-    # Header separator
-    sep = Box.VR + Box.X.join(Box.H * (w + 2) for w in col_widths) + Box.VL
-    print(ANSI.format(sep, ANSI.FG.GRAY))
-
-    # Rows
+    # Print rows
     for row in rows:
-        print(format_row(row))
-
-    # Bottom border
-    bottom = Box.BL + Box.HU.join(Box.H * (w + 2) for w in col_widths) + Box.BR
-    print(ANSI.format(bottom, ANSI.FG.GRAY))
+        print(" | ".join(str(cell).ljust(col_widths[i]) for i, cell in enumerate(row)))
 
 
 def list_items(
     items: list[str],
     /,
     bullet: str = "•",
-    color: ANSI.FG | None = None,
     indent: int = 0,
 ) -> None:
     """Print a bulleted list of items.
@@ -207,28 +142,23 @@ def list_items(
     Args:
         items: List items to display
         bullet: Bullet character
-        color: Optional color for bullets
         indent: Indentation level
     """
     indent_str = "  " * indent
-    colored_bullet = ANSI.format(bullet, color) if color else bullet
-
     for item in items:
-        print(f"{indent_str}{colored_bullet} {item}")
+        print(f"{indent_str}{bullet} {item}")
 
 
 def key_value(
     data: dict[str, t.Any],
     /,
     indent: int = 0,
-    key_color: ANSI.FG = ANSI.FG.CYAN,
 ) -> None:
     """Print key-value pairs in a formatted style.
 
     Args:
         data: Dictionary of key-value pairs
         indent: Indentation level
-        key_color: Color for keys
     """
     if not data:
         return
@@ -237,8 +167,7 @@ def key_value(
     indent_str = "  " * indent
 
     for key, value in data.items():
-        colored_key = ANSI.format(str(key).ljust(max_key_len), key_color, ANSI.STYLE.BOLD)
-        print(f"{indent_str}{colored_key} : {value}")
+        print(f"{indent_str}{str(key).ljust(max_key_len)} : {value}")
 
 
 def progress_bar(
@@ -247,7 +176,6 @@ def progress_bar(
     /,
     width: int = 40,
     label: str = "",
-    show_percent: bool = True,
 ) -> None:
     """Print a progress bar.
 
@@ -256,31 +184,22 @@ def progress_bar(
         total: Total/max value
         width: Width of the progress bar
         label: Optional label
-        show_percent: Show percentage
     """
     percent = current / total if total > 0 else 0
     filled = int(width * percent)
-
-    colored_bar = ANSI.format("█" * filled, ANSI.FG.GREEN) + ANSI.format(
-        "░" * (width - filled), ANSI.FG.GRAY
-    )
+    bar = "█" * filled + "░" * (width - filled)
 
     parts = []
     if label:
         parts.append(label)
-    parts.append(f"[{colored_bar}]")
-
-    if show_percent:
-        percent_str = f"{percent * 100:>5.1f}%"
-        parts.append(ANSI.format(percent_str, ANSI.FG.CYAN, ANSI.STYLE.BOLD))
-
+    parts.append(f"[{bar}]")
+    parts.append(f"{percent * 100:5.1f}%")
     parts.append(f"({current}/{total})")
 
-    # Use \r to overwrite the line
     print("\r" + " ".join(parts), end="", flush=True)
 
     if current >= total:
-        print()  # New line when complete
+        print()
 
 
 @contextlib.contextmanager
@@ -296,10 +215,6 @@ def loading(
         text: Loading message
         success_text: Message to show on success
         error_text: Message to show on error
-
-    Example:
-        with loading("Fetching data"):
-            fetch_data()
     """
     spinner.text = text
     spinner.start()
@@ -322,67 +237,35 @@ def loading(
 
 @contextlib.contextmanager
 def section(title: str, /) -> t.Generator[None, None, None]:
-    """Context manager for a named section with visual boundaries.
+    """Context manager for a named section.
 
     Args:
         title: Section title
-
-    Example:
-        with section("Configuration"):
-            key_value(config)
     """
-    # Print section header
-    width = 60
-    border = Box.H * (width - len(title) - 4)
-    header = f"{Box.TL}{Box.H * 2} {title} {border}{Box.TR}"
     print()
-    print(ANSI.format(header, ANSI.FG.CYAN, ANSI.STYLE.BOLD))
-    print()
+    print(title)
+    print("-" * len(title))
 
     try:
         yield
     finally:
-        # Print section footer
-        footer = Box.BL + Box.H * (width - 2) + Box.BR
-        print()
-        print(ANSI.format(footer, ANSI.FG.CYAN))
         print()
 
 
 def banner(text: str, /, subtitle: str | None = None, version: str | None = None) -> None:
-    """Print an application banner/splash screen.
+    """Print an application banner.
 
     Args:
         text: Main banner text
         subtitle: Optional subtitle
         version: Optional version string
     """
-    width = 70
-
     print()
-    print(ANSI.format(Box.TL + Box.H * (width - 2) + Box.TR, ANSI.FG.CYAN))
-
-    # Main text - centered
-    padding = (width - len(text) - 2) // 2
-    line = f"{Box.V}{' ' * padding}{text}{' ' * (width - padding - len(text) - 2)}{Box.V}"
-    print(ANSI.format(line, ANSI.FG.CYAN, ANSI.STYLE.BOLD))
-
-    # Subtitle
+    print(f"=== {text} ===")
     if subtitle:
-        padding = (width - len(subtitle) - 2) // 2
-        line = (
-            f"{Box.V}{' ' * padding}{subtitle}{' ' * (width - padding - len(subtitle) - 2)}{Box.V}"
-        )
-        print(ANSI.format(line, ANSI.FG.GRAY))
-
-    # Version in bottom right
+        print(f"    {subtitle}")
     if version:
-        version_text = f"v{version}"
-        padding = width - len(version_text) - 4
-        line = f"{Box.V}{' ' * padding}{version_text}  {Box.V}"
-        print(ANSI.format(line, ANSI.FG.GRAY, ANSI.STYLE.DIM))
-
-    print(ANSI.format(Box.BL + Box.H * (width - 2) + Box.BR, ANSI.FG.CYAN))
+        print(f"    v{version}")
     print()
 
 
@@ -398,7 +281,6 @@ def tree(data: dict[str, t.Any], /, prefix: str = "") -> None:
     for i, (key, value) in enumerate(items):
         is_last_item = i == len(items) - 1
 
-        # Choose the right connector
         if is_last_item:
             connector = "└── "
             extension = "    "
@@ -406,21 +288,15 @@ def tree(data: dict[str, t.Any], /, prefix: str = "") -> None:
             connector = "├── "
             extension = "│   "
 
-        # Format and print the key
-        colored_connector = ANSI.format(connector, ANSI.FG.GRAY)
-        colored_key = ANSI.format(str(key), ANSI.FG.CYAN, ANSI.STYLE.BOLD)
-
         if isinstance(value, dict):
-            print(f"{prefix}{colored_connector}{colored_key}")
-            # Recurse for nested dicts
+            print(f"{prefix}{connector}{key}")
             tree(value, prefix + extension)
         elif isinstance(value, list):
-            print(f"{prefix}{colored_connector}{colored_key}")
+            print(f"{prefix}{connector}{key}")
             for item in value:
-                item_connector = ANSI.format("    • ", ANSI.FG.GRAY)
-                print(f"{prefix}{extension}{item_connector}{item}")
+                print(f"{prefix}{extension}• {item}")
         else:
-            print(f"{prefix}{colored_connector}{colored_key}: {value}")
+            print(f"{prefix}{connector}{key}: {value}")
 
 
 def confirm(prompt: str, /, default: bool = False) -> bool:
@@ -433,17 +309,107 @@ def confirm(prompt: str, /, default: bool = False) -> bool:
     Returns:
         True if user confirms, False otherwise
     """
-    suffix = " [Y/n]" if default else " [y/N]"
-    colored_prompt = ANSI.format(prompt + suffix + " ", ANSI.FG.YELLOW, ANSI.STYLE.BOLD)
+    suffix = "[Y/n]" if default else "[y/N]"
+    response = input(f"{prompt} {suffix} ").strip().lower()
 
-    while True:
-        response = input(colored_prompt).strip().lower()
+    if not response:
+        return default
 
-        if not response:
-            return default
+    if response in ("y", "yes"):
+        return True
+    if response in ("n", "no"):
+        return False
 
-        if response in ("y", "yes"):
-            return True
-        if response in ("n", "no"):
-            return False
-        error("Please answer 'y' or 'n'")
+    error("Please answer 'y' or 'n'")
+    return confirm(prompt, default)
+
+
+def exception_detail(exc: Exception, /, show_traceback: bool = False) -> None:
+    """Display detailed exception information.
+
+    Args:
+        exc: Exception to display
+        show_traceback: Whether to show full traceback
+    """
+    from cracks_yolo.exceptions import CracksYoloError
+
+    print()
+    print("=" * 70)
+    print(f"ERROR: {type(exc).__name__}")
+
+    if isinstance(exc, CracksYoloError):
+        print(f"Code: {exc.code}")
+
+    print("-" * 70)
+    print(f"Message: {exc}")
+    print("=" * 70)
+
+    if show_traceback:
+        print()
+        print("Traceback:")
+        print("-" * 70)
+        traceback.print_exception(type(exc), exc, exc.__traceback__)
+
+
+def error_summary(
+    title: str,
+    /,
+    details: dict[str, str] | None = None,
+    suggestions: list[str] | None = None,
+) -> None:
+    """Display an error summary with optional details and suggestions.
+
+    Args:
+        title: Error title/summary
+        details: Optional dictionary of error details
+        suggestions: Optional list of suggestions to fix the error
+    """
+    print()
+    print(f"✗ {title}")
+    print()
+
+    if details:
+        print("Details:")
+        key_value(details, indent=1)
+        print()
+
+    if suggestions:
+        print("Suggestions:")
+        list_items(suggestions, bullet="→", indent=1)
+        print()
+
+
+def fatal_error(message: str, /, exit_code: int = 1) -> t.NoReturn:
+    """Display a fatal error and exit.
+
+    Args:
+        message: Error message
+        exit_code: Exit code
+    """
+    print()
+    print("=" * 70)
+    print("FATAL ERROR")
+    print("=" * 70)
+    print(f"  {message}")
+    print("=" * 70)
+    print()
+    sys.exit(exit_code)
+
+
+def show_error(exc: Exception, verbose: bool = False) -> None:
+    """Display error information.
+
+    Args:
+        exc: Exception to display
+        verbose: Show full traceback
+    """
+    from cracks_yolo.exceptions import CracksYoloError
+
+    error(f"{type(exc).__name__}: {exc}")
+
+    if isinstance(exc, CracksYoloError):
+        info(f"Error code: {exc.code}")
+
+    if verbose:
+        print("\nTraceback:")
+        traceback.print_exception(type(exc), exc, exc.__traceback__)

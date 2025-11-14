@@ -13,6 +13,7 @@ from cracks_yolo.dataset import Dataset
 from cracks_yolo.dataset.types import Annotation
 from cracks_yolo.dataset.types import BBox
 from cracks_yolo.dataset.types import ImageInfo
+from cracks_yolo.exceptions import DatasetMergeError
 
 logger = logging.getLogger(__name__)
 
@@ -340,7 +341,7 @@ def merge(
     """
     if not datasets:
         logger.error("No datasets provided for merging")
-        raise ValueError("No datasets provided for merging")
+        raise DatasetMergeError("No datasets provided for merging")
 
     logger.info(
         f"Merging {len(datasets)} datasets into '{name}' "
