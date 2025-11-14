@@ -90,3 +90,6 @@ pyrightconfig.json
 # Chore/Experimental code
 .chore/
 .experimental/
+
+data/
+!data/.gitkeep
