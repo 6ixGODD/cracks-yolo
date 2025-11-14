@@ -5,7 +5,6 @@ import typing as t
 
 from cracks_yolo.cli.args import BaseArgs
 from cracks_yolo.cli.helper import display
-from cracks_yolo.cli.helper.ansi import ANSI
 from cracks_yolo.dataset import Dataset
 
 if t.TYPE_CHECKING:
@@ -116,7 +115,7 @@ def print_dataset_info(
         if dataset.get_sources():
             overview["Sources"] = len(dataset.get_sources())
 
-        display.key_value(overview, key_color=ANSI.FG.CYAN)
+        display.key_value(overview)
 
     # Statistics
     if by_source:
@@ -148,7 +147,7 @@ def print_dataset_info(
             percentage = f"{count / total * 100:.1f}%"
             rows.append([cat_name, str(count), percentage])
 
-        display.table(headers, rows, colors=[ANSI.FG.CYAN, ANSI.FG.GREEN, ANSI.FG.YELLOW])
+        display.table(headers, rows)
 
 
 def _print_stats_table(stats: t.Mapping[str, t.Any], detailed: bool = False) -> None:
@@ -176,7 +175,7 @@ def _print_stats_table(stats: t.Mapping[str, t.Any], detailed: bool = False) -> 
             "Avg BBox Area": f"{stats['avg_bbox_area']:.2f}",
             "Median BBox Area": f"{stats['median_bbox_area']:.2f}",
         }
-        display.key_value(detailed_stats, indent=1, key_color=ANSI.FG.GRAY)
+        display.key_value(detailed_stats, indent=1)
 
 
 def register(subparser: _SubParsersAction[argparse.ArgumentParser]) -> None:
