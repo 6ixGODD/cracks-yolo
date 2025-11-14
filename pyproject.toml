@@ -20,6 +20,8 @@ dependencies = [
   "halo>=0.0.31,<0.0.32",
   "matplotlib>=3.10.7,<4",
   "numpy==2.2.6",
+  "openpyxl>=3.1.5,<4",
+  "pandas>=2.3.3,<3",
   # "torch>=1.8.0",  # fuck poetry
   # "torchvision>=0.9.0",
   "pycocotools>=2.0.10,<3",
