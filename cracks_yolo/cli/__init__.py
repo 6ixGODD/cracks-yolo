@@ -1,5 +1,3 @@
-"""Main CLI entry point."""
-
 from __future__ import annotations
 
 import argparse
@@ -37,13 +35,28 @@ def main() -> int:
         return 1
 
 
-def parse_args() -> argparse.Namespace:
+def register_commands(subparsers: argparse._SubParsersAction) -> None:
+    from cracks_yolo.cli import annotator
     from cracks_yolo.cli import dataset
 
+    dataset.register(subparsers)
+    annotator.register(subparsers)
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
+        description="Cracks YOLO Command Line Interface",
         prog="cracks-yolo",
-        description="Cracks YOLO - Dataset management toolkit",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog="For more information, visit: https://github.com/6ixGODD/cracks-yolo",
+    )
+
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose output with detailed tracebacks",
     )
 
     parser.add_argument(
@@ -52,21 +65,22 @@ def parse_args() -> argparse.Namespace:
         version=f"%(prog)s {__version__}",
     )
 
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Show detailed error messages",
-    )
-
     subparsers = parser.add_subparsers(
+        title="commands",
         dest="command",
         help="Available commands",
         required=True,
     )
 
-    # Register commands
-    dataset.register(subparsers)
+    register_commands(subparsers)
+
+    def print_help(args: argparse.Namespace) -> None:
+        parser.print_help()
+        if args.command is None:
+            print()
+            display.warning("Please specify a command. Use -h for help.")
+
+    parser.set_defaults(func=print_help)
 
     return parser.parse_args()
 

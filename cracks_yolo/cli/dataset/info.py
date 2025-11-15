@@ -28,11 +28,13 @@ class Args(BaseArgs):
 
         try:
             # Load dataset(s)
-            datasets = load_dataset_info(
-                input_path=self.input,
-                format=self.format,
-                splits=self.splits,
-            )
+            with display.loading(f"Loading {self.format.upper()} dataset"):
+                datasets = load_dataset_info(
+                    input_path=self.input,
+                    format=self.format,
+                    splits=self.splits,
+                )
+            display.success(f"Loaded {len(datasets)} split(s)")
 
             # Print information
             print_dataset_info(

@@ -88,6 +88,7 @@ def export_dataset(
     naming_strategy: NamingStrategy | None = None,
     seed: int | None = None,
     copy_images: bool = True,
+    unified_structure: bool = False,
 ) -> None:
     """Export dataset to the specified format.
 
@@ -99,6 +100,7 @@ def export_dataset(
         naming_strategy: File naming strategy
         seed: Random seed for splits
         copy_images: Whether to copy image files
+        unified_structure: Whether to export as unified structure
     """
     try:
         if format == "coco":
@@ -109,6 +111,7 @@ def export_dataset(
                 seed=seed,
                 naming_strategy=naming_strategy,
                 copy_images=copy_images,
+                unified_structure=unified_structure,
             )
         elif format == "yolo":
             export_yolov5(
@@ -118,6 +121,7 @@ def export_dataset(
                 seed=seed,
                 naming_strategy=naming_strategy,
                 copy_images=copy_images,
+                unified_structure=unified_structure,
             )
         else:
             raise DatasetExportError(f"Unknown format: {format}")

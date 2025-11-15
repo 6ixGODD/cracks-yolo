@@ -67,6 +67,9 @@ class Args(BaseArgs):
     yolo_splits: list[str] | None = None
     """Which splits to load for YOLO datasets (train, val, test)."""
 
+    unified_structure: bool = False
+    """Export with unified directory structure."""
+
     def run(self) -> None:
         from cracks_yolo.cli.dataset.helper import export_dataset
         from cracks_yolo.cli.dataset.helper import get_naming_strategy
@@ -181,6 +184,7 @@ class Args(BaseArgs):
                     naming_strategy=naming_strategy,
                     seed=self.seed,
                     copy_images=not self.no_copy,
+                    unified_structure=self.unified_structure,
                 )
 
             display.separator()
@@ -345,6 +349,11 @@ class Args(BaseArgs):
             nargs="+",
             choices=["train", "val", "test"],
             help="Which splits to load for YOLO datasets (default: all available)",
+        )
+        parser.add_argument(
+            "--unified-structure",
+            action="store_true",
+            help="Use unified directory structure: images/train/, annotations/",
         )
 
 
