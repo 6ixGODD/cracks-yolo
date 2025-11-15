@@ -106,6 +106,9 @@ class ControlPanel(ttk.Frame):
         on_split_changed: t.Callable[[str], None],
         on_edit_mode_changed: t.Callable[[bool], None],
         on_category_changed: t.Callable[[int | None], None],
+        on_audit_mode_changed: t.Callable[[bool], None],
+        on_approve: t.Callable[[], None],
+        on_reject: t.Callable[[], None],
     ):
         """Initialize control panel."""
         super().__init__(parent)
@@ -113,6 +116,9 @@ class ControlPanel(ttk.Frame):
         self.on_split_changed = on_split_changed
         self.on_edit_mode_changed = on_edit_mode_changed
         self.on_category_changed = on_category_changed
+        self.on_audit_mode_changed = on_audit_mode_changed
+        self.on_approve = on_approve
+        self.on_reject = on_reject
 
         # Left side: Split and navigation
         left_frame = ttk.Frame(self)
@@ -134,6 +140,42 @@ class ControlPanel(ttk.Frame):
         self.counter_label.pack(side="left", padx=10)
 
         ttk.Button(left_frame, text="Next ▶", command=on_next, width=8).pack(side="left", padx=2)
+
+        # Center: Audit controls
+        audit_frame = ttk.Frame(self)
+        audit_frame.pack(side="left", padx=20)
+
+        # Audit mode toggle
+        self.audit_mode_var = tk.BooleanVar(value=False)
+        audit_check = ttk.Checkbutton(
+            audit_frame,
+            text="🔍 Audit Mode",
+            variable=self.audit_mode_var,
+            command=self._on_audit_mode_toggle,
+            style="Toolbutton",
+        )
+        audit_check.pack(side="left", padx=(0, 10))
+
+        # Audit buttons (initially hidden)
+        self.audit_buttons_frame = ttk.Frame(audit_frame)
+
+        ttk.Button(
+            self.audit_buttons_frame,
+            text="✓ Approve",
+            command=on_approve,
+            width=10,
+        ).pack(side="left", padx=2)
+
+        ttk.Button(
+            self.audit_buttons_frame,
+            text="✗ Reject",
+            command=on_reject,
+            width=10,
+        ).pack(side="left", padx=2)
+
+        # Audit status label
+        self.audit_status_label = ttk.Label(self.audit_buttons_frame, text="", font=("Segoe UI", 9))
+        self.audit_status_label.pack(side="left", padx=10)
 
         # Right side: Edit controls
         right_frame = ttk.Frame(self)
@@ -180,6 +222,29 @@ class ControlPanel(ttk.Frame):
         """Update image counter display."""
         self.counter_label.config(text=f"{current} / {total}")
 
+    def update_audit_status(self, status: str) -> None:
+        """Update audit status display."""
+        status_text = {
+            "approved": "✓ Approved",
+            "rejected": "✗ Rejected",
+            "pending": "⏳ Pending",
+        }.get(status, "")
+
+        status_color = {
+            "approved": "green",
+            "rejected": "red",
+            "pending": "orange",
+        }.get(status, "black")
+
+        self.audit_status_label.config(text=status_text, foreground=status_color)
+
+    def show_audit_controls(self, show: bool) -> None:
+        """Show or hide audit control buttons."""
+        if show:
+            self.audit_buttons_frame.pack(side="left")
+        else:
+            self.audit_buttons_frame.pack_forget()
+
     def _on_split_select(self, _event: tk.Event) -> None:
         """Handle split selection."""
         split = self.split_var.get()
@@ -189,6 +254,12 @@ class ControlPanel(ttk.Frame):
         """Handle edit mode toggle."""
         enabled = self.edit_mode_var.get()
         self.on_edit_mode_changed(enabled)
+
+    def _on_audit_mode_toggle(self) -> None:
+        """Handle audit mode toggle."""
+        enabled = self.audit_mode_var.get()
+        self.on_audit_mode_changed(enabled)
+        self.show_audit_controls(enabled)
 
     def _on_category_select(self, _event: tk.Event | None) -> None:
         """Handle category selection."""
@@ -216,7 +287,7 @@ class InfoPanel(ttk.Frame):
 
         self.dataset_text = tk.Text(
             self.dataset_info_frame,
-            height=5,
+            height=6,
             width=30,
             state="disabled",
             font=("Consolas", 9),
@@ -230,7 +301,7 @@ class InfoPanel(ttk.Frame):
 
         self.image_text = tk.Text(
             self.image_info_frame,
-            height=5,
+            height=6,
             width=30,
             state="disabled",
             font=("Consolas", 9),
@@ -251,7 +322,9 @@ class InfoPanel(ttk.Frame):
         self.annotations_text.pack(side="left", fill="both", expand=True)
         ann_scrollbar.pack(side="right", fill="y")
 
-    def update_dataset_info(self, info: dict[str, int]) -> None:
+    def update_dataset_info(
+        self, info: dict[str, int], audit_stats: dict[str, int] | None = None
+    ) -> None:
         """Update dataset information."""
         self.dataset_text.config(state="normal")
         self.dataset_text.delete("1.0", tk.END)
@@ -259,6 +332,12 @@ class InfoPanel(ttk.Frame):
         text = ""
         for key, value in info.items():
             text += f"{key.capitalize()}: {value}\n"
+
+        if audit_stats:
+            text += "\nAudit Status:\n"
+            text += f"Approved: {audit_stats['approved']}\n"
+            text += f"Rejected: {audit_stats['rejected']}\n"
+            text += f"Pending: {audit_stats['pending']}\n"
 
         self.dataset_text.insert("1.0", text)
         self.dataset_text.config(state="disabled")
@@ -268,6 +347,7 @@ class InfoPanel(ttk.Frame):
         image_info: ImageInfo,
         annotations: list[Annotation],
         source: str | None = None,
+        audit_status: str | None = None,
     ) -> None:
         """Update image information."""
         # Image info
@@ -279,6 +359,13 @@ class InfoPanel(ttk.Frame):
         text += f"Annotations: {len(annotations)}\n"
         if source:
             text += f"Source: {source}\n"
+        if audit_status:
+            status_text = {
+                "approved": "✓ Approved",
+                "rejected": "✗ Rejected",
+                "pending": "⏳ Pending",
+            }.get(audit_status, audit_status)
+            text += f"Status: {status_text}\n"
 
         self.image_text.insert("1.0", text)
         self.image_text.config(state="disabled")

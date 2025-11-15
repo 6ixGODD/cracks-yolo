@@ -151,7 +151,7 @@ class ExportDialog:
         dir_entry = ttk.Entry(dir_frame, textvariable=dir_var, width=60)
         dir_entry.pack(side="left", padx=(0, 5), fill="x", expand=True)
 
-        def browse():
+        def browse() -> None:
             path = filedialog.askdirectory()
             if path:
                 dir_var.set(path)
@@ -210,7 +210,7 @@ class ExportDialog:
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill="x", pady=(10, 0))
 
-        def on_ok():
+        def on_ok() -> None:
             if not dir_var.get():
                 messagebox.showwarning("Warning", "Please select an output directory")
                 return

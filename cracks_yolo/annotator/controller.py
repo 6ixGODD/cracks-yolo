@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import typing as t
 
+from cracks_yolo.annotator.workspace import Workspace
 from cracks_yolo.dataset import Dataset
 from cracks_yolo.dataset.exporter import OriginalNaming
 from cracks_yolo.dataset.exporter import PrefixNaming
@@ -12,10 +13,10 @@ from cracks_yolo.dataset.exporter import export_coco
 from cracks_yolo.dataset.exporter import export_yolov5
 from cracks_yolo.dataset.loader import load_coco
 from cracks_yolo.dataset.loader import load_yolo
+from cracks_yolo.dataset.types import Annotation
 
 if t.TYPE_CHECKING:
     from cracks_yolo.dataset.exporter import NamingStrategy
-    from cracks_yolo.dataset.types import Annotation
     from cracks_yolo.dataset.types import ImageInfo
 
 logger = logging.getLogger(__name__)
@@ -31,12 +32,151 @@ class AnnotationController:
         # Cache for modified annotations
         self.modified_annotations: dict[str, list[Annotation]] = {}
 
+        # Workspace
+        self.workspace: Workspace | None = None
+        self.dataset_path: str = ""
+        self.dataset_format: str = ""
+        self.loaded_splits: list[str] = []
+
+        # Audit mode
+        self.audit_mode: bool = False
+        self.audit_status: dict[str, str] = {}  # image_id -> "approved" | "rejected" | "pending"
+
+    def enable_audit_mode(self, enabled: bool) -> None:
+        """Enable or disable audit mode."""
+        self.audit_mode = enabled
+
+        # Initialize all images as pending if enabling for first time
+        if enabled and not self.audit_status:
+            for image_ids in self.image_ids_by_split.values():
+                for img_id in image_ids:
+                    if img_id not in self.audit_status:
+                        self.audit_status[img_id] = "pending"
+
+    def set_audit_status(
+        self, image_id: str, status: t.Literal["approved", "rejected", "pending"]
+    ) -> None:
+        """Set audit status for current image."""
+        self.audit_status[image_id] = status
+        logger.info(f"Image {image_id} marked as {status}")
+
+    def get_audit_status(self, image_id: str) -> str:
+        """Get audit status for image."""
+        return self.audit_status.get(image_id, "pending")
+
+    def get_audit_statistics(self) -> dict[str, int]:
+        """Get audit statistics."""
+        stats = {"approved": 0, "rejected": 0, "pending": 0}
+
+        for status in self.audit_status.values():
+            if status in stats:
+                stats[status] += 1
+
+        # Count unreviewed images
+        total_images = self.total_images()
+        stats["pending"] = total_images - (stats["approved"] + stats["rejected"])
+
+        return stats
+
+    def save_workspace(self, filepath: str) -> None:
+        """Save current workspace to file."""
+        from cracks_yolo.annotator.workspace import Workspace
+
+        workspace = Workspace()
+        workspace.set_dataset_info(self.dataset_path, self.dataset_format, self.loaded_splits)
+        workspace.set_current_position(self.current_split or "", self.current_index)
+
+        # Save modified annotations
+        for img_id, anns in self.modified_annotations.items():
+            workspace.set_modified_annotations(img_id, anns)
+
+        # Save audit info
+        workspace.set_audit_mode(self.audit_mode)
+        for img_id, status in self.audit_status.items():
+            workspace.set_audit_status(img_id, status)
+
+        workspace.save(filepath)
+        logger.info(f"Workspace saved to {filepath}")
+
+    def load_workspace(self, filepath: str) -> None:
+        """Load workspace from file."""
+        from cracks_yolo.annotator.workspace import Workspace
+
+        workspace = Workspace.load(filepath)
+
+        # Load dataset
+        self.load_dataset(
+            workspace.data["dataset_path"],
+            workspace.data["dataset_format"],
+            workspace.data["loaded_splits"],
+        )
+
+        # Restore position
+        if workspace.data["current_split"]:
+            self.current_split = workspace.data["current_split"]
+            self.current_index = workspace.data["current_index"]
+
+        # Restore modified annotations
+        self.modified_annotations.clear()
+        for img_id in workspace.data["modified_annotations"]:
+            anns = workspace.get_modified_annotations(img_id)
+            if anns:
+                self.modified_annotations[img_id] = anns
+
+        # Restore audit info
+        self.audit_mode = workspace.data["audit_mode"]
+        self.audit_status = workspace.data["audit_status"].copy()
+
+        logger.info(f"Workspace loaded from {filepath}")
+
+    def generate_audit_report(self) -> str:
+        """Generate audit report."""
+        from datetime import datetime
+
+        stats = self.get_audit_statistics()
+        total = self.total_images()
+
+        report = "=" * 60 + "\n"
+        report += "AUDIT REPORT\n"
+        report += "=" * 60 + "\n\n"
+        report += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        report += f"Dataset: {self.dataset_path}\n"
+        report += f"Format: {self.dataset_format}\n\n"
+        report += "Audit Statistics:\n"
+        report += "-" * 60 + "\n"
+        report += f"Total Images: {total}\n"
+        report += (
+            f"Approved: {stats['approved']} ({stats['approved'] / total * 100:.1f}%)\n"
+            if total > 0
+            else "Approved: 0\n"
+        )
+        report += (
+            f"Rejected: {stats['rejected']} ({stats['rejected'] / total * 100:.1f}%)\n"
+            if total > 0
+            else "Rejected: 0\n"
+        )
+        report += (
+            f"Pending: {stats['pending']} ({stats['pending'] / total * 100:.1f}%)\n"
+            if total > 0
+            else "Pending: 0\n"
+        )
+        report += "=" * 60 + "\n"
+
+        return report
+
     def load_dataset(
         self,
         path: str,
         format_type: str,
         splits: list[t.Literal["train", "val", "test"]],
     ) -> None:
+        """Load dataset and store path info for workspace."""
+        # Store dataset info for workspace
+        self.dataset_path = path
+        self.dataset_format = format_type
+        self.loaded_splits = splits
+
+        # ... rest of existing load_dataset code ...
         logger.info(f"Loading {format_type} dataset from {path}, splits: {splits}")
 
         self.datasets.clear()

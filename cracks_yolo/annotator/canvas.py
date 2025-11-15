@@ -517,18 +517,60 @@ class AnnotationCanvas(tk.Canvas):
             self.config(cursor="crosshair")
 
     def on_mouse_wheel(self, event: tk.Event) -> None:  # type: ignore
+        """Handle mouse wheel for zooming at mouse position."""
+        # Get mouse position before zoom
+        mouse_x = event.x
+        mouse_y = event.y
+
+        # Calculate image coordinates at mouse position
+        img_x_before = (mouse_x - self.offset_x) / self.zoom_level
+        img_y_before = (mouse_y - self.offset_y) / self.zoom_level
+
+        # Zoom
         if event.delta > 0:
-            self.zoom_in()
+            self.zoom_level = min(self.zoom_level * 1.2, 5.0)
         else:
-            self.zoom_out()
+            self.zoom_level = max(self.zoom_level / 1.2, 0.1)
 
-    def zoom_in(self) -> None:
+        # Calculate new offset to keep mouse position on same image point
+        if self.image:
+            img_x_after = (mouse_x - self.offset_x) / self.zoom_level
+            img_y_after = (mouse_y - self.offset_y) / self.zoom_level
+
+            # Adjust offset
+            dx = (img_x_after - img_x_before) * self.zoom_level
+            dy = (img_y_after - img_y_before) * self.zoom_level
+
+            self.offset_x += int(dx)
+            self.offset_y += int(dy)
+
+        self.render()
+
+    def zoom_in(self, center: bool = True) -> None:
+        """Zoom in.
+
+        Args:
+            center: If True, zoom to center. If False, keep current offset.
+        """
         self.zoom_level = min(self.zoom_level * 1.2, 5.0)
-        self.render()
+        if center:
+            # Reset offset to center
+            self.render()
+        else:
+            # Keep current offset, just update zoom
+            self.render()
 
-    def zoom_out(self) -> None:
+    def zoom_out(self, center: bool = True) -> None:
+        """Zoom out.
+
+        Args:
+            center: If True, zoom to center. If False, keep current offset.
+        """
         self.zoom_level = max(self.zoom_level / 1.2, 0.1)
-        self.render()
+        if center:
+            self.render()
+        else:
+            self.render()
 
     def reset_zoom(self) -> None:
         self.zoom_level = 1.0

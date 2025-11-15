@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import pathlib
 import tkinter as tk
-from tkinter import messagebox
-from tkinter import ttk
+import tkinter.filedialog as filedialog
+import tkinter.messagebox as messagebox
+import tkinter.ttk as ttk
 
 from cracks_yolo.annotator.canvas import AnnotationCanvas
 from cracks_yolo.annotator.controller import AnnotationController
@@ -17,8 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class AnnotatorApp:
-    """Simple annotation tool for viewing and editing datasets."""
-
     def __init__(self, root: tk.Tk | None = None):
         """Initialize the annotation application."""
         self.root = root or tk.Tk()
@@ -60,6 +60,13 @@ class AnnotatorApp:
             label="Export Dataset...", command=self.export_dataset, accelerator="Ctrl+S"
         )
         file_menu.add_separator()
+        file_menu.add_command(
+            label="Save Workspace...", command=self.save_workspace, accelerator="Ctrl+Shift+S"
+        )
+        file_menu.add_command(
+            label="Load Workspace...", command=self.load_workspace, accelerator="Ctrl+Shift+O"
+        )
+        file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.on_closing, accelerator="Alt+F4")
 
         # View menu
@@ -72,11 +79,24 @@ class AnnotatorApp:
         view_menu.add_command(label="Zoom Out", command=self.zoom_out, accelerator="Ctrl+-")
         view_menu.add_command(label="Reset Zoom", command=self.reset_zoom, accelerator="Ctrl+0")
 
+        # Audit menu
+        audit_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Audit", menu=audit_menu)
+        audit_menu.add_command(
+            label="Approve Current", command=self.approve_current, accelerator="A"
+        )
+        audit_menu.add_command(label="Reject Current", command=self.reject_current, accelerator="R")
+        audit_menu.add_separator()
+        audit_menu.add_command(label="View Audit Report", command=self.show_audit_report)
+        audit_menu.add_command(label="Export Audit Report...", command=self.export_audit_report)
+
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="Keyboard Shortcuts", command=self.show_shortcuts)
         help_menu.add_command(label="About", command=self.show_about)
+
+    # ... existing _setup_layout ...
 
     def _setup_layout(self) -> None:
         """Setup main layout with panels."""
@@ -107,7 +127,7 @@ class AnnotatorApp:
         )
         self.canvas.grid(row=0, column=0, sticky="nsew", pady=(0, 5))
 
-        # Control panel
+        # Control panel (with audit callbacks)
         self.control_panel = ControlPanel(
             center_frame,
             on_prev=self.prev_image,
@@ -115,6 +135,9 @@ class AnnotatorApp:
             on_split_changed=self.on_split_changed,
             on_edit_mode_changed=self.on_edit_mode_changed,
             on_category_changed=self.on_category_changed,
+            on_audit_mode_changed=self.on_audit_mode_changed,
+            on_approve=self.approve_current,
+            on_reject=self.reject_current,
         )
         self.control_panel.grid(row=1, column=0, sticky="ew")
 
@@ -137,6 +160,8 @@ class AnnotatorApp:
         self.root.bind("<Right>", lambda _: self.next_image())
         self.root.bind("<Control-o>", lambda _: self.import_dataset())
         self.root.bind("<Control-s>", lambda _: self.export_dataset())
+        self.root.bind("<Control-Shift-S>", lambda _: self.save_workspace())
+        self.root.bind("<Control-Shift-O>", lambda _: self.load_workspace())
         self.root.bind("<Control-plus>", lambda _: self.zoom_in())
         self.root.bind("<Control-equal>", lambda _: self.zoom_in())
         self.root.bind("<Control-minus>", lambda _: self.zoom_out())
@@ -145,6 +170,298 @@ class AnnotatorApp:
         # Delete and Undo
         self.root.bind("<Delete>", lambda _: self.delete_selected())
         self.root.bind("<Control-z>", lambda _: self.undo())
+
+        # Audit shortcuts
+        self.root.bind("<a>", lambda _: self.approve_current())
+        self.root.bind("<A>", lambda _: self.approve_current())
+        self.root.bind("<r>", lambda _: self.reject_current())
+        self.root.bind("<R>", lambda _: self.reject_current())
+
+    def on_audit_mode_changed(self, enabled: bool) -> None:
+        """Handle audit mode toggle."""
+        self.controller.enable_audit_mode(enabled)
+
+        # Update info panel with audit stats
+        if enabled:
+            audit_stats = self.controller.get_audit_statistics()
+            self.info_panel.update_dataset_info(self.controller.get_dataset_info(), audit_stats)
+
+            # Update current image audit status
+            current_id = self.controller.get_current_image_id()
+            if current_id:
+                status = self.controller.get_audit_status(current_id)
+                self.control_panel.update_audit_status(status)
+
+        mode_text = "ON (🔍 Audit)" if enabled else "OFF"
+        self.status_var.set(f"Audit mode: {mode_text}")
+
+    def approve_current(self) -> None:
+        """Approve current image."""
+        if not self.controller.audit_mode:
+            return
+
+        current_id = self.controller.get_current_image_id()
+        if current_id:
+            self.controller.set_audit_status(current_id, "approved")
+            self.control_panel.update_audit_status("approved")
+            self.status_var.set("✓ Image approved")
+
+            # Update info panel
+            audit_stats = self.controller.get_audit_statistics()
+            self.info_panel.update_dataset_info(self.controller.get_dataset_info(), audit_stats)
+
+            # Auto advance to next
+            self.next_image()
+
+    def reject_current(self) -> None:
+        """Reject current image."""
+        if not self.controller.audit_mode:
+            return
+
+        current_id = self.controller.get_current_image_id()
+        if current_id:
+            self.controller.set_audit_status(current_id, "rejected")
+            self.control_panel.update_audit_status("rejected")
+            self.status_var.set("✗ Image rejected")
+
+            # Update info panel
+            audit_stats = self.controller.get_audit_statistics()
+            self.info_panel.update_dataset_info(self.controller.get_dataset_info(), audit_stats)
+
+            # Auto advance to next
+            self.next_image()
+
+    def save_workspace(self) -> None:
+        """Save current workspace."""
+        if not self.controller.has_dataset():
+            messagebox.showwarning("Warning", "No dataset loaded")
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".cyw",
+            filetypes=[("Cracks YOLO Workspace", "*.cyw"), ("All Files", "*.*")],
+            title="Save Workspace",
+        )
+
+        if filepath:
+            try:
+                self.controller.save_workspace(filepath)
+                self.status_var.set(f"✓ Workspace saved: {filepath}")
+                messagebox.showinfo("Success", f"Workspace saved to:\n{filepath}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save workspace:\n{e}")
+                logger.error(f"Failed to save workspace: {e}", exc_info=True)
+
+    def load_workspace(self) -> None:
+        """Load workspace from file."""
+        filepath = filedialog.askopenfilename(
+            filetypes=[("Cracks YOLO Workspace", "*.cyw"), ("All Files", "*.*")],
+            title="Load Workspace",
+        )
+
+        if filepath:
+            try:
+                self.controller.load_workspace(filepath)
+                self.update_after_load()
+
+                # Restore current image
+                current_id = self.controller.get_current_image_id()
+                if current_id:
+                    self.load_image(current_id)
+
+                self.status_var.set(f"✓ Workspace loaded: {filepath}")
+                messagebox.showinfo("Success", f"Workspace loaded from:\n{filepath}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load workspace:\n{e}")
+                logger.error(f"Failed to load workspace: {e}", exc_info=True)
+
+    def show_audit_report(self) -> None:
+        """Show audit report in a dialog."""
+        if not self.controller.audit_mode:
+            messagebox.showinfo("Info", "Audit mode is not enabled")
+            return
+
+        report = self.controller.generate_audit_report()
+
+        # Create report dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Audit Report")
+        dialog.geometry("600x400")
+        dialog.transient(self.root)  # type: ignore
+
+        # Center dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (600 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (400 // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+        # Text widget with scrollbar
+        text_frame = ttk.Frame(dialog, padding=10)
+        text_frame.pack(fill="both", expand=True)
+
+        text = tk.Text(text_frame, wrap="word", font=("Consolas", 10))
+        scrollbar = ttk.Scrollbar(text_frame, command=text.yview)
+        text.config(yscrollcommand=scrollbar.set)
+
+        text.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        text.insert("1.0", report)
+        text.config(state="disabled")
+
+        # Close button
+        ttk.Button(dialog, text="Close", command=dialog.destroy, width=12).pack(pady=10)
+
+    def export_audit_report(self) -> None:
+        """Export audit report to text file."""
+        if not self.controller.audit_mode:
+            messagebox.showinfo("Info", "Audit mode is not enabled")
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
+            title="Export Audit Report",
+        )
+
+        if filepath:
+            try:
+                report = self.controller.generate_audit_report()
+                with pathlib.Path(filepath).open("w", encoding="utf-8") as f:
+                    f.write(report)
+
+                self.status_var.set(f"✓ Audit report exported: {filepath}")
+                messagebox.showinfo("Success", f"Audit report exported to:\n{filepath}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export report:\n{e}")
+                logger.error(f"Failed to export report: {e}", exc_info=True)
+
+    def export_dataset(self) -> None:
+        """Show export dialog and save dataset."""
+        if not self.controller.has_dataset():
+            messagebox.showwarning("Warning", "No dataset loaded")
+            return
+
+        # Check for pending audits if in audit mode
+        if self.controller.audit_mode:
+            stats = self.controller.get_audit_statistics()
+            if stats["pending"] > 0:
+                response = messagebox.askyesno(
+                    "Pending Audits",
+                    f"There are {stats['pending']} images pending audit.\n\n"
+                    "Do you want to continue exporting?",
+                )
+                if not response:
+                    return
+
+        dialog = ExportDialog(self.root)  # type: ignore
+        result = dialog.show()
+
+        if result:
+            output_dir = result["output_dir"]
+            format_type = result["format"]
+            naming = result["naming"]
+
+            self.status_var.set(f"Exporting to {format_type.upper()} format...")
+            self.root.update()
+
+            try:
+                self.controller.export_dataset(output_dir, format_type, naming)
+
+                self.status_var.set(f"✓ Exported to {output_dir}")
+
+                # Export audit report if in audit mode
+                if self.controller.audit_mode:
+                    import pathlib
+
+                    report_path = pathlib.Path(output_dir) / "audit_report.txt"
+                    report = self.controller.generate_audit_report()
+                    with report_path.open("w", encoding="utf-8") as f:
+                        f.write(report)
+
+                    messagebox.showinfo(
+                        "Success",
+                        f"Dataset exported successfully to:\n{output_dir}\n\n"
+                        f"Audit report saved to:\n{report_path}",
+                    )
+                else:
+                    messagebox.showinfo(
+                        "Success", f"Dataset exported successfully to:\n{output_dir}"
+                    )
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export dataset:\n{e}")
+                self.status_var.set("Ready")
+                logger.error(f"Failed to export dataset: {e}", exc_info=True)
+
+    def load_image(self, image_id: str) -> None:
+        """Load and display image with annotations."""
+        try:
+            image_info = self.controller.get_image_info(image_id)
+            annotations = self.controller.get_annotations(image_id)
+
+            if image_info and image_info.path and image_info.path.exists():
+                from PIL import Image
+
+                img = Image.open(image_info.path)
+
+                self.canvas.display_image(img, annotations, self.controller.get_categories())
+
+                # Get audit status if in audit mode
+                audit_status = None
+                if self.controller.audit_mode:
+                    audit_status = self.controller.get_audit_status(image_id)
+                    self.control_panel.update_audit_status(audit_status)
+
+                self.info_panel.update_image_info(
+                    image_info=image_info,
+                    annotations=annotations,
+                    source=self.controller.get_image_source(image_id),
+                    audit_status=audit_status,
+                )
+
+                self.status_var.set(f"📷 {image_info.file_name}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load image:\n{e}")
+            logger.error(f"Failed to load image {image_id}: {e}", exc_info=True)
+
+    def show_shortcuts(self) -> None:
+        """Show keyboard shortcuts dialog."""
+        shortcuts = """
+Keyboard Shortcuts:
+
+Navigation:
+  ←\t\t\tPrevious image
+  →\t\t\tNext image
+
+View:
+  Ctrl + +\t\tZoom in (at mouse position)
+  Ctrl + -\t\tZoom out (at mouse position)
+  Ctrl + 0\t\tReset zoom
+  Mouse Wheel\t\tZoom at cursor
+
+Editing:
+  Delete\t\tDelete selected annotation
+  Ctrl + Z\t\tUndo last change
+  Right Click\t\tShow delete menu
+  Drag Corners\t\tResize (diagonal)
+  Drag Edges\t\tResize (horizontal/vertical)
+  Click BBox\t\tSelect annotation
+
+Audit:
+  A\t\t\tApprove current image
+  R\t\t\tReject current image
+
+File:
+  Ctrl + O\t\tImport dataset
+  Ctrl + S\t\tExport dataset
+  Ctrl + Shift + S\tSave workspace
+  Ctrl + Shift + O\tLoad workspace
+"""
+        messagebox.showinfo("Keyboard Shortcuts", shortcuts)
+
+        # ... rest of existing methods ...
 
     def delete_selected(self) -> None:
         """Delete selected annotation."""
@@ -155,34 +472,6 @@ class AnnotatorApp:
         """Undo last annotation change."""
         if self.canvas.undo():
             self.status_var.set("↶ Undo - Unsaved changes")
-
-    def show_shortcuts(self) -> None:
-        """Show keyboard shortcuts dialog."""
-        shortcuts = """
-Keyboard Shortcuts
-
-[Navigation]
-  ←\t\tPrevious image
-  →\t\tNext image
-
-[View]
-  Ctrl + +\t\tZoom in
-  Ctrl + -\t\tZoom out
-  Ctrl + 0\t\tReset zoom
-
-[Editing]
-  Delete\t\tDelete selected annotation
-  Ctrl + Z\t\tUndo last change
-  Right Click\tShow delete menu
-  Drag Corners\tResize (diagonal)
-  Drag Edges\tResize (horizontal/vertical)
-  Click BBox\tSelect annotation
-
-[File]
-  Ctrl + O\t\tImport dataset
-  Ctrl + S\t\tExport dataset
-"""
-        messagebox.showinfo("Keyboard Shortcuts", shortcuts)
 
     def on_closing(self) -> None:
         """Handle window close event."""
@@ -224,34 +513,6 @@ Keyboard Shortcuts
                 self.status_var.set("Ready")
                 logger.error(f"Failed to load dataset: {e}", exc_info=True)
 
-    def export_dataset(self) -> None:
-        """Show export dialog and save dataset."""
-        if not self.controller.has_dataset():
-            messagebox.showwarning("Warning", "No dataset loaded")
-            return
-
-        dialog = ExportDialog(self.root)  # type: ignore
-        result = dialog.show()
-
-        if result:
-            output_dir = result["output_dir"]
-            format_type = result["format"]
-            naming = result["naming"]
-
-            self.status_var.set(f"Exporting to {format_type.upper()} format...")
-            self.root.update()
-
-            try:
-                self.controller.export_dataset(output_dir, format_type, naming)
-
-                self.status_var.set(f"✓ Exported to {output_dir}")
-                messagebox.showinfo("Success", f"Dataset exported successfully to:\n{output_dir}")
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to export dataset:\n{e}")
-                self.status_var.set("Ready")
-                logger.error(f"Failed to export dataset: {e}", exc_info=True)
-
     def update_after_load(self) -> None:
         splits = self.controller.get_splits()
         current_split = splits[0] if splits else None
@@ -286,31 +547,6 @@ Keyboard Shortcuts
                 self.update_counter()
             except ValueError:
                 pass
-
-    def load_image(self, image_id: str) -> None:
-        """Load and display image with annotations."""
-        try:
-            image_info = self.controller.get_image_info(image_id)
-            annotations = self.controller.get_annotations(image_id)
-
-            if image_info and image_info.path and image_info.path.exists():
-                from PIL import Image
-
-                img = Image.open(image_info.path)
-
-                self.canvas.display_image(img, annotations, self.controller.get_categories())
-
-                self.info_panel.update_image_info(
-                    image_info=image_info,
-                    annotations=annotations,
-                    source=self.controller.get_image_source(image_id),
-                )
-
-                self.status_var.set(f"📷 {image_info.file_name}")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load image:\n{e}")
-            logger.error(f"Failed to load image {image_id}: {e}", exc_info=True)
 
     def next_image(self) -> None:
         """Navigate to next image."""
