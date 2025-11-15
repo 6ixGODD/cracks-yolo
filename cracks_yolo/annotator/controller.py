@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import datetime
 import logging
+import pathlib
 import typing as t
 
 from cracks_yolo.annotator.workspace import Workspace
@@ -32,15 +34,256 @@ class AnnotationController:
         # Cache for modified annotations
         self.modified_annotations: dict[str, list[Annotation]] = {}
 
+        # Original annotations (for audit report)
+        self.original_annotations: dict[str, list[Annotation]] = {}
+
         # Workspace
         self.workspace: Workspace | None = None
         self.dataset_path: str = ""
         self.dataset_format: str = ""
-        self.loaded_splits: list[str] = []
+        self.loaded_splits: list[t.Literal["train", "test", "val"]] = []
 
         # Audit mode
         self.audit_mode: bool = False
-        self.audit_status: dict[str, str] = {}  # image_id -> "approved" | "rejected" | "pending"
+        self.audit_status: dict[str, str] = {}
+
+    def load_raw_images(
+        self,
+        path: str,
+        categories: list[str],
+    ) -> None:
+        """Load raw images from directory and create empty dataset.
+
+        Args:
+            path: Path to directory containing images
+            categories: List of category names
+        """
+        import pathlib
+
+        from cracks_yolo.dataset import Dataset
+        from cracks_yolo.dataset.types import ImageInfo
+
+        logger.info(f"Loading raw images from {path}")
+
+        self.dataset_path = path
+        self.dataset_format = "raw"
+        self.loaded_splits = ["train"]
+
+        self.datasets.clear()
+        self.image_ids_by_split.clear()
+        self.modified_annotations.clear()
+        self.original_annotations.clear()
+
+        # Create new empty dataset
+        dataset = Dataset(name="raw_dataset")
+
+        # Add categories
+        for idx, cat_name in enumerate(categories, start=1):
+            dataset.add_category(idx, cat_name)
+
+        # Scan directory for images
+        path_obj = pathlib.Path(path)
+        image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"}
+
+        image_files = []
+        for ext in image_extensions:
+            image_files.extend(path_obj.glob(f"*{ext}"))
+            image_files.extend(path_obj.glob(f"*{ext.upper()}"))
+
+        if not image_files:
+            raise ValueError(f"No image files found in {path}")
+
+        # Add images to dataset
+        from PIL import Image
+
+        for idx, img_path in enumerate(sorted(image_files), start=1):
+            try:
+                # Open image to get dimensions
+                with Image.open(img_path) as img:
+                    width, height = img.size
+
+                # Create image info
+                image_id = str(idx)
+                img_info = ImageInfo(
+                    image_id=image_id,
+                    file_name=img_path.name,
+                    width=width,
+                    height=height,
+                    path=img_path,
+                )
+
+                dataset.add_image(img_info)
+
+                # Initialize with empty annotations
+                self.original_annotations[image_id] = []
+
+            except Exception as e:
+                logger.warning(f"Failed to load image {img_path}: {e}")
+                continue
+
+        self.datasets["train"] = dataset
+        self.image_ids_by_split["train"] = list(dataset.images.keys())
+
+        self.current_split = "train"
+        self.current_index = 0
+
+        logger.info(f"Loaded {len(dataset.images)} raw images with {len(categories)} categories")
+
+    def load_dataset(
+        self,
+        path: str,
+        format_type: str,
+        splits: list[t.Literal["train", "val", "test"]],
+        categories: list[str] | None = None,
+    ) -> None:
+        """Load dataset from path.
+
+        Args:
+            path: Path to dataset
+            format_type: 'coco', 'yolo', or 'raw'
+            splits: List of splits to load
+            categories: Category names (required for raw format)
+        """
+        if format_type == "raw":
+            if not categories:
+                raise ValueError("Categories must be provided for raw image import")
+            self.load_raw_images(path, categories)
+            return
+
+        # Existing logic for COCO/YOLO
+        self.dataset_path = path
+        self.dataset_format = format_type
+        self.loaded_splits = splits
+
+        logger.info(f"Loading {format_type} dataset from {path}, splits: {splits}")
+
+        self.datasets.clear()
+        self.image_ids_by_split.clear()
+        self.modified_annotations.clear()
+        self.original_annotations.clear()
+
+        import pathlib
+
+        path_obj = pathlib.Path(path)
+
+        if format_type == "coco":
+            for split in splits:
+                ann_file = path_obj / f"annotations_{split}.json"
+                if ann_file.exists():
+                    dataset = load_coco(str(ann_file), name=f"dataset_{split}")
+                    self.datasets[split] = dataset
+                    self.image_ids_by_split[split] = list(dataset.images.keys())
+
+                    # Store original annotations
+                    for img_id in dataset.images:
+                        self.original_annotations[img_id] = dataset.get_annotations(img_id).copy()
+                else:
+                    logger.warning(f"Annotation file not found: {ann_file}")
+
+        elif format_type == "yolo":
+            for split in splits:
+                split_dir = path_obj / "images" / split
+                if split_dir.exists():
+                    dataset = load_yolo(path, splits=split, name=f"dataset_{split}")
+                    self.datasets[split] = dataset
+                    self.image_ids_by_split[split] = list(dataset.images.keys())
+
+                    # Store original annotations
+                    for img_id in dataset.images:
+                        self.original_annotations[img_id] = dataset.get_annotations(img_id).copy()
+                else:
+                    logger.warning(f"Split directory not found: {split_dir}")
+
+        if splits and self.datasets:
+            self.current_split = (
+                splits[0] if splits[0] in self.datasets else next(iter(self.datasets.keys()))
+            )
+            self.current_index = 0
+
+        logger.info(f"Loaded {len(self.datasets)} split(s)")
+
+    def save_workspace(self, filepath: str) -> None:
+        from cracks_yolo.annotator.workspace import Workspace
+
+        workspace = Workspace()
+        workspace.set_dataset_info(self.dataset_path, self.dataset_format, self.loaded_splits)
+        workspace.set_current_position(self.current_split or "", self.current_index)
+
+        # Save original annotations
+        for img_id, anns in self.original_annotations.items():
+            workspace.set_original_annotations(img_id, anns)
+
+        # Save modified annotations
+        for img_id, anns in self.modified_annotations.items():
+            workspace.set_modified_annotations(img_id, anns)
+
+        # Save audit info
+        workspace.set_audit_mode(self.audit_mode)
+        for img_id, status in self.audit_status.items():
+            workspace.set_audit_status(img_id, status)
+
+        workspace.save(filepath)
+        logger.info(f"Workspace saved to {filepath}")
+
+    def generate_audit_report_csv(self, output_path: str) -> None:
+        """Generate CSV audit report.
+
+        Args:
+            output_path: Path to save CSV file
+        """
+        from cracks_yolo.annotator.workspace import Workspace
+
+        # Create temporary workspace for report generation
+        workspace = Workspace()
+        workspace.set_dataset_info(self.dataset_path, self.dataset_format, self.loaded_splits)
+
+        # Add all annotations
+        for img_id, anns in self.original_annotations.items():
+            workspace.set_original_annotations(img_id, anns)
+
+        for img_id, anns in self.modified_annotations.items():
+            workspace.set_modified_annotations(img_id, anns)
+
+        # Add audit status
+        workspace.data["audit_status"] = self.audit_status.copy()
+
+        # Build image info map
+        image_info_map: dict[str, tuple[str, str]] = {}
+        for dataset in self.datasets.values():
+            for img_id, img_info in dataset.images.items():
+                source = dataset.get_image_source(img_id) or "Unknown"
+                # Extract source from filename if not set
+                if source == "Unknown" and "_" in img_info.file_name:
+                    source = img_info.file_name.split("_")[0]
+
+                image_info_map[img_id] = (img_info.file_name, str(source))
+
+        # Generate CSV report
+        workspace.generate_audit_report_csv(output_path, image_info_map)
+        logger.info(f"Audit report CSV generated: {output_path}")
+
+    def auto_backup_workspace(self, backup_dir: str | pathlib.Path) -> str:
+        """Create automatic backup of workspace.
+
+        Args:
+            backup_dir: Directory to save backup
+
+        Returns:
+            Path to backup file
+        """
+        import pathlib
+
+        backup_dir = pathlib.Path(backup_dir)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"auto_backup_{timestamp}.cyw"
+        backup_path = backup_dir / backup_filename
+
+        self.save_workspace(str(backup_path))
+        logger.info(f"Auto-backup created: {backup_path}")
+
+        return str(backup_path)
 
     def enable_audit_mode(self, enabled: bool) -> None:
         """Enable or disable audit mode."""
@@ -77,26 +320,6 @@ class AnnotationController:
         stats["pending"] = total_images - (stats["approved"] + stats["rejected"])
 
         return stats
-
-    def save_workspace(self, filepath: str) -> None:
-        """Save current workspace to file."""
-        from cracks_yolo.annotator.workspace import Workspace
-
-        workspace = Workspace()
-        workspace.set_dataset_info(self.dataset_path, self.dataset_format, self.loaded_splits)
-        workspace.set_current_position(self.current_split or "", self.current_index)
-
-        # Save modified annotations
-        for img_id, anns in self.modified_annotations.items():
-            workspace.set_modified_annotations(img_id, anns)
-
-        # Save audit info
-        workspace.set_audit_mode(self.audit_mode)
-        for img_id, status in self.audit_status.items():
-            workspace.set_audit_status(img_id, status)
-
-        workspace.save(filepath)
-        logger.info(f"Workspace saved to {filepath}")
 
     def load_workspace(self, filepath: str) -> None:
         """Load workspace from file."""
@@ -163,57 +386,6 @@ class AnnotationController:
         report += "=" * 60 + "\n"
 
         return report
-
-    def load_dataset(
-        self,
-        path: str,
-        format_type: str,
-        splits: list[t.Literal["train", "val", "test"]],
-    ) -> None:
-        """Load dataset and store path info for workspace."""
-        # Store dataset info for workspace
-        self.dataset_path = path
-        self.dataset_format = format_type
-        self.loaded_splits = splits
-
-        # ... rest of existing load_dataset code ...
-        logger.info(f"Loading {format_type} dataset from {path}, splits: {splits}")
-
-        self.datasets.clear()
-        self.image_ids_by_split.clear()
-        self.modified_annotations.clear()
-
-        import pathlib
-
-        path_obj = pathlib.Path(path)
-
-        if format_type == "coco":
-            for split in splits:
-                ann_file = path_obj / f"annotations_{split}.json"
-                if ann_file.exists():
-                    dataset = load_coco(str(ann_file), name=f"dataset_{split}")
-                    self.datasets[split] = dataset
-                    self.image_ids_by_split[split] = list(dataset.images.keys())
-                else:
-                    logger.warning(f"Annotation file not found: {ann_file}")
-
-        elif format_type == "yolo":
-            for split in splits:
-                split_dir = path_obj / "images" / split
-                if split_dir.exists():
-                    dataset = load_yolo(path, splits=split, name=f"dataset_{split}")
-                    self.datasets[split] = dataset
-                    self.image_ids_by_split[split] = list(dataset.images.keys())
-                else:
-                    logger.warning(f"Split directory not found: {split_dir}")
-
-        if splits and self.datasets:
-            self.current_split = (
-                splits[0] if splits[0] in self.datasets else next(iter(self.datasets.keys()))
-            )
-            self.current_index = 0
-
-        logger.info(f"Loaded {len(self.datasets)} split(s)")
 
     def export_dataset(
         self,

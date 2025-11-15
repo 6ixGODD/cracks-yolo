@@ -6,6 +6,7 @@ import tkinter as tk
 import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
 import tkinter.ttk as ttk
+import types
 
 from cracks_yolo.annotator.canvas import AnnotationCanvas
 from cracks_yolo.annotator.controller import AnnotationController
@@ -36,6 +37,13 @@ class AnnotatorApp:
 
         self.controller = AnnotationController()
 
+        # Setup auto-backup directory
+        self.backup_dir = pathlib.Path.home() / ".cracks_yolo" / "backups"
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+
+        # Setup exception handler for auto-backup
+        self._setup_exception_handler()
+
         self._setup_menu()
         self._setup_layout()
         self._setup_bindings()
@@ -44,6 +52,127 @@ class AnnotatorApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         logger.info("Annotator application initialized")
+
+    def _setup_exception_handler(self) -> None:
+        """Setup global exception handler for auto-backup."""
+        import sys
+
+        def exception_handler(
+            exc_type: type[BaseException],
+            exc_value: BaseException,
+            exc_traceback: types.TracebackType,
+        ) -> None:
+            """Handle uncaught exceptions with auto-backup."""
+            if isinstance(exc_value, KeyboardInterrupt):
+                sys.__excepthook__(exc_type, exc_value, exc_traceback)
+                return
+
+            # Log the exception
+            logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+            # Create auto-backup if dataset is loaded
+            if self.controller.has_dataset():
+                try:
+                    backup_path = self.controller.auto_backup_workspace(self.backup_dir)
+                    messagebox.showerror(
+                        "Unexpected Error",
+                        f"An unexpected error occurred:\n{exc_value}\n\n"
+                        f"An automatic backup has been saved to:\n{backup_path}\n\n"
+                        "You can load this backup to restore your work.",
+                    )
+                except Exception as backup_error:
+                    logger.error(f"Failed to create auto-backup: {backup_error}")
+                    messagebox.showerror(
+                        "Critical Error",
+                        f"An unexpected error occurred:\n{exc_value}\n\n"
+                        f"Additionally, failed to create backup:\n{backup_error}",
+                    )
+            else:
+                messagebox.showerror(
+                    "Unexpected Error", f"An unexpected error occurred:\n{exc_value}"
+                )
+
+            # Call default exception handler
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+        sys.excepthook = exception_handler
+
+    def export_dataset(self) -> None:
+        """Show export dialog and save dataset."""
+        if not self.controller.has_dataset():
+            messagebox.showwarning("Warning", "No dataset loaded")
+            return
+
+        # Check for pending audits if in audit mode
+        if self.controller.audit_mode:
+            stats = self.controller.get_audit_statistics()
+            if stats["pending"] > 0:
+                response = messagebox.askyesno(
+                    "Pending Audits",
+                    f"There are {stats['pending']} images pending audit.\n\n"
+                    "Do you want to continue exporting?",
+                )
+                if not response:
+                    return
+
+        dialog = ExportDialog(self.root)  # type: ignore
+        result = dialog.show()
+
+        if result:
+            output_dir = result["output_dir"]
+            format_type = result["format"]
+            naming = result["naming"]
+
+            self.status_var.set(f"Exporting to {format_type.upper()} format...")
+            self.root.update()
+
+            try:
+                self.controller.export_dataset(output_dir, format_type, naming)
+
+                self.status_var.set(f"✓ Exported to {output_dir}")
+
+                # Generate CSV audit report if in audit mode
+                if self.controller.audit_mode:
+                    import pathlib
+
+                    report_path = pathlib.Path(output_dir) / "audit_report.csv"
+                    self.controller.generate_audit_report_csv(str(report_path))
+
+                    messagebox.showinfo(
+                        "Success",
+                        f"Dataset exported successfully to:\n{output_dir}\n\n"
+                        f"Audit report (CSV) saved to:\n{report_path}",
+                    )
+                else:
+                    messagebox.showinfo(
+                        "Success", f"Dataset exported successfully to:\n{output_dir}"
+                    )
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export dataset:\n{e}")
+                self.status_var.set("Ready")
+                logger.error(f"Failed to export dataset: {e}", exc_info=True)
+
+    def export_audit_report(self) -> None:
+        """Export audit report to CSV file."""
+        if not self.controller.audit_mode:
+            messagebox.showinfo("Info", "Audit mode is not enabled")
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            title="Export Audit Report (CSV)",
+        )
+
+        if filepath:
+            try:
+                self.controller.generate_audit_report_csv(filepath)
+                self.status_var.set(f"✓ Audit report exported: {filepath}")
+                messagebox.showinfo("Success", f"Audit report (CSV) exported to:\n{filepath}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export report:\n{e}")
+                logger.error(f"Failed to export report: {e}", exc_info=True)
 
     def _setup_menu(self) -> None:
         """Setup menu bar."""
@@ -312,88 +441,6 @@ class AnnotatorApp:
         # Close button
         ttk.Button(dialog, text="Close", command=dialog.destroy, width=12).pack(pady=10)
 
-    def export_audit_report(self) -> None:
-        """Export audit report to text file."""
-        if not self.controller.audit_mode:
-            messagebox.showinfo("Info", "Audit mode is not enabled")
-            return
-
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
-            title="Export Audit Report",
-        )
-
-        if filepath:
-            try:
-                report = self.controller.generate_audit_report()
-                with pathlib.Path(filepath).open("w", encoding="utf-8") as f:
-                    f.write(report)
-
-                self.status_var.set(f"✓ Audit report exported: {filepath}")
-                messagebox.showinfo("Success", f"Audit report exported to:\n{filepath}")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to export report:\n{e}")
-                logger.error(f"Failed to export report: {e}", exc_info=True)
-
-    def export_dataset(self) -> None:
-        """Show export dialog and save dataset."""
-        if not self.controller.has_dataset():
-            messagebox.showwarning("Warning", "No dataset loaded")
-            return
-
-        # Check for pending audits if in audit mode
-        if self.controller.audit_mode:
-            stats = self.controller.get_audit_statistics()
-            if stats["pending"] > 0:
-                response = messagebox.askyesno(
-                    "Pending Audits",
-                    f"There are {stats['pending']} images pending audit.\n\n"
-                    "Do you want to continue exporting?",
-                )
-                if not response:
-                    return
-
-        dialog = ExportDialog(self.root)  # type: ignore
-        result = dialog.show()
-
-        if result:
-            output_dir = result["output_dir"]
-            format_type = result["format"]
-            naming = result["naming"]
-
-            self.status_var.set(f"Exporting to {format_type.upper()} format...")
-            self.root.update()
-
-            try:
-                self.controller.export_dataset(output_dir, format_type, naming)
-
-                self.status_var.set(f"✓ Exported to {output_dir}")
-
-                # Export audit report if in audit mode
-                if self.controller.audit_mode:
-                    import pathlib
-
-                    report_path = pathlib.Path(output_dir) / "audit_report.txt"
-                    report = self.controller.generate_audit_report()
-                    with report_path.open("w", encoding="utf-8") as f:
-                        f.write(report)
-
-                    messagebox.showinfo(
-                        "Success",
-                        f"Dataset exported successfully to:\n{output_dir}\n\n"
-                        f"Audit report saved to:\n{report_path}",
-                    )
-                else:
-                    messagebox.showinfo(
-                        "Success", f"Dataset exported successfully to:\n{output_dir}"
-                    )
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to export dataset:\n{e}")
-                self.status_var.set("Ready")
-                logger.error(f"Failed to export dataset: {e}", exc_info=True)
-
     def load_image(self, image_id: str) -> None:
         """Load and display image with annotations."""
         try:
@@ -501,7 +548,12 @@ File:
             self.root.update()
 
             try:
-                self.controller.load_dataset(path, format_type, splits)
+                if format_type == "raw":
+                    categories = result.get("categories", [])
+                    self.controller.load_dataset(path, format_type, splits, categories)
+                else:
+                    self.controller.load_dataset(path, format_type, splits)
+
                 self.update_after_load()
 
                 self.status_var.set(

@@ -28,6 +28,10 @@ class AnnotationCanvas(tk.Canvas):
         self.categories: dict[int, str] = {}
         self.current_category: int | None = None
 
+        # Image cache for different zoom levels
+        self.image_cache: dict[float, ImageTk.PhotoImage] = {}
+        self.max_cache_size: int = 10
+
         # Offset for image position
         self.offset_x: int = 0
         self.offset_y: int = 0
@@ -47,6 +51,18 @@ class AnnotationCanvas(tk.Canvas):
         self.drag_start_y: int = 0
         self.drag_handle: str | None = None
 
+        # Panning state
+        self.panning: bool = False
+        self.pan_start_x: int = 0
+        self.pan_start_y: int = 0
+        self.pan_offset_x: int = 0
+        self.pan_offset_y: int = 0
+
+        # Crosshair
+        self.show_crosshair: bool = True
+        self.crosshair_x: int = 0
+        self.crosshair_y: int = 0
+
         # Edit mode
         self.edit_mode: bool = False
 
@@ -54,18 +70,26 @@ class AnnotationCanvas(tk.Canvas):
         self.undo_stack: list[list[Annotation]] = []
         self.max_undo_steps: int = 50
 
+        # Performance optimization
+        self.pending_render: t.Any = None  # After handle for debouncing
+
         # Bind mouse events
         self.bind("<ButtonPress-1>", self.on_mouse_press)
         self.bind("<B1-Motion>", self.on_mouse_drag)
         self.bind("<ButtonRelease-1>", self.on_mouse_release)
+        self.bind("<Button-2>", self.on_middle_press)
+        self.bind("<B2-Motion>", self.on_middle_drag)
+        self.bind("<ButtonRelease-2>", self.on_middle_release)
         self.bind("<Button-3>", self.on_right_click)
         self.bind("<Motion>", self.on_mouse_move)
         self.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.bind("<Leave>", self.on_mouse_leave)
 
     def set_edit_mode(self, enabled: bool) -> None:
         """Enable or disable edit mode."""
         self.edit_mode = enabled
-        self.config(cursor="crosshair" if enabled else "arrow")
+        if not self.panning:
+            self.config(cursor="crosshair" if enabled else "arrow")
 
     def set_current_category(self, category_id: int | None) -> None:
         """Set current category for drawing."""
@@ -84,8 +108,11 @@ class AnnotationCanvas(tk.Canvas):
         self.zoom_level = 1.0
         self.selected_annotation = None
         self.drawing = False
+        self.pan_offset_x = 0
+        self.pan_offset_y = 0
 
-        # Clear undo stack when loading new image
+        # Clear cache when loading new image
+        self.image_cache.clear()
         self.undo_stack.clear()
 
         self.render()
@@ -94,11 +121,7 @@ class AnnotationCanvas(tk.Canvas):
         return self.annotations.copy()
 
     def delete_selected(self) -> bool:
-        """Delete selected annotation.
-
-        Returns:
-            True if annotation was deleted
-        """
+        """Delete selected annotation."""
         if self.selected_annotation is not None and self.edit_mode:
             self.save_to_undo_stack()
             del self.annotations[self.selected_annotation]
@@ -112,11 +135,7 @@ class AnnotationCanvas(tk.Canvas):
         return False
 
     def undo(self) -> bool:
-        """Undo last annotation change.
-
-        Returns:
-            True if undo was performed
-        """
+        """Undo last annotation change."""
         if self.undo_stack and self.edit_mode:
             self.annotations = self.undo_stack.pop()
             self.selected_annotation = None
@@ -130,7 +149,6 @@ class AnnotationCanvas(tk.Canvas):
 
     def save_to_undo_stack(self) -> None:
         """Save current state to undo stack."""
-        # Deep copy annotations
         state = [
             Annotation(
                 bbox=ann.bbox,
@@ -146,33 +164,126 @@ class AnnotationCanvas(tk.Canvas):
 
         self.undo_stack.append(state)
 
-        # Limit stack size
         if len(self.undo_stack) > self.max_undo_steps:
             self.undo_stack.pop(0)
 
-    def render(self) -> None:
+    def get_cached_image(self, zoom_level: float) -> ImageTk.PhotoImage:
+        """Get or create cached resized image.
+
+        Args:
+            zoom_level: Current zoom level
+
+        Returns:
+            Cached PhotoImage
+        """
+        # Round zoom level to reduce cache size
+        cache_key = round(zoom_level, 2)
+
+        if cache_key in self.image_cache:
+            return self.image_cache[cache_key]
+
+        # Create new resized image
+        if self.image:
+            width = int(self.image.width * zoom_level)
+            height = int(self.image.height * zoom_level)
+
+            # Use faster resampling for large images
+            if width * height > 4000000:  # > 4MP
+                resample = Image.Resampling.BILINEAR
+            else:
+                resample = Image.Resampling.LANCZOS
+
+            resized = self.image.resize((width, height), resample)
+            photo = ImageTk.PhotoImage(resized)
+
+            # Cache it
+            self.image_cache[cache_key] = photo
+
+            # Limit cache size
+            if len(self.image_cache) > self.max_cache_size:
+                # Remove oldest entry
+                oldest_key = next(iter(self.image_cache))
+                del self.image_cache[oldest_key]
+
+            return photo
+
+        # Fallback
+        return ImageTk.PhotoImage(Image.new("RGB", (1, 1)))
+
+    def render(self, fast: bool = False) -> None:
+        """Render canvas.
+
+        Args:
+            fast: If True, only update position without redrawing annotations
+        """
         if self.image is None:
             return
 
         self.delete("all")
 
-        width = int(self.image.width * self.zoom_level)
-        height = int(self.image.height * self.zoom_level)
-
-        resized = self.image.resize((width, height), Image.Resampling.LANCZOS)
-        self.photo_image = ImageTk.PhotoImage(resized)
+        # Get cached image
+        self.photo_image = self.get_cached_image(self.zoom_level)
 
         canvas_width = self.winfo_width()
         canvas_height = self.winfo_height()
 
-        self.offset_x = (canvas_width - width) // 2
-        self.offset_y = (canvas_height - height) // 2
+        width = int(self.image.width * self.zoom_level)
+        height = int(self.image.height * self.zoom_level)
+
+        self.offset_x = (canvas_width - width) // 2 + self.pan_offset_x
+        self.offset_y = (canvas_height - height) // 2 + self.pan_offset_y
 
         self.create_image(
             self.offset_x, self.offset_y, anchor=tk.NW, image=self.photo_image, tags="image"
         )
 
-        self.draw_annotations()
+        if not fast:
+            self.draw_annotations()
+
+        self.draw_crosshair()
+
+    def render_debounced(self, delay: int = 16) -> None:
+        """Render with debouncing for smooth performance.
+
+        Args:
+            delay: Delay in milliseconds (default 16ms ≈ 60fps)
+        """
+        if self.pending_render:
+            self.after_cancel(self.pending_render)
+
+        self.pending_render = self.after(delay, self.render, True)
+
+    def draw_crosshair(self) -> None:
+        """Draw crosshair lines at mouse position."""
+        if not self.show_crosshair or not self.edit_mode:
+            return
+
+        canvas_width = self.winfo_width()
+        canvas_height = self.winfo_height()
+
+        # Vertical line
+        self.create_line(
+            self.crosshair_x,
+            0,
+            self.crosshair_x,
+            canvas_height,
+            fill="#00FF00",
+            width=1,
+            dash=(4, 4),
+            tags="crosshair",
+        )
+
+        # Horizontal line
+        self.create_line(
+            0,
+            self.crosshair_y,
+            canvas_width,
+            self.crosshair_y,
+            fill="#00FF00",
+            width=1,
+            dash=(4, 4),
+            tags="crosshair",
+        )
 
     def draw_annotations(self) -> None:
         if not self.annotations or not self.image:
@@ -220,13 +331,13 @@ class AnnotationCanvas(tk.Canvas):
                         tags=("handle", "corner_handle", f"handle_{idx}_{handle_type}"),
                     )
 
-                # Edge handles (midpoints)
+                # Edge handles
                 edge_size = 6
                 edges = [
-                    ((x1 + x2) // 2, y1, "n"),  # Top
-                    ((x1 + x2) // 2, y2, "s"),  # Bottom
-                    (x1, (y1 + y2) // 2, "w"),  # Left
-                    (x2, (y1 + y2) // 2, "e"),  # Right
+                    ((x1 + x2) // 2, y1, "n"),
+                    ((x1 + x2) // 2, y2, "s"),
+                    (x1, (y1 + y2) // 2, "w"),
+                    (x2, (y1 + y2) // 2, "e"),
                 ]
                 for hx, hy, handle_type in edges:
                     self.create_rectangle(
@@ -280,7 +391,6 @@ class AnnotationCanvas(tk.Canvas):
         img_x = int((x - self.offset_x) / self.zoom_level)
         img_y = int((y - self.offset_y) / self.zoom_level)
 
-        # Clamp to image bounds
         if self.image:
             img_x = max(0, min(img_x, self.image.width))
             img_y = max(0, min(img_y, self.image.height))
@@ -314,16 +424,63 @@ class AnnotationCanvas(tk.Canvas):
 
         return None
 
+    def on_middle_press(self, event: tk.Event) -> None:  # type: ignore
+        """Handle middle mouse button press for panning."""
+        self.panning = True
+        self.pan_start_x = event.x
+        self.pan_start_y = event.y
+        self.config(cursor="fleur")
+
+    def on_middle_drag(self, event: tk.Event) -> None:  # type: ignore
+        """Handle middle mouse button drag for panning."""
+        if self.panning:
+            dx = event.x - self.pan_start_x
+            dy = event.y - self.pan_start_y
+
+            self.pan_offset_x += dx
+            self.pan_offset_y += dy
+
+            self.pan_start_x = event.x
+            self.pan_start_y = event.y
+
+            # Fast render during panning (skip annotations redraw)
+            self.delete("all")
+            self.photo_image = self.get_cached_image(self.zoom_level)
+
+            canvas_width = self.winfo_width()
+            canvas_height = self.winfo_height()
+            width = int(self.image.width * self.zoom_level) if self.image else 0
+            height = int(self.image.height * self.zoom_level) if self.image else 0
+
+            self.offset_x = (canvas_width - width) // 2 + self.pan_offset_x
+            self.offset_y = (canvas_height - height) // 2 + self.pan_offset_y
+
+            self.create_image(
+                self.offset_x, self.offset_y, anchor=tk.NW, image=self.photo_image, tags="image"
+            )
+
+    def on_middle_release(self, _event: tk.Event) -> None:  # type: ignore
+        """Handle middle mouse button release."""
+        self.panning = False
+        # Full render after panning
+        self.render()
+
+        if self.edit_mode:
+            self.config(cursor="crosshair")
+        else:
+            self.config(cursor="arrow")
+
     def on_mouse_press(self, event: tk.Event) -> None:  # type: ignore
+        if self.panning:
+            return
+
         if not self.edit_mode:
-            # View mode: just select annotation
             ann_idx = self.find_annotation_at(event.x, event.y)
             if ann_idx is not None:
                 self.selected_annotation = ann_idx
                 self.render()
             return
 
-        # Check if clicking on handle
         handle = self.find_handle_at(event.x, event.y)
         if handle:
             self.save_to_undo_stack()
@@ -333,14 +490,12 @@ class AnnotationCanvas(tk.Canvas):
             self.drag_handle = handle[1]
             return
 
-        # Check if clicking on existing annotation (for selection)
         ann_idx = self.find_annotation_at(event.x, event.y)
         if ann_idx is not None:
             self.selected_annotation = ann_idx
             self.render()
             return
 
-        # Start drawing new annotation
         if self.current_category is not None:
             self.save_to_undo_stack()
             self.drawing = True
@@ -349,7 +504,7 @@ class AnnotationCanvas(tk.Canvas):
             self.selected_annotation = None
 
     def on_mouse_drag(self, event: tk.Event) -> None:  # type: ignore
-        if not self.edit_mode:
+        if self.panning or not self.edit_mode:
             return
 
         if self.drawing:
@@ -372,7 +527,7 @@ class AnnotationCanvas(tk.Canvas):
             self.drag_start_y = event.y
 
     def on_mouse_release(self, event: tk.Event) -> None:  # type: ignore
-        if not self.edit_mode:
+        if self.panning or not self.edit_mode:
             return
 
         if self.drawing:
@@ -425,7 +580,6 @@ class AnnotationCanvas(tk.Canvas):
 
         x_min, y_min, x_max, y_max = bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max
 
-        # Handle edges (only one dimension changes)
         if self.drag_handle == "n":
             y_min = img_y
         elif self.drag_handle == "s":
@@ -434,7 +588,6 @@ class AnnotationCanvas(tk.Canvas):
             x_min = img_x
         elif self.drag_handle == "e":
             x_max = img_x
-        # Handle corners (both dimensions change)
         elif "n" in self.drag_handle:
             y_min = img_y
         elif "s" in self.drag_handle:
@@ -445,7 +598,6 @@ class AnnotationCanvas(tk.Canvas):
         elif "e" in self.drag_handle:
             x_max = img_x
 
-        # Ensure minimum size
         if x_max - x_min >= 5 and y_max - y_min >= 5:
             new_bbox = BBox(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max)
 
@@ -465,7 +617,7 @@ class AnnotationCanvas(tk.Canvas):
                 self.on_annotation_changed()
 
     def on_right_click(self, event: tk.Event) -> None:  # type: ignore
-        if not self.edit_mode:
+        if not self.edit_mode or self.panning:
             return
 
         ann_idx = self.find_annotation_at(event.x, event.y)
@@ -493,21 +645,35 @@ class AnnotationCanvas(tk.Canvas):
                 self.on_annotation_changed()
 
     def on_mouse_move(self, event: tk.Event) -> None:  # type: ignore
-        if not self.edit_mode or self.drawing or self.dragging:
+        # Update crosshair position
+        self.crosshair_x = event.x
+        self.crosshair_y = event.y
+
+        if self.panning:
             return
+
+        if not self.edit_mode or self.drawing or self.dragging:
+            if self.edit_mode and not self.drawing and not self.dragging:
+                # Only redraw crosshair
+                self.delete("crosshair")
+                self.draw_crosshair()
+            return
+
+        # Redraw crosshair
+        self.delete("crosshair")
+        self.draw_crosshair()
 
         handle = self.find_handle_at(event.x, event.y)
         if handle:
             handle_type = handle[1]
-            # Set cursor based on handle type
             if handle_type in ("nw", "se"):
                 self.config(cursor="size_nw_se")
             elif handle_type in ("ne", "sw"):
                 self.config(cursor="size_ne_sw")
             elif handle_type in ("n", "s"):
-                self.config(cursor="sb_v_double_arrow")  # Vertical resize
+                self.config(cursor="sb_v_double_arrow")
             elif handle_type in ("w", "e"):
-                self.config(cursor="sb_h_double_arrow")  # Horizontal resize
+                self.config(cursor="sb_h_double_arrow")
             return
 
         ann_idx = self.find_annotation_at(event.x, event.y)
@@ -516,62 +682,32 @@ class AnnotationCanvas(tk.Canvas):
         else:
             self.config(cursor="crosshair")
 
+    def on_mouse_leave(self, _event: tk.Event) -> None:  # type: ignore
+        """Handle mouse leaving canvas."""
+        self.delete("crosshair")
+
     def on_mouse_wheel(self, event: tk.Event) -> None:  # type: ignore
-        """Handle mouse wheel for zooming at mouse position."""
-        # Get mouse position before zoom
-        mouse_x = event.x
-        mouse_y = event.y
-
-        # Calculate image coordinates at mouse position
-        img_x_before = (mouse_x - self.offset_x) / self.zoom_level
-        img_y_before = (mouse_y - self.offset_y) / self.zoom_level
-
-        # Zoom
+        """Handle mouse wheel for zooming."""
         if event.delta > 0:
             self.zoom_level = min(self.zoom_level * 1.2, 5.0)
         else:
             self.zoom_level = max(self.zoom_level / 1.2, 0.1)
 
-        # Calculate new offset to keep mouse position on same image point
-        if self.image:
-            img_x_after = (mouse_x - self.offset_x) / self.zoom_level
-            img_y_after = (mouse_y - self.offset_y) / self.zoom_level
-
-            # Adjust offset
-            dx = (img_x_after - img_x_before) * self.zoom_level
-            dy = (img_y_after - img_y_before) * self.zoom_level
-
-            self.offset_x += int(dx)
-            self.offset_y += int(dy)
-
         self.render()
 
-    def zoom_in(self, center: bool = True) -> None:
-        """Zoom in.
-
-        Args:
-            center: If True, zoom to center. If False, keep current offset.
-        """
+    def zoom_in(self) -> None:
+        """Zoom in."""
         self.zoom_level = min(self.zoom_level * 1.2, 5.0)
-        if center:
-            # Reset offset to center
-            self.render()
-        else:
-            # Keep current offset, just update zoom
-            self.render()
+        self.render()
 
-    def zoom_out(self, center: bool = True) -> None:
-        """Zoom out.
-
-        Args:
-            center: If True, zoom to center. If False, keep current offset.
-        """
+    def zoom_out(self) -> None:
+        """Zoom out."""
         self.zoom_level = max(self.zoom_level / 1.2, 0.1)
-        if center:
-            self.render()
-        else:
-            self.render()
+        self.render()
 
     def reset_zoom(self) -> None:
+        """Reset zoom and pan."""
         self.zoom_level = 1.0
+        self.pan_offset_x = 0
+        self.pan_offset_y = 0
         self.render()
