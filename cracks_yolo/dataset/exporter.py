@@ -79,6 +79,7 @@ def export_coco(
     seed: int | None = None,
     naming_strategy: NamingStrategy | None = None,
     copy_images: bool = True,
+    unified_structure: bool = False,
 ) -> None:
     """Export dataset in COCO format.
 
@@ -89,6 +90,7 @@ def export_coco(
         seed: Random seed for reproducibility
         naming_strategy: File naming strategy (default: OriginalNaming)
         copy_images: Whether to copy image files
+        unified_structure: Use unified directory structure (images/train/, annotations/)
     """
     output_dir = pathlib.Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -106,6 +108,7 @@ def export_coco(
             all_image_ids,
             naming_strategy,
             copy_images,
+            unified_structure,
         )
     else:
         splits = dataset.split(split_ratio, seed)
@@ -118,7 +121,12 @@ def export_coco(
                     image_ids,
                     naming_strategy,
                     copy_images,
+                    unified_structure,
                 )
+
+    # Create dataset_meta.json for unified structure
+    if unified_structure:
+        _create_dataset_meta(dataset, output_dir)
 
     logger.info(f"\nCOCO dataset exported to: {output_dir}")
 
@@ -130,10 +138,20 @@ def _export_coco_split(
     image_ids: list[str],
     naming_strategy: NamingStrategy,
     copy_images: bool,
+    unified_structure: bool = False,
 ) -> None:
     """Export a single split in COCO format."""
-    images_dir = output_dir / "images"
-    images_dir.mkdir(exist_ok=True)
+    # Determine directory structure
+    if unified_structure:
+        images_dir = output_dir / "images" / split_name
+        annotations_dir = output_dir / "annotations"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        annotations_dir.mkdir(parents=True, exist_ok=True)
+        annotation_file = annotations_dir / f"instances_{split_name}.json"
+    else:
+        images_dir = output_dir / "images"
+        images_dir.mkdir(exist_ok=True)
+        annotation_file = output_dir / f"annotations_{split_name}.json"
 
     coco_output = {
         "info": {
@@ -219,7 +237,6 @@ def _export_coco_split(
             ann_id += 1
 
     # Save annotation file
-    annotation_file = output_dir / f"annotations_{split_name}.json"
     with annotation_file.open(mode="w") as f:
         json.dump(coco_output, f, indent=2)
 
@@ -236,6 +253,7 @@ def export_yolov5(
     seed: int | None = None,
     naming_strategy: NamingStrategy | None = None,
     copy_images: bool = True,
+    unified_structure: bool = False,
 ) -> None:
     """Export dataset in YOLOv5 format."""
     output_dir = pathlib.Path(output_dir)
@@ -254,6 +272,7 @@ def export_yolov5(
             all_image_ids,
             naming_strategy,
             copy_images,
+            unified_structure,
         )
         splits_to_write = ["train"]
     else:
@@ -268,24 +287,16 @@ def export_yolov5(
                     image_ids,
                     naming_strategy,
                     copy_images,
+                    unified_structure,
                 )
                 splits_to_write.append(split_name)
 
     # Create data.yaml
-    yaml_path = output_dir / "data.yaml"
-    with yaml_path.open(mode="w") as f:
-        f.write("# YOLOv5 dataset configuration\n")
-        f.write(f"# Generated from {dataset.name}\n\n")
-        f.write(f"path: {output_dir.absolute()}\n")
+    _create_yolo_yaml(dataset, output_dir, splits_to_write)
 
-        for split_name in ["train", "val", "test"]:
-            if split_name in splits_to_write:
-                f.write(f"{split_name}: images/{split_name}\n")
-
-        f.write(f"\nnc: {dataset.num_categories()}\n\n")
-        f.write("names:\n")
-        for i, cat_id in enumerate(sorted(dataset.categories.keys())):
-            f.write(f"  {i}: {dataset.categories[cat_id]}\n")
+    # Create dataset_meta.json for unified structure
+    if unified_structure:
+        _create_dataset_meta(dataset, output_dir)
 
     logger.info(f"\nYOLOv5 dataset exported to: {output_dir}")
 
@@ -297,10 +308,17 @@ def _export_yolov5_split(
     image_ids: list[str],
     naming_strategy: NamingStrategy,
     copy_images: bool,
+    unified_structure: bool = False,
 ) -> None:
     """Export a single split in YOLOv5 format."""
-    images_dir = output_dir / "images" / split_name
-    labels_dir = output_dir / "labels" / split_name
+    # Determine directory structure
+    if unified_structure:
+        images_dir = output_dir / "images" / split_name
+        labels_dir = output_dir / "annotations" / split_name
+    else:
+        images_dir = output_dir / "images" / split_name
+        labels_dir = output_dir / "labels" / split_name
+
     images_dir.mkdir(parents=True, exist_ok=True)
     labels_dir.mkdir(parents=True, exist_ok=True)
 
@@ -368,3 +386,62 @@ def _export_yolov5_split(
         labels_created += 1
 
     logger.info(f"YOLOv5 {split_name} exported: {images_copied} images, {labels_created} labels")
+
+
+def _create_yolo_yaml(
+    dataset: Dataset,
+    output_dir: pathlib.Path,
+    splits_to_write: list[str],
+) -> None:
+    """Create data.yaml for YOLOv5 format."""
+    yaml_path = output_dir / "data.yaml"
+    with yaml_path.open(mode="w") as f:
+        f.write("# YOLOv5 dataset configuration\n")
+        f.write(f"# Generated from {dataset.name}\n\n")
+        f.write(f"path: {output_dir.absolute()}\n")
+
+        for split_name in ["train", "val", "test"]:
+            if split_name in splits_to_write:
+                f.write(f"{split_name}: images/{split_name}\n")
+
+        f.write(f"\nnc: {dataset.num_categories()}\n\n")
+        f.write("names:\n")
+        for i, cat_id in enumerate(sorted(dataset.categories.keys())):
+            f.write(f"  {i}: {dataset.categories[cat_id]}\n")
+
+
+def _create_dataset_meta(dataset: Dataset, output_dir: pathlib.Path) -> None:
+    """Create dataset_meta.json with category labels.
+
+    Args:
+        dataset: Dataset to export metadata from
+        output_dir: Output directory
+    """
+    meta_path = output_dir / "dataset_meta.json"
+
+    # Create labels list
+    labels = []
+    for cat_id in sorted(dataset.categories.keys()):
+        cat_name = dataset.categories[cat_id]
+        labels.append({
+            "id": cat_id,
+            "name": cat_name,
+            "supercategory": "object",
+        })
+
+    meta = {
+        "name": dataset.name,
+        "version": "1.0",
+        "description": f"Dataset exported from {dataset.name}",
+        "contributor": "6ixGODD",
+        "date_created": "2025-11-14",
+        "num_images": len(dataset),
+        "num_annotations": dataset.num_annotations(),
+        "num_categories": dataset.num_categories(),
+        "labels": labels,
+    }
+
+    with meta_path.open("w") as f:
+        json.dump(meta, f, indent=2)
+
+    logger.info(f"Created dataset_meta.json at {meta_path}")
