@@ -76,6 +76,8 @@ def _exp_to_cmd(exp: dict[str, Any]) -> list[str]:
         ]
         if exp.get("cross_val"):
             cmd.extend(["--cross-val", "--n-folds", str(exp.get("n_folds", 5))])
+            if "val_fraction" in exp:
+                cmd.extend(["--val-fraction", str(exp["val_fraction"])])
         if exp.get("no_amp"):
             cmd.append("--no-amp")
         if exp.get("pretrained"):

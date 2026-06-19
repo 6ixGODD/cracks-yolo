@@ -82,6 +82,13 @@ def main() -> None:
     )
     parser.add_argument("--n-folds", type=int, default=5)
     parser.add_argument(
+        "--val-fraction",
+        type=float,
+        default=0.1,
+        help="CV mode only: fraction of each fold's training pool carved out as "
+        "validation for backprop. Held-out fold is always the test set.",
+    )
+    parser.add_argument(
         "--val-split", default="valid", help="Split name for single-run validation."
     )
     parser.add_argument("--train-split", default="train", help="Split name for training.")
@@ -105,8 +112,11 @@ def main() -> None:
     src = YOLOSource(args.dataset)
 
     if args.cross_val:
-        # Load all available records from the train split (full dataset).
-        records = src.load_split(args.train_split)
+        # CV mode: merge ALL dataset splits (train + valid + test) into a
+        # single pool. The original split is ignored — StratifiedKFold
+        # re-partitions the pool into N folds; held-out fold = test,
+        # remaining records further split into train + val (val_fraction).
+        records = src.load_split("train") + src.load_split("valid") + src.load_split("test")
         train_cfg = TrainConfig(
             output_dir=args.output_dir,
             epochs=args.epochs,
@@ -139,6 +149,7 @@ def main() -> None:
             seed=args.seed,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
+            val_fraction=args.val_fraction,
         )
         print(f"CV complete: {args.output_dir}/cv_summary.csv")
         print(f"aggregated map50: {cv_report.aggregated()['map50']}")

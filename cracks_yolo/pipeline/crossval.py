@@ -1,14 +1,16 @@
-"""5-fold (or N-fold) cross-validation for a single model class.
+"""N-fold cross-validation for a single model class.
 
-Splits the full list of :class:`RawDetection` records into N folds via
-``sklearn.model_selection.StratifiedKFold`` (stratified by the most-common
-class label per image, to keep class balance across folds). For each fold:
+Merges ALL dataset records (train/valid/test splits collapsed into one
+pool) and runs ``StratifiedKFold`` (stratified by the most-common class
+label per image, to keep class balance across folds). For each fold:
 
-1. Build train/val :class:`DetectionDataset` from the split.
-2. Instantiate a fresh model from ``model_cls``.
-3. Run :class:`TrainPipelineImpl`.
-4. Run :class:`TestPipelineImpl` on the held-out fold.
-5. Save all artifacts under ``output_dir/fold_<i>/``.
+1. Held-out fold (1/N) → **TEST** records.
+2. Remaining records (N-1/N) → split further into **train** (1 - ``val_fraction``)
+   + **val** (``val_fraction``, used for backprop-validation during training).
+3. Instantiate a fresh model from ``model_cls``.
+4. Run :class:`TrainPipelineImpl` on train + val.
+5. Run :class:`TestPipelineImpl` on the held-out test records.
+6. Save all artifacts under ``output_dir/fold_<i>/``.
 
 After all folds: aggregate mean ± std for every metric in
 :class:`MetricReport` and write ``cv_summary.csv`` + ``cv_report.json``.
@@ -102,12 +104,15 @@ def run_cross_validation(
     seed: int = 42,
     batch_size: int | None = None,
     num_workers: int = 0,
+    val_fraction: float = 0.1,
 ) -> CrossValReport:
     """Run N-fold CV for one model class.
 
     Args:
         model_factory: zero-arg callable that returns a fresh model each fold.
-        records: full dataset records (will be split per fold).
+        records: full dataset records (will be split per fold). Caller is
+            responsible for merging the original train/valid/test splits
+            into this single list — CV does NOT respect the original split.
         input_size: model input size (also transform resize target).
         train_cfg: base training config — its ``output_dir`` is used as the
             CV root; per-fold outputs land in ``output_dir/fold_<i>/``.
@@ -116,11 +121,19 @@ def run_cross_validation(
         batch_size: optional override for the dataloader batch size; falls
             back to ``train_cfg.batch_size``.
         num_workers: dataloader workers.
+        val_fraction: fraction of the training portion (per fold, the N-1/N
+            non-held-out records) to carve out as validation for backprop.
+            The held-out fold is always used as the TEST set. ``0.0`` disables
+            validation during training.
 
     Returns:
         :class:`CrossValReport` with per-fold train/test summaries + mean/std.
     """
     from sklearn.model_selection import StratifiedKFold
+    from sklearn.model_selection import train_test_split
+
+    if not 0.0 <= val_fraction < 1.0:
+        raise ValueError(f"val_fraction must be in [0, 1); got {val_fraction}")
 
     cv_root = train_cfg.output_dir
     cv_root.mkdir(parents=True, exist_ok=True)
@@ -163,13 +176,44 @@ def run_cross_validation(
     model_name = type(sample_model).__name__
     del sample_model
 
-    for fold_idx, (train_idx, val_idx) in enumerate(skf.split(range(len(records)), labels)):
+    for fold_idx, (train_idx, test_idx) in enumerate(skf.split(range(len(records)), labels)):
         fold_dir = cv_root / f"fold_{fold_idx}"
         fold_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"CV fold {fold_idx}: train={len(train_idx)} val={len(val_idx)}")
 
-        train_records = [records[i] for i in train_idx]
-        val_records = [records[i] for i in val_idx]
+        # Held-out fold = TEST; remaining records = training pool.
+        pool_records = [records[i] for i in train_idx]
+        test_records = [records[i] for i in test_idx]
+        pool_labels = [labels[i] for i in train_idx]
+
+        # Further split the training pool into train + val (for backprop
+        # validation). Stratify when possible; fall back to random split
+        # if too few samples per class for stratification.
+        if val_fraction > 0.0 and len(pool_records) >= 4:
+            try:
+                train_sub_idx, val_sub_idx = train_test_split(
+                    list(range(len(pool_records))),
+                    test_size=val_fraction,
+                    shuffle=True,
+                    random_state=seed + fold_idx,
+                    stratify=pool_labels,
+                )
+            except ValueError:
+                train_sub_idx, val_sub_idx = train_test_split(
+                    list(range(len(pool_records))),
+                    test_size=val_fraction,
+                    shuffle=True,
+                    random_state=seed + fold_idx,
+                )
+            train_records = [pool_records[i] for i in train_sub_idx]
+            val_records = [pool_records[i] for i in val_sub_idx]
+        else:
+            train_records = pool_records
+            val_records = []
+
+        logger.info(
+            f"CV fold {fold_idx}: train={len(train_records)} "
+            f"val={len(val_records)} test={len(test_records)}"
+        )
 
         train_ds = DetectionDataset(
             train_records,
@@ -177,6 +221,10 @@ def run_cross_validation(
         )
         val_ds = DetectionDataset(
             val_records,
+            transform=build_transforms(input_size, train=False, augment=False),
+        )
+        test_ds = DetectionDataset(
+            test_records,
             transform=build_transforms(input_size, train=False, augment=False),
         )
         train_loader = build_dataloader(
@@ -188,6 +236,13 @@ def run_cross_validation(
         )
         val_loader = build_dataloader(
             val_ds,
+            batch_size=bs,
+            num_workers=num_workers,
+            shuffle=False,
+            pin_memory=torch.cuda.is_available(),
+        )
+        test_loader = build_dataloader(
+            test_ds,
             batch_size=bs,
             num_workers=num_workers,
             shuffle=False,
@@ -209,6 +264,9 @@ def run_cross_validation(
             "best_map50": train_report.best_map50,
             "final_train_loss": train_report.final_train_loss,
             "elapsed_sec": train_report.elapsed_sec,
+            "n_train": len(train_records),
+            "n_val": len(val_records),
+            "n_test": len(test_records),
         })
 
         test_cfg = TestConfig(
@@ -217,7 +275,8 @@ def run_cross_validation(
             device=train_cfg.device,
             num_workers=num_workers,
         )
-        test_report = test_pipeline.run(model, val_loader, test_cfg)
+        # Evaluate on the HELD-OUT fold (= test), not the val loader.
+        test_report = test_pipeline.run(model, test_loader, test_cfg)
         metrics: MetricReport = test_report.metrics
         per_fold_test.append({
             "fold": fold_idx,

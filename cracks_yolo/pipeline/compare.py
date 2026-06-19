@@ -94,6 +94,7 @@ def compare_models_cross_val(
     metric: str = "map50",
     batch_size: int | None = None,
     num_workers: int = 0,
+    val_fraction: float = 0.1,
 ) -> ComparisonReport:
     """Run N-fold CV for each model and compare via paired statistical tests.
 
@@ -110,6 +111,8 @@ def compare_models_cross_val(
             :class:`MetricReport`).
         batch_size: optional override.
         num_workers: dataloader workers.
+        val_fraction: fraction of the per-fold training pool carved out as
+            validation for backprop. Held-out fold is always the test set.
 
     Returns:
         :class:`ComparisonReport` with per-model aggregation + pairwise tests.
@@ -134,6 +137,7 @@ def compare_models_cross_val(
             seed=seed,
             batch_size=batch_size,
             num_workers=num_workers,
+            val_fraction=val_fraction,
         )
         per_model[name] = cv_report
 
