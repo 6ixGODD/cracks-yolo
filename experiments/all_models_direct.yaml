@@ -1,0 +1,535 @@
+# experiments/all_models_direct.yaml — 26-model direct train→test sweep for
+# tongue surface crack detection.
+#
+# Each model produces TWO experiments: (1) train on the train split with
+# validation on the valid split, (2) test the resulting best.pt on the
+# held-out test split. 26 models × 2 = 52 experiments.
+#
+# Batch sizes below are tuned for a single high-VRAM GPU. If a run OOMs,
+# halve the batch_size and retry.
+#
+# Single-GPU usage (max_parallel=1):
+#   uv sync
+#   uv pip install torch==2.5.1 torchvision==0.20.1 \
+#       --index-url https://download.pytorch.org/whl/cu118
+#   python -m scripts.schedule_experiments \
+#       --config experiments/all_models_direct.yaml \
+#       --output-dir output/all_models_direct
+#
+# Multi-GPU usage (one GPU per experiment):
+#   Set scheduler.max_parallel to the GPU count and add
+#     env: {CUDA_VISIBLE_DEVICES: "N"}
+#   to each experiment (N = 0/1/2/...). Batch sizes can then be reduced
+#   proportionally.
+#
+# After the sweep finishes, retry any failures:
+#   python -m scripts.schedule_experiments \
+#       --retry-failed output/all_models_direct/scheduler/errors.jsonl \
+#       --output-dir output/all_models_direct_retry
+scheduler:
+  max_parallel: 1
+  seed: 42
+# Dataset path is fixed across all experiments. YOLOv5 PyTorch format is
+
+# read directly by YOLOSource (no COCO conversion needed).
+dataset: &dataset data/CrackDetection_Augmentation.v1.yolov5pytorch
+# Common training knobs. 100 epochs ≈ 2-3 h per model on a single GPU.
+
+# 26 models × ~2.5 h ≈ 65 h total. Reduce --epochs for faster sweeps.
+common: &common
+  epochs: 100
+  input_size: 640
+  device: cuda
+  seed: 42
+  num_workers: 8
+  pretrained: true
+experiments:
+  # ===== YOLOv5 family (4 models) =====
+  - name: yolov5s_baseline_train
+    type: train
+    model: yolov5s
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov5s_baseline
+    !!merge <<: *common
+  - name: yolov5s_baseline_test
+    type: test
+    model: yolov5s
+    weights: output/yolov5s_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov5s_sac_train
+    type: train
+    model: yolov5s_sac
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov5s_sac
+    !!merge <<: *common
+  - name: yolov5s_sac_test
+    type: test
+    model: yolov5s_sac
+    weights: output/yolov5s_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov5s_tr_train
+    type: train
+    model: yolov5s_tr
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov5s_tr
+    !!merge <<: *common
+  - name: yolov5s_tr_test
+    type: test
+    model: yolov5s_tr
+    weights: output/yolov5s_tr/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov5s_sactr_train
+    type: train
+    model: yolov5s_sactr
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov5s_sactr
+    !!merge <<: *common
+  - name: yolov5s_sactr_test
+    type: test
+    model: yolov5s_sactr
+    weights: output/yolov5s_sactr/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov7w_baseline_train
+    # ===== YOLOv7 family (2 models) =====
+
+    type: train
+    model: yolov7w
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov7w_baseline
+    !!merge <<: *common
+  - name: yolov7w_baseline_test
+    type: test
+    model: yolov7w
+    weights: output/yolov7w_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 32
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov7w_sac_train
+    type: train
+    model: yolov7w_sac
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov7w_sac
+    !!merge <<: *common
+  - name: yolov7w_sac_test
+    type: test
+    model: yolov7w_sac
+    weights: output/yolov7w_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 32
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8n_baseline_train
+    # ===== YOLOv8 family (10 models: n/s/m/l/x × baseline/SAC) =====
+
+    type: train
+    model: yolov8n
+    dataset: *dataset
+    batch_size: 128
+    lr: 0.01
+    output_dir: output/yolov8n_baseline
+    !!merge <<: *common
+  - name: yolov8n_baseline_test
+    type: test
+    model: yolov8n
+    weights: output/yolov8n_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 128
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8n_sac_train
+    type: train
+    model: yolov8n_sac
+    dataset: *dataset
+    batch_size: 128
+    lr: 0.01
+    output_dir: output/yolov8n_sac
+    !!merge <<: *common
+  - name: yolov8n_sac_test
+    type: test
+    model: yolov8n_sac
+    weights: output/yolov8n_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 128
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8s_baseline_train
+    type: train
+    model: yolov8s
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov8s_baseline
+    !!merge <<: *common
+  - name: yolov8s_baseline_test
+    type: test
+    model: yolov8s
+    weights: output/yolov8s_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8s_sac_train
+    type: train
+    model: yolov8s_sac
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov8s_sac
+    !!merge <<: *common
+  - name: yolov8s_sac_test
+    type: test
+    model: yolov8s_sac
+    weights: output/yolov8s_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8m_baseline_train
+    type: train
+    model: yolov8m
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov8m_baseline
+    !!merge <<: *common
+  - name: yolov8m_baseline_test
+    type: test
+    model: yolov8m
+    weights: output/yolov8m_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 32
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8m_sac_train
+    type: train
+    model: yolov8m_sac
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov8m_sac
+    !!merge <<: *common
+  - name: yolov8m_sac_test
+    type: test
+    model: yolov8m_sac
+    weights: output/yolov8m_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 32
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8l_baseline_train
+    type: train
+    model: yolov8l
+    dataset: *dataset
+    batch_size: 16
+    lr: 0.01
+    output_dir: output/yolov8l_baseline
+    !!merge <<: *common
+  - name: yolov8l_baseline_test
+    type: test
+    model: yolov8l
+    weights: output/yolov8l_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 16
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8l_sac_train
+    type: train
+    model: yolov8l_sac
+    dataset: *dataset
+    batch_size: 16
+    lr: 0.01
+    output_dir: output/yolov8l_sac
+    !!merge <<: *common
+  - name: yolov8l_sac_test
+    type: test
+    model: yolov8l_sac
+    weights: output/yolov8l_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 16
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8x_baseline_train
+    type: train
+    model: yolov8x
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.01
+    output_dir: output/yolov8x_baseline
+    !!merge <<: *common
+  - name: yolov8x_baseline_test
+    type: test
+    model: yolov8x
+    weights: output/yolov8x_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 8
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov8x_sac_train
+    type: train
+    model: yolov8x_sac
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.01
+    output_dir: output/yolov8x_sac
+    !!merge <<: *common
+  - name: yolov8x_sac_test
+    type: test
+    model: yolov8x_sac
+    weights: output/yolov8x_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 8
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov9c_baseline_train
+    # ===== YOLOv9c family (2 models) =====
+
+    type: train
+    model: yolov9c
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov9c_baseline
+    !!merge <<: *common
+  - name: yolov9c_baseline_test
+    type: test
+    model: yolov9c
+    weights: output/yolov9c_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 32
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov9c_sac_train
+    type: train
+    model: yolov9c_sac
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov9c_sac
+    !!merge <<: *common
+  - name: yolov9c_sac_test
+    type: test
+    model: yolov9c_sac
+    weights: output/yolov9c_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 32
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov10s_baseline_train
+    # ===== YOLOv10s family (2 models) =====
+
+    type: train
+    model: yolov10s
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov10s_baseline
+    !!merge <<: *common
+  - name: yolov10s_baseline_test
+    type: test
+    model: yolov10s
+    weights: output/yolov10s_baseline/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: yolov10s_sac_train
+    type: train
+    model: yolov10s_sac
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov10s_sac
+    !!merge <<: *common
+  - name: yolov10s_sac_test
+    type: test
+    model: yolov10s_sac
+    weights: output/yolov10s_sac/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: retinanet_r50_train
+    # ===== Torchvision baselines (6 models). lr=1e-4 (lower than YOLO). =====
+
+    type: train
+    model: retinanet_r50
+    dataset: *dataset
+    batch_size: 16
+    lr: 0.0001
+    output_dir: output/retinanet_r50
+    !!merge <<: *common
+  - name: retinanet_r50_test
+    type: test
+    model: retinanet_r50
+    weights: output/retinanet_r50/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 16
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: faster_rcnn_r50_train
+    type: train
+    model: faster_rcnn_r50
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.0001
+    output_dir: output/faster_rcnn_r50
+    !!merge <<: *common
+  - name: faster_rcnn_r50_test
+    type: test
+    model: faster_rcnn_r50
+    weights: output/faster_rcnn_r50/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 8
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: mask_rcnn_r50_train
+    type: train
+    model: mask_rcnn_r50
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.0001
+    output_dir: output/mask_rcnn_r50
+    !!merge <<: *common
+  - name: mask_rcnn_r50_test
+    type: test
+    model: mask_rcnn_r50
+    weights: output/mask_rcnn_r50/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 8
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: fcos_r50_train
+    type: train
+    model: fcos_r50
+    dataset: *dataset
+    batch_size: 16
+    lr: 0.0001
+    output_dir: output/fcos_r50
+    !!merge <<: *common
+  - name: fcos_r50_test
+    type: test
+    model: fcos_r50
+    weights: output/fcos_r50/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 16
+    input_size: 640
+    device: cuda
+    num_workers: 8
+  - name: ssd300_vgg16_train
+    type: train
+    model: ssd300_vgg16
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.0001
+    input_size: 300
+    output_dir: output/ssd300_vgg16
+    epochs: 100
+    device: cuda
+    seed: 42
+    num_workers: 8
+    pretrained: true
+  - name: ssd300_vgg16_test
+    type: test
+    model: ssd300_vgg16
+    weights: output/ssd300_vgg16/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 32
+    input_size: 300
+    device: cuda
+    num_workers: 8
+  - name: ssdlite320_mobilenetv3_train
+    type: train
+    model: ssdlite320_mobilenetv3
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.0001
+    input_size: 320
+    output_dir: output/ssdlite320_mobilenetv3
+    epochs: 100
+    device: cuda
+    seed: 42
+    num_workers: 8
+    pretrained: true
+  - name: ssdlite320_mobilenetv3_test
+    type: test
+    model: ssdlite320_mobilenetv3
+    weights: output/ssdlite320_mobilenetv3/best.pt
+    dataset: *dataset
+    split: test
+    batch_size: 64
+    input_size: 320
+    device: cuda
+    num_workers: 8
