@@ -83,7 +83,14 @@ logger.bind(**record).info("step done")
 | `recall` | `float` |
 | `f1` | `float` |
 | `elapsed_sec` | `float` |
+| `n_images` | `int` |
+| `fps_mean` | `float` |
+| `latency_mean_ms` | `float` |
+| `gflops` | `float` |
+| `n_parameters` | `int` |
 | `timestamp` | `str` |
+
+`n_images` / `fps_mean` / `latency_mean_ms` / `gflops` / `n_parameters` 为效率关键指标（`measure_efficiency=False` 时为 0），完整明细见 `model_analysis.json`。
 
 ### `MetricLog`——单个标量输出
 

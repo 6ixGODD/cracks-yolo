@@ -53,11 +53,11 @@ class TrainConfig(BaseModel):
 `TestPipelineImpl.run(model, test_loader, cfg) -> TestReport`：
 
 1. `configure_logger(cfg.output_dir)`。
-2. 每个 batch：`model.eval()` → `preds = model(images)` → `decoded = model.decode(preds)` → NMS（通过 `detections_to_per_image`）。
+2. 每个 batch：`model.eval()` → `preds = model(images)` → `decoded = model.decode(preds)` → NMS（通过 `detections_to_per_image`）。记录每批前向+解码+NMS 的耗时（CUDA 同步）用于 FPS/延迟统计。
 3. `COCOMetricsCalculator.update(all_per_image)` → `report = calculator.run()`。
 4. 计算 PR/ROC 曲线、混淆矩阵、AUC（通过 `cracks_yolo.metrics.curves` + `confusion`）。
-5. 写入 `metrics.csv`、`per_image/<id>.json`、`predictions/<id>.jpg`、`curves/{pr,roc,confusion}.png`、`TestLog`。
-6. 返回 `TestReport(output_dir, metrics, elapsed_sec)`。
+5. 由记录的批耗时构建 `EfficiencyReport`（真实 FPS/延迟/峰值显存）+ `analyze_model`（参数量/MACs/GFLOPs）；写入 `metrics.csv`、`model_analysis.json`、`per_image/<id>.json`、`predictions/<id>.jpg`、`curves/{pr,roc,confusion}.png`、`TestLog`。
+6. 返回 `TestReport(output_dir, metrics, elapsed_sec, efficiency)`。
 
 ### 解码格式
 
@@ -74,11 +74,12 @@ class TrainConfig(BaseModel):
 | 产物 | 说明 |
 | --- | --- |
 | `run.log.jsonl` | 结构化 JSONL 日志（loguru）。 |
-| `metrics.csv` | 逐 epoch 的损失和验证指标。 |
+| `metrics.csv` | 训练：逐 epoch 损失与验证指标；测试：精度 + 效率。 |
 | `loss_curve.png` | 训练损失曲线。 |
 | `metric_curve.png` | 验证指标曲线。 |
 | `config.yaml` | 冻结的训练配置。 |
 | `best.pt` | 验证 mAP@50 最优的检查点。 |
+| `model_analysis.json` | 测试运行的效率报告（参数量/MACs/GFLOPs/延迟/显存）。 |
 | `per_image/<id>.json` | 逐图像检测结果。 |
 | `predictions/<id>.jpg` | 带边界框的可视化预测。 |
 | `curves/{pr,roc,confusion}.png` | 评估曲线。 |

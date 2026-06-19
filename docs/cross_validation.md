@@ -90,6 +90,8 @@ python -m scripts.compare_models \
 
 Supported metric keys: `map50`, `map5095`, `map75`, `precision`, `recall`, `f1`, `auc_pr`, `auc_roc`.
 
+Both `cv_summary.csv` and `comparison.csv` also aggregate the per-fold **efficiency** metrics (`fps_mean`, `latency_mean_ms`, `gflops`, `n_parameters`, `peak_vram_bytes`, …) as mean ± std, so the accuracy comparison table ships with a speed/cost comparison built in.
+
 ## Per-fold artifacts
 
 Each fold's `output/cv/fold_<i>/` directory contains the full artifact set of a single train run (see `docs/pipeline.md`), so individual folds can be inspected post-hoc — e.g. to confirm a particular fold's training curve didn't diverge.

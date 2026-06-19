@@ -125,6 +125,24 @@ class MetricReport:
     conf_threshold: float
 ```
 
+`MetricReport` 只含检测精度。效率（速度与算力）由测试流程单独产出。
+
+## 效率指标
+
+每次测试（以及每一折交叉验证）都会在精度之外同步测量效率，一次扫描即可得到完整的「精度—速度—算力」对比表。设 `TestConfig.measure_efficiency=False` 可跳过。
+
+`EfficiencyReport`（pydantic）由 `TestPipelineImpl` 产出，写入 `metrics.csv`、`model_analysis.json` 与 `TestLog` 记录：
+
+| 字段 | 含义 |
+| --- | --- |
+| `fps_mean` / `fps_p50` / `fps_p95` | 在真实测试集上的端到端推理吞吐（张/秒），含前向 + 解码 + NMS，batch 为 `TestConfig.batch_size`。 |
+| `latency_mean_ms` / `latency_p50_ms` / `latency_p95_ms` | 单张延迟（批耗时 / 批大小）。 |
+| `n_parameters` / `n_trainable_parameters` | 参数量。 |
+| `macs` / `gflops` | 单张输入的 MACs 与 GFLOPs（= 2 × MACs），由 `fvcore.FlopCountAnalysis` 计算。 |
+| `peak_vram_bytes` | 真实推理循环中的 CUDA 峰值显存（CPU 下取单张合成的值）。 |
+
+独立的 `scripts/analyze_model.py` 用合成输入报告同样的结构指标（参数量/MACs/延迟/显存），无需跑测试；测试流程的数值才是权威的端到端结果，因为它在真实 batch 下包含解码与 NMS。
+
 ## 评估曲线
 
 `cracks_yolo.metrics.curves` 模块生成三种图表，保存到 `curves/` 目录：

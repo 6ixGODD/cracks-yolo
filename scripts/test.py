@@ -71,6 +71,12 @@ def main() -> None:
     )
     report = TestPipelineImpl().run(model, loader, cfg)
     print(f"Test complete: map50={report.metrics.map50:.4f} map5095={report.metrics.map5095:.4f}")
+    if report.efficiency is not None:
+        e = report.efficiency
+        print(
+            f"  efficiency: fps={e.fps_mean:.1f} "
+            f"gflops={e.gflops / 1e9:.2f} params={e.n_parameters / 1e6:.2f}M"
+        )
     print(f"  output: {args.output_dir}")
 
 

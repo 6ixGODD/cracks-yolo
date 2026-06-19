@@ -178,9 +178,43 @@ def test_test_pipeline_smoke(tmp_path: Path) -> None:
     )
     report = TestPipelineImpl().run(model, test_loader, cfg)
     assert (cfg.output_dir / "metrics.csv").exists()
+    assert (cfg.output_dir / "model_analysis.json").exists()
     assert (cfg.output_dir / "per_image").is_dir()
     assert (cfg.output_dir / "curves").is_dir()
     assert report.elapsed_sec >= 0.0
+    # Efficiency is measured by default: real FPS over the test loop + params/
+    # GFLOPs via analyze_model.
+    assert report.efficiency is not None
+    eff = report.efficiency
+    assert eff.n_images == 4
+    assert eff.n_parameters > 0
+    assert eff.gflops >= 0.0
+    assert eff.fps_mean >= 0.0
+    # metrics.csv carries both accuracy and efficiency columns.
+    metrics_text = (cfg.output_dir / "metrics.csv").read_text(encoding="utf-8")
+    assert "fps_mean" in metrics_text
+    assert "gflops" in metrics_text
+    assert "n_parameters" in metrics_text
+
+
+def test_test_pipeline_efficiency_disabled(tmp_path: Path) -> None:
+    """measure_efficiency=False skips the report and zeroes the CSV columns."""
+    records = _make_records(tmp_path, n=4, size=64)
+    cls = ZOO["yolov5s"]
+    model = cls(num_classes=1, input_size=64)
+    test_loader = _build_loader(records, input_size=64, batch_size=2)
+    cfg = TestConfig(
+        output_dir=tmp_path / "test_run_noeff",
+        batch_size=2,
+        device="cpu",
+        conf_thr=0.001,
+        measure_efficiency=False,
+    )
+    report = TestPipelineImpl().run(model, test_loader, cfg)
+    assert report.efficiency is None
+    assert not (cfg.output_dir / "model_analysis.json").exists()
+    metrics_text = (cfg.output_dir / "metrics.csv").read_text(encoding="utf-8")
+    assert "fps_mean" in metrics_text  # column still present, values zeroed
 
 
 def test_crossval_smoke(tmp_path: Path) -> None:
@@ -221,6 +255,11 @@ def test_crossval_smoke(tmp_path: Path) -> None:
     agg = report.aggregated()
     assert "map50" in agg
     assert "mean" in agg["map50"]
+    # Efficiency fields are aggregated alongside accuracy.
+    assert "fps_mean" in agg
+    assert "gflops" in agg
+    cv_summary = (train_cfg.output_dir / "cv_summary.csv").read_text(encoding="utf-8")
+    assert "fps_mean" in cv_summary
 
 
 def test_compare_smoke(tmp_path: Path) -> None:

@@ -83,7 +83,14 @@ Same fields as `TrainStepLog` (minus `step`) plus `mean_*` prefixes and `elapsed
 | `recall` | `float` |
 | `f1` | `float` |
 | `elapsed_sec` | `float` |
+| `n_images` | `int` |
+| `fps_mean` | `float` |
+| `latency_mean_ms` | `float` |
+| `gflops` | `float` |
+| `n_parameters` | `int` |
 | `timestamp` | `str` |
+
+The `n_images` / `fps_mean` / `latency_mean_ms` / `gflops` / `n_parameters` fields are the efficiency headline numbers (0 when `measure_efficiency=False`); the full breakdown is in `model_analysis.json`.
 
 ### `MetricLog` — a single scalar emission
 

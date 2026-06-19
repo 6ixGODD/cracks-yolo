@@ -53,11 +53,11 @@ class TrainConfig(BaseModel):
 `TestPipelineImpl.run(model, test_loader, cfg) -> TestReport`:
 
 1. `configure_logger(cfg.output_dir)`.
-2. For each batch: `model.eval()` → `preds = model(images)` → `decoded = model.decode(preds)` → NMS (via `detections_to_per_image`).
+2. For each batch: `model.eval()` → `preds = model(images)` → `decoded = model.decode(preds)` → NMS (via `detections_to_per_image`). Each batch's forward+decode+NMS time is recorded (CUDA-synced) for FPS/latency.
 3. `COCOMetricsCalculator.update(all_per_image)` → `report = calculator.run()`.
 4. Compute PR/ROC curves, confusion matrix, AUCs (via `cracks_yolo.metrics.curves` + `confusion`).
-5. Write `metrics.csv`, `per_image/<id>.json`, `predictions/<id>.jpg`, `curves/{pr,roc,confusion}.png`, `TestLog`.
-6. Returns `TestReport(output_dir, metrics, elapsed_sec)`.
+5. Build `EfficiencyReport` from the recorded batch timings (real FPS/latency/peak VRAM) + `analyze_model` (params/MACs/GFLOPs); write `metrics.csv`, `model_analysis.json`, `per_image/<id>.json`, `predictions/<id>.jpg`, `curves/{pr,roc,confusion}.png`, `TestLog`.
+6. Returns `TestReport(output_dir, metrics, elapsed_sec, efficiency)`.
 
 ### Decode format
 
@@ -74,11 +74,12 @@ Each train or test run produces:
 | Artifact | Description |
 | --- | --- |
 | `run.log.jsonl` | Structured JSONL log (loguru). |
-| `metrics.csv` | Per-epoch losses and validation metrics. |
+| `metrics.csv` | Per-epoch losses and validation metrics (train); accuracy + efficiency (test). |
 | `loss_curve.png` | Training loss curve. |
 | `metric_curve.png` | Validation metric curve. |
 | `config.yaml` | Frozen training configuration. |
 | `best.pt` | Best checkpoint by val mAP@50. |
+| `model_analysis.json` | Test-run efficiency report (params/MACs/GFLOPs/latency/VRAM). |
 | `per_image/<id>.json` | Per-image detection results. |
 | `predictions/<id>.jpg` | Visualized predictions with bounding boxes. |
 | `curves/{pr,roc,confusion}.png` | Evaluation curves. |

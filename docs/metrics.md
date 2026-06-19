@@ -125,6 +125,24 @@ class MetricReport:
     conf_threshold: float
 ```
 
+`MetricReport` is detection accuracy only. Efficiency (speed + compute cost) is reported separately by the test pipeline.
+
+## Efficiency metrics
+
+Every test run (and every CV fold) measures efficiency alongside accuracy, so a single sweep yields a complete accuracy–speed–cost comparison table. Set `TestConfig.measure_efficiency=False` to skip.
+
+`EfficiencyReport` (pydantic) — produced by `TestPipelineImpl`, written into `metrics.csv`, `model_analysis.json`, and the `TestLog` record:
+
+| Field | Meaning |
+| --- | --- |
+| `fps_mean` / `fps_p50` / `fps_p95` | End-to-end inference throughput (images/sec) over the real test loader — forward + decode + NMS, batch = `TestConfig.batch_size`. |
+| `latency_mean_ms` / `latency_p50_ms` / `latency_p95_ms` | Per-image latency (batch time / batch size). |
+| `n_parameters` / `n_trainable_parameters` | Parameter counts. |
+| `macs` / `gflops` | MACs and GFLOPs (2 × MACs) on a single-image input via `fvcore.FlopCountAnalysis`. |
+| `peak_vram_bytes` | Peak CUDA memory over the real inference loop (synthetic single-image value on CPU). |
+
+The standalone `scripts/analyze_model.py` reports the same structural metrics (params/MACs/latency/VRAM) on a dummy input for any model without running a test; the test-pipeline numbers are the authoritative end-to-end figures because they include decode + NMS at the real batch size.
+
 ## Evaluation curves
 
 The `cracks_yolo.metrics.curves` module produces three plots, saved to `curves/`:

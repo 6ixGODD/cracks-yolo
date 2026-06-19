@@ -167,6 +167,20 @@ def run_cross_validation(
         "specificity",
         "ppv",
         "npv",
+        # Efficiency (measured per-fold on the held-out test set). FPS/GFLOPs/
+        # params are aggregated mean ± std across folds alongside accuracy.
+        "n_images",
+        "fps_mean",
+        "fps_p50",
+        "fps_p95",
+        "latency_mean_ms",
+        "latency_p50_ms",
+        "latency_p95_ms",
+        "n_parameters",
+        "n_trainable_parameters",
+        "macs",
+        "gflops",
+        "peak_vram_bytes",
     ]
 
     train_pipeline = TrainPipelineImpl()
@@ -278,10 +292,16 @@ def run_cross_validation(
         # Evaluate on the HELD-OUT fold (= test), not the val loader.
         test_report = test_pipeline.run(model, test_loader, test_cfg)
         metrics: MetricReport = test_report.metrics
-        per_fold_test.append({
-            "fold": fold_idx,
-            **{f: float(getattr(metrics, f)) for f in metric_fields},
-        })
+        eff = test_report.efficiency
+        fold_row: dict[str, Any] = {"fold": fold_idx}
+        for field in metric_fields:
+            if eff is not None and hasattr(eff, field):
+                fold_row[field] = float(getattr(eff, field))
+            elif hasattr(metrics, field):
+                fold_row[field] = float(getattr(metrics, field))
+            else:
+                fold_row[field] = 0.0
+        per_fold_test.append(fold_row)
 
         # Free memory between folds.
         del model
