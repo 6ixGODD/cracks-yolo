@@ -1,40 +1,39 @@
-# Usage
+# 用法
 
 [English](usage.md) | [中文](usage.zh-CN.md)
 
-End-to-end tutorial for training and evaluating tongue surface crack
-detection models with `cracks_yolo`.
+使用 `cracks_yolo` 训练和评估舌面裂纹检测模型的端到端教程。
 
-## Install
+## 安装
 
 ```bash
 git clone <repo>
 cd cracks-yolo
-uv sync          # or: pip install -e .
+uv sync          # 或：pip install -e .
 ```
 
-Requires Python 3.11 or 3.12, PyTorch >= 2.2. For CUDA 11.8 support:
+需要 Python 3.11 或 3.12，PyTorch >= 2.2。如需 CUDA 11.8 支持：
 
 ```bash
 uv pip install torch==2.5.1 torchvision==0.20.1 \
     --index-url https://download.pytorch.org/whl/cu118
 ```
 
-## Quickstart: forward + loss + backward
+## 快速开始：前向传播 + 损失计算 + 反向传播
 
 ```python
 import torch
 from cracks_yolo.zoo import ZOO
 
-# Instantiate any registered model.
+# 实例化任意已注册的模型。
 model = ZOO["yolov5s_sactr"](num_classes=1)
 model.train()
 
-# Forward (training mode returns raw head outputs).
+# 前向传播（训练模式返回原始检测头输出）。
 x = torch.randn(2, 3, 640, 640)
 preds = model(x)
 
-# Build YOLO-format targets: (N, 6) = (img_idx, cls, x, y, w, h) normalized.
+# 构建 YOLO 格式的目标：(N, 6) = (img_idx, cls, x, y, w, h) 归一化。
 targets = torch.tensor(
     [
         [0, 0, 0.50, 0.50, 0.20, 0.20],
@@ -44,8 +43,8 @@ targets = torch.tensor(
     dtype=torch.float32,
 )
 
-# Compute loss.
-# v7 needs the image batch (OTA assignment uses image dimensions).
+# 计算损失。
+# v7 需要图像批次（OTA 分配使用图像尺寸）。
 if model.__class__.__name__.startswith("YOLOv7"):
     loss, parts = model.compute_loss(preds, targets, imgs=x)
 else:
@@ -55,33 +54,33 @@ loss.backward()
 assert all(p.grad is not None for p in model.parameters() if p.requires_grad)
 ```
 
-## Eval-mode forward + decode
+## 评估模式前向传播 + 解码
 
 ```python
 model.eval()
 with torch.no_grad():
-    out = model(x)               # eval forward decodes internally
-    decoded = model.decode(out)  # returns (B, N, nc+5) or (B, 4+nc, N)
+    out = model(x)               # eval 前向传播在内部解码
+    decoded = model.decode(out)  # 返回 (B, N, nc+5) 或 (B, 4+nc, N)
 
 print(decoded.shape)
-# v5/v7: torch.Size([2, 25200, 6])  -- (B, anchors, nc+5)
-# v8/v10: torch.Size([2, 5, 8400])  -- (B, 4+nc, grid_cells)
+# v5/v7：torch.Size([2, 25200, 6])  -- (B, anchors, nc+5)
+# v8/v10：torch.Size([2, 5, 8400])  -- (B, 4+nc, grid_cells)
 ```
 
-## Load COCO pretrained weights
+## 加载 COCO 预训练权重
 
 ```python
 from cracks_yolo.zoo import YOLOv5s
 
-# Baseline (has pretrained_spec) -- downloads + loads with strict=False.
+# 基线（有 pretrained_spec）-- 下载并使用 strict=False 加载。
 model = YOLOv5s.from_pretrained(num_classes=1)
 
-# SAC/TR variants return random init (pretrained_spec is None).
+# SAC/TR 变体返回随机初始化（pretrained_spec 为 None）。
 from cracks_yolo.zoo import YOLOv5sSACTR
 model = YOLOv5sSACTR(num_classes=1)
 ```
 
-To inspect the load report:
+检查加载报告：
 
 ```python
 from cracks_yolo.weights.loader import load_pretrained
@@ -91,15 +90,15 @@ model = YOLOv5s(num_classes=1)
 report = load_pretrained(
     model=model,
     spec=YOLOv5s.pretrained_spec,
-    weights_dir=None,  # defaults to ./weights
+    weights_dir=None,  # 默认为 ./weights
     strict=False,
 )
-print(f"matched: {len(report.matched)}")
-print(f"missing: {report.missing[:5]} ... ({len(report.missing)} total)")
-print(f"unexpected: {len(report.unexpected)}")
+print(f"匹配：{len(report.matched)}")
+print(f"缺失：{report.missing[:5]} ...（共 {len(report.missing)} 个）")
+print(f"意外：{len(report.unexpected)}")
 ```
 
-## Build the optimizer
+## 构建优化器
 
 ```python
 model = ZOO["yolov8s_sac"](num_classes=1)
@@ -107,7 +106,7 @@ optimizer = model.build_optimizer()
 # torch.optim.AdamW(model.parameters(), lr=1e-3)
 ```
 
-## List all available models
+## 列出所有可用模型
 
 ```python
 from cracks_yolo.zoo import ZOO
@@ -116,7 +115,7 @@ for key, cls in ZOO.items():
     print(f"{key:18s} -> {cls.__name__}")
 ```
 
-Output (26 entries total):
+输出（共 26 个条目）：
 
 ```
 yolov5s            -> YOLOv5s_CIoU_BCEObj_BCECls_AdamW_SILU
@@ -132,9 +131,9 @@ yolov10s_sac       -> YOLOv10sSAC_CIoU_DFL_AdamW_SILU
 ...
 ```
 
-## Run training
+## 运行训练
 
-The train script expects a dataset in YOLOv5 PyTorch format:
+训练脚本需要 YOLOv5 PyTorch 格式的数据集：
 
 ```bash
 python -m scripts.train \
@@ -145,18 +144,18 @@ python -m scripts.train \
     --pretrained
 ```
 
-Training artifacts produced under `output/yolov5s_sactr/`:
+`output/yolov5s_sactr/` 下生成的训练产物：
 
-- `run.log.jsonl` -- structured JSONL log
-- `metrics.csv` -- per-epoch metrics
-- `loss_curve.png`, `metric_curve.png` -- training curves
-- `config.yaml` -- frozen training config
-- `best.pt` -- best checkpoint
-- `per_image/*.json` -- per-image prediction results
-- `predictions/*.jpg` -- visualization of predictions
-- `curves/{pr,roc,confusion}.png` -- evaluation curves
+- `run.log.jsonl` -- 结构化 JSONL 日志
+- `metrics.csv` -- 每周期指标
+- `loss_curve.png`, `metric_curve.png` -- 训练曲线
+- `config.yaml` -- 冻结的训练配置
+- `best.pt` -- 最佳检查点
+- `per_image/*.json` -- 每张图像的预测结果
+- `predictions/*.jpg` -- 预测可视化
+- `curves/{pr,roc,confusion}.png` -- 评估曲线
 
-## Run testing on a trained model
+## 对训练好的模型运行测试
 
 ```bash
 python -m scripts.test \
@@ -166,10 +165,9 @@ python -m scripts.test \
     --output-dir output/yolov5s_sactr/test
 ```
 
-## 5-fold cross-validation
+## 5 折交叉验证
 
-Merges train+valid+test into one pool, held-out fold = test, remaining
-90/10 split for train/val:
+将 train+valid+test 合并为一个池，留出折 = test，剩余数据按 90/10 划分为 train/val：
 
 ```bash
 python -m scripts.train \
@@ -181,10 +179,9 @@ python -m scripts.train \
     --pretrained
 ```
 
-CV output includes `cv_summary.csv`, `cv_report.json`, and individual
-`fold_*/` directories.
+CV 输出包括 `cv_summary.csv`、`cv_report.json` 以及各个 `fold_*/` 目录。
 
-## Multi-model comparison with statistical tests
+## 带统计检验的多模型比较
 
 ```bash
 python -m scripts.compare_models \
@@ -194,10 +191,9 @@ python -m scripts.compare_models \
     --output-dir output/comparison
 ```
 
-Produces `comparison*.csv`, `paired_t_test.csv`, plus Wilcoxon and
-bootstrap CI results.
+生成 `comparison*.csv`、`paired_t_test.csv`，以及 Wilcoxon 和 bootstrap CI 结果。
 
-## Batch scheduling with subprocess isolation
+## 带子进程隔离的批量调度
 
 ```bash
 python -m scripts.schedule_experiments \
@@ -205,12 +201,9 @@ python -m scripts.schedule_experiments \
     --output-dir output/all_models_direct
 ```
 
-The scheduler runs each experiment in an isolated subprocess, captures
-errors to `errors.jsonl`, and supports `--retry` mode to re-run only
-failed experiments. Set `max_parallel > 1` and per-experiment
-`env: {CUDA_VISIBLE_DEVICES: "N"}` for multi-GPU servers.
+调度器在隔离的子进程中运行每个实验，将错误捕获到 `errors.jsonl`，并支持 `--retry` 模式重新运行仅失败的实验。设置 `max_parallel > 1` 和每个实验的 `env: {CUDA_VISIBLE_DEVICES: "N"}` 以用于多 GPU 服务器。
 
-## Structured logging
+## 结构化日志
 
 ```python
 from pathlib import Path
@@ -228,14 +221,14 @@ record: TrainStepLog = {
     "lr": 1e-3, "timestamp": "2026-06-18T00:00:00",
 }
 logger.bind(**record).info("step done")
-# Writes one JSON line to output/run1/run.log.jsonl
+# 写入一行 JSON 到 output/run1/run.log.jsonl
 ```
 
-## Other scripts
+## 其他脚本
 
-| Script | Purpose |
+| 脚本 | 用途 |
 | --- | --- |
-| `convert_dataset` | Convert between COCO and YOLOv5 formats |
-| `heatmap` | Grad-CAM visualization for a trained model |
-| `analyze_dataset` | Dataset diversity metrics and distribution plots |
-| `analyze_model` | Model params/MACs/latency/VRAM profiling |
+| `convert_dataset` | 在 COCO 和 YOLOv5 格式之间转换 |
+| `heatmap` | 训练模型的 Grad-CAM 可视化 |
+| `analyze_dataset` | 数据集多样性指标和分布图 |
+| `analyze_model` | 模型 params/MACs/latency/VRAM 分析 |

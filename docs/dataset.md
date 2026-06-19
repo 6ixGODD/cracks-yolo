@@ -1,8 +1,8 @@
 # Dataset
 
-`cracks_yolo.dataset` provides format-agnostic dataset loading, conversion
-between YOLOv5-PyTorch and COCO formats, a torchvision-compatible
-`DetectionDataset`, and a conservative transform pipeline.
+[English](dataset.md) | [中文](dataset.zh-CN.md)
+
+`cracks_yolo.dataset` provides format-agnostic dataset loading, conversion between YOLOv5-PyTorch and COCO formats, a torchvision-compatible `DetectionDataset`, and a conservative transform pipeline. The default dataset (`data/CrackDetection_Augmentation.v1.yolov5pytorch`) is a tongue surface crack image collection with a single class (`crack`) in YOLOv5 PyTorch format.
 
 ## Supported formats
 
@@ -11,8 +11,7 @@ between YOLOv5-PyTorch and COCO formats, a torchvision-compatible
 | YOLOv5 PyTorch | `data.yaml` + `train/`, `valid/`, `test/` with `images/` + `labels/*.txt` | `cracks_yolo.dataset.yolo.YOLOSource` |
 | COCO | `instances_{train,val}.json` + `train2017/`, `val2017/` (image dir) | `cracks_yolo.dataset.coco.COCOSource` |
 
-Both sources expose a uniform `load_split(split: str) -> list[RawDetection]`
-API. `RawDetection` is the format-agnostic record type:
+Both sources expose a uniform `load_split(split: str) -> list[RawDetection]` API. `RawDetection` is the format-agnostic record type:
 
 ```python
 @dataclass
@@ -25,9 +24,7 @@ class RawDetection:
 
 ## DetectionDataset (torch.utils.data.Dataset)
 
-`DetectionDataset` wraps a list of `RawDetection` + a `DetectionTransform`
-and returns `DetectionSample(image, boxes, labels, image_id)` per item.
-Construct via the classmethods:
+`DetectionDataset` wraps a list of `RawDetection` + a `DetectionTransform` and returns `DetectionSample(image, boxes, labels, image_id)` per item. Construct via the classmethods:
 
 ```python
 from cracks_yolo.dataset import DetectionDataset
@@ -54,8 +51,7 @@ ds = DetectionDataset.from_records(records=subset, input_size=640, train=True)
 
 ## DataLoader
 
-`build_dataloader` returns a `torch.utils.data.DataLoader` with a custom
-`detection_collate` that handles variable-N boxes per image:
+`build_dataloader` returns a `torch.utils.data.DataLoader` with a custom `detection_collate` that handles variable-N boxes per image:
 
 ```python
 from cracks_yolo.dataset import build_dataloader
@@ -69,17 +65,14 @@ for images, targets in loader:
 
 ## Transforms
 
-`DetectionTransform` is a small callable class (not torchvision v2). The
-default train pipeline is intentionally conservative — only horizontal flip —
-so baseline comparisons aren't confounded by heavy augmentation.
+`DetectionTransform` is a small callable class (not torchvision v2). The default train pipeline is intentionally conservative — only horizontal flip — so baseline comparisons are not confounded by heavy augmentation.
 
-- **Resize**: bilinear to `input_size × input_size`.
+- **Resize**: bilinear to `input_size x input_size`.
 - **Normalize**: pixels scaled to `[0, 1]` (no mean/std subtraction — YOLO convention).
 - **Train augmentation**: random horizontal flip (p=0.5). Boxes are flipped accordingly.
 - **Eval**: resize + normalize only.
 
-`build_transforms(input_size, train, augment)` is the factory used by
-`DetectionDataset.from_*`.
+`build_transforms(input_size, train, augment)` is the factory used by `DetectionDataset.from_*`.
 
 ## Format conversion
 
@@ -99,9 +92,7 @@ python -m scripts.convert_dataset \
 
 ## Target tensor conventions
 
-The pipeline's `targets_to_yolo` helper converts the dataloader's
-`list[dict]` format to the `(N, 6)` YOLO target tensor consumed by all YOLO
-losses:
+The pipeline's `targets_to_yolo` helper converts the dataloader's `list[dict]` format to the `(N, 6)` YOLO target tensor consumed by all YOLO losses:
 
 | Column | Meaning |
 | --- | --- |
@@ -112,6 +103,4 @@ losses:
 | 4 | width (normalized) |
 | 5 | height (normalized) |
 
-The torchvision detector wrappers (`cracks_yolo/zoo/torchvision_detectors.py`)
-convert this `(N, 6)` format back to torchvision's `list[dict]` with xyxy
-absolute-pixel boxes and 1-indexed labels (background = 0).
+The torchvision detector wrappers (`cracks_yolo/zoo/torchvision_detectors.py`) convert this `(N, 6)` format back to torchvision's `list[dict]` with xyxy absolute-pixel boxes and 1-indexed labels (background = 0).

@@ -1,5 +1,7 @@
 # Development: adding a new model variant
 
+[English](development.md) | [中文](development.zh-CN.md)
+
 ## Naming convention
 
 Class name = `{baseline}_{improvements}_{loss}_{optimizer}_{activation}`.
@@ -19,8 +21,8 @@ Short alias (e.g. `YOLOv5sSACTR`) re-exported from
 
 ### 1. Subclass nothing from `cracks_yolo.zoo.base`
 
-`base.py` is a `Protocol` — there's nothing to subclass. Define a fresh
-`nn.Module` class.
+`base.py` defines a `Protocol` -- there is nothing to subclass. Define a
+fresh `nn.Module` class.
 
 ### 2. File location
 
@@ -110,15 +112,15 @@ In `tests/zoo/test_<arch>.py` (extend existing or new file):
 - **Protocol structural check:** `isinstance(model, DetectorModel)`.
 
 The parametrized tests in `tests/zoo/test_zoo.py` automatically pick up
-new ZOO entries — adding a key to `ZOO` is enough to get forward/loss/
+new ZOO entries -- adding a key to `ZOO` is enough to get forward/loss/
 stride/optimizer/protocol tests run on it.
 
 ### 7. Update docs
 
-- `docs/models.md` — add a section with architecture diagram, layer
+- `docs/models.md` -- add a section with architecture diagram, layer
   table, loss formula, SAC/TR insertion points, paper citation.
-- `docs/ops.md` — if you introduced a new op, document it here.
-- `README.md` — update the model table if applicable.
+- `docs/ops.md` -- if you introduced a new op, document it here.
+- `README.md` -- update the model table if applicable.
 
 ## Verification before claiming done
 
@@ -129,14 +131,14 @@ uv run pytest -q
 ```
 
 All three must be green. Plus: for every class in `cracks_yolo.zoo.ZOO`,
-instantiate → `from_pretrained` (or random init if offline) → forward on
-`(2, 3, 640, 640)` → `compute_loss` → backward → all trainable params
+instantiate -> `from_pretrained` (or random init if offline) -> forward on
+`(2, 3, 640, 640)` -> `compute_loss` -> backward -> all trainable params
 have non-None grad.
 
 ## Conventions checklist
 
 - `from __future__ import annotations` at top of every file.
-- No `Any` — fix the type.
+- No `Any` -- fix the type.
 - Google-style docstrings, double quotes, 4-space indent, line length 100.
 - Force-single-line imports (enforced by `.ruff.toml`).
 - Pre-commit runs ruff + ruff-format.

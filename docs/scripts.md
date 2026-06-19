@@ -1,8 +1,8 @@
 # Scripts
 
-`scripts/` contains all CLI entry points. Each script is a thin wrapper
-around `cracks_yolo.*` modules. All accept `--config <yaml>` and individual
-`--flags`, and write to `--output-dir`.
+[English](scripts.md) | [中文](scripts.zh-CN.md)
+
+`scripts/` contains all CLI entry points. Each script is a thin wrapper around `cracks_yolo.*` modules. All accept `--config <yaml>` and individual `--flags`, and write to `--output-dir`.
 
 ## train.py
 
@@ -12,6 +12,7 @@ python -m scripts.train \
     --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
     --epochs 100 --batch-size 32 --input-size 640 \
     --output-dir output/yolov5s_sactr \
+    --pretrained \
     --seed 42
 ```
 
@@ -19,16 +20,20 @@ Flags:
 - `--model` — ZOO key (see `cracks_yolo.zoo.ZOO`).
 - `--dataset` — YOLOv5-format dataset root (contains `data.yaml` + `train/`, `valid/`, `test/`).
 - `--epochs`, `--batch-size`, `--lr`, `--weight-decay`, `--input-size` — training hyperparameters.
-- `--amp` / `--no-amp` — toggle AMP (default off).
-- `--num-workers` — DataLoader workers (default 4).
+- `--amp` / `--no-amp` — toggle AMP (default on). Note: AMP + `lr=0.01` can diverge over long runs — use `lr=1e-3` or `--no-amp` for stability.
+- `--num-workers` — DataLoader workers (default 0).
 - `--device` — `cuda` or `cpu` (default `cuda`).
 - `--seed` — reproducibility seed (default 42).
 - `--val-interval` — validate every N epochs (default 1).
-- `--log-every-n-steps` — train-step log frequency (default 10).
-- `--cross-val` — switch to 5-fold CV mode (uses `--n-folds`, `--val-split`, `--train-split`).
+- `--log-every-n-steps` — train-step log frequency (default 50).
+- `--pretrained` — load official COCO pretrained weights via `from_pretrained(strict=False)` (SAC/TR layers stay randomly initialized).
+- `--weights-dir` — cache directory for downloaded `.pt` files (default `weights/`).
+- `--cross-val` — switch to N-fold CV mode. Merges train+valid+test splits into one pool, partitions into N folds. Per fold: held-out = TEST, remaining records split into train (90%) + val (10%). Uses `--n-folds`, `--val-fraction`.
+- `--n-folds` — number of CV folds (default 5).
+- `--val-fraction` — fraction of per-fold training pool carved out as val for backprop validation (default 0.1). 0.0 disables val.
+- `--train-split`, `--val-split` — split names for single-run mode (defaults `train`, `valid`). Ignored in CV mode.
 
-Emits to `output-dir`: `run.log.jsonl`, `metrics.csv`, `loss_curve.png`,
-`metric_curve.png`, `config.yaml`, `best.pt`.
+Emits to `output-dir`: `run.log.jsonl`, `metrics.csv`, `loss_curve.png`, `metric_curve.png`, `config.yaml`, `best.pt`. In CV mode: `fold_<i>/` per fold + `cv_summary.csv` + `cv_report.json`.
 
 ## test.py
 
@@ -41,8 +46,7 @@ python -m scripts.test \
     --output-dir output/yolov5s_sactr_test
 ```
 
-Emits: `metrics.csv`, `per_image/<id>.json`, `predictions/<id>.jpg`,
-`curves/{pr,roc,confusion}.png`, `TestLog` in `run.log.jsonl`.
+Emits: `metrics.csv`, `per_image/<id>.json`, `predictions/<id>.jpg`, `curves/{pr,roc,confusion}.png`, `TestLog` in `run.log.jsonl`.
 
 ## convert_dataset.py
 
@@ -64,13 +68,9 @@ python -m scripts.heatmap \
     --output-dir output/heatmaps
 ```
 
-Generates Grad-CAM heatmaps for the specified backbone layers. Per image per
-layer: `heatmaps/<image_id>/<layer>.png` + `feature_maps/<image_id>/<layer>.npy`.
+Generates Grad-CAM heatmaps for the specified backbone layers. Per image per layer: `heatmaps/<image_id>/<layer>.png` + `feature_maps/<image_id>/<layer>.npy`.
 
-**Layer naming**: use dot-notation relative to the model's top-level
-attributes. YOLOv5s backbone has 10 children (indices 0-9), so valid layers
-are `backbone.0` through `backbone.9`. Invalid indices raise
-`IndexError: index N is out of range` — check `len(model.backbone)` first.
+**Layer naming**: use dot-notation relative to the model's top-level attributes. YOLOv5s backbone has 10 children (indices 0-9), so valid layers are `backbone.0` through `backbone.9`. Invalid indices raise `IndexError: index N is out of range` — check `len(model.backbone)` first.
 
 See `docs/heatmap.md` for methodology.
 
@@ -82,10 +82,7 @@ python -m scripts.analyze_dataset \
     --output-dir output/dataset_analysis
 ```
 
-Emits: `class_distribution.png`, `bbox_size_distribution.png`,
-`bbox_position_heatmap.png`, `image_size_distribution.png`,
-`diversity_metrics.json` (Shannon entropy, unique bbox aspect-ratio buckets,
-spatial coverage).
+Emits: `class_distribution.png`, `bbox_size_distribution.png`, `bbox_position_heatmap.png`, `image_size_distribution.png`, `diversity_metrics.json` (Shannon entropy, unique bbox aspect-ratio buckets, spatial coverage).
 
 ## analyze_model.py
 
@@ -96,9 +93,7 @@ python -m scripts.analyze_model \
     --output-dir output/model_analysis
 ```
 
-Emits: `params.csv`, `macs.csv` (via `fvcore.nn.FlopCountAnalysis`),
-`latency.csv` (p50/p95 over 100 runs, CPU + CUDA), `vram.csv` (peak
-`torch.cuda.max_memory_allocated`), `comparison_plot.png`.
+Emits: `params.csv`, `macs.csv` (via `fvcore.nn.FlopCountAnalysis`), `latency.csv` (p50/p95 over 100 runs, CPU + CUDA), `vram.csv` (peak `torch.cuda.max_memory_allocated`), `comparison_plot.png`.
 
 Use `--all` to run on every ZOO entry:
 
@@ -108,11 +103,23 @@ python -m scripts.analyze_model --all --output-dir output/model_analysis_all
 
 ## schedule_experiments.py
 
-YAML-driven batch scheduler. See `docs/scheduler.md`.
+YAML-driven batch scheduler. See `docs/scheduler.md` for the full YAML format and `experiments/README.md` for the ready-to-run sweeps.
 
 ```bash
-python -m scripts.schedule_experiments --config experiments.yaml --output-dir output/scheduler
-python -m scripts.schedule_experiments --retry-failed output/scheduler/errors.jsonl --output-dir output/scheduler_retry
+# Direct 26-model sweep (train + test each).
+python -m scripts.schedule_experiments \
+    --config experiments/all_models_direct.yaml \
+    --output-dir output/all_models_direct
+
+# 5-fold CV 26-model sweep.
+python -m scripts.schedule_experiments \
+    --config experiments/all_models_cv5.yaml \
+    --output-dir output/all_models_cv5
+
+# Retry any failed experiments.
+python -m scripts.schedule_experiments \
+    --retry-failed output/all_models_direct/scheduler/errors.jsonl \
+    --output-dir output/all_models_direct_retry
 ```
 
 ## compare_models.py
@@ -126,5 +133,4 @@ python -m scripts.compare_models \
     --output-dir output/comparison
 ```
 
-Runs 5-fold CV for each model, then per-fold paired t-test on the chosen
-metric. Emits `comparison.csv`, `paired_t_test.csv`, `comparison_plot.png`.
+Runs 5-fold CV for each model, then per-fold paired t-test on the chosen metric. Emits `comparison.csv`, `paired_t_test.csv`, `comparison_plot.png`.

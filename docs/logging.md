@@ -1,13 +1,12 @@
 # Logging (`cracks_yolo.logging`)
 
+[English](logging.md) | [中文](logging.zh-CN.md)
+
 ## Design
 
-`loguru` configured by `cracks_yolo.logging.configure_logger(output_dir)`.
-Two sinks are installed:
+`loguru` configured by `cracks_yolo.logging.configure_logger(output_dir)`. Two sinks are installed:
 
-1. **JSONL file sink** at `{output_dir}/run.log.jsonl` — one JSON object
-   per line, suitable for post-hoc analysis with `jq`, pandas, or any
-   JSONL-aware tool.
+1. **JSONL file sink** at `{output_dir}/run.log.jsonl` — one JSON object per line, suitable for post-hoc analysis with `jq`, pandas, or any JSONL-aware tool.
 2. **Stderr sink** — human-readable, colorized, for live monitoring.
 
 ## Usage
@@ -35,15 +34,11 @@ record: TrainStepLog = {
 logger.bind(**record).info("step done")
 ```
 
-The `logger.bind(**record)` pattern (canonical loguru) merges the dict
-into `record["extra"]`. The JSONL sink merges `extra` into the top-level
-JSON object alongside `level`, `message`, `timestamp`.
+The `logger.bind(**record)` pattern (canonical loguru) merges the dict into `record["extra"]`. The JSONL sink merges `extra` into the top-level JSON object alongside `level`, `message`, `timestamp`.
 
 ## Record schemas (`cracks_yolo.logging.schema`)
 
-All schemas are `TypedDict`s (via `typing_extensions.TypedDict` for
-Python 3.11 compatibility with pydantic). Each carries a `record_type:
-Literal[...]` discriminator so post-hoc queries can filter by record type.
+All schemas are `TypedDict`s (via `typing_extensions.TypedDict` for Python 3.11 compatibility with pydantic). Each carries a `record_type: Literal[...]` discriminator so post-hoc queries can filter by record type.
 
 ### `TrainStepLog` — one optimizer step
 
@@ -62,8 +57,7 @@ Literal[...]` discriminator so post-hoc queries can filter by record type.
 
 ### `TrainEpochLog` — end-of-epoch summary
 
-Same fields as `TrainStepLog` (minus `step`) plus `mean_*` prefixes and
-`elapsed_sec`.
+Same fields as `TrainStepLog` (minus `step`) plus `mean_*` prefixes and `elapsed_sec`.
 
 ### `ValLog` — validation pass
 
@@ -118,8 +112,7 @@ Use this for FPS, params, MACs, latency percentiles, etc.
 | `unexpected_keys` | `list[str]` |
 | `timestamp` | `str` |
 
-Emitted by the pipeline after `from_pretrained` so every run records
-exactly which keys were randomly initialized (SAC/TR layers).
+Emitted by the pipeline after `from_pretrained` so every run records exactly which keys were randomly initialized (SAC/TR layers).
 
 ## JSONL format
 
