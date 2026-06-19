@@ -7,3 +7,9 @@
 [submodule "deps/ultralytics"]
 	path = deps/ultralytics
 	url = https://github.com/ultralytics/ultralytics.git
+[submodule "deps/yolov7"]
+	path = deps/yolov7
+	url = https://github.com/WongKinYiu/yolov7.git
+[submodule "deps/yolov9"]
+	path = deps/yolov9
+	url = https://github.com/WongKinYiu/yolov9.git

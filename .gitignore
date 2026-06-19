@@ -93,3 +93,17 @@ pyrightconfig.json
 
 data/
 !data/.gitkeep
+
+# Coding Agent
+CLAUDE.md
+AGENTS.md
+TODO.md
+
+# Cracks-YOLO artifacts
+output/
+weights/
+!/tests/weights/
+!/cracks_yolo/weights/
+runs/
+*.pt
+*.pth

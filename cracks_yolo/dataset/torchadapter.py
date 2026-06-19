@@ -1,237 +1,150 @@
+"""torch.utils.data.Dataset wrapper + dataloader builder.
+
+``DetectionDataset`` is format-agnostic — it consumes a list of
+:class:`RawDetection` (from YOLOSource or COCOSource) and applies a
+:class:`DetectionTransform`. Returns ``(image_tensor, target_dict)`` where
+``target_dict = {"boxes": (N,4) xyxy abs, "labels": (N,), "image_id": int}``.
+
+``build_dataloader`` returns a ``torch.utils.data.DataLoader`` with a
+custom collate_fn that handles variable-N boxes per image (returns a list
+of target dicts, not a padded tensor).
+"""
+
 from __future__ import annotations
 
-import logging
-import typing as t
+from dataclasses import dataclass
+from pathlib import Path
 
-import PIL.Image as Image
+from PIL import Image
 import torch
-from torch.utils.data import Dataset as TorchDataset
-from torchvision import transforms as T  # noqa: N812
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
 
-from cracks_yolo.dataset import Dataset
-from cracks_yolo.dataset.types import Annotation
-from cracks_yolo.exceptions import DatasetError
-from cracks_yolo.exceptions import DatasetNotFoundError
-from cracks_yolo.exceptions import ValidationError
-
-logger = logging.getLogger(__name__)
+from cracks_yolo.dataset.transforms import DetectionTransform
+from cracks_yolo.dataset.transforms import build_transforms
+from cracks_yolo.dataset.types import RawDetection
 
 
-class Target(t.TypedDict):
-    boxes: torch.Tensor  # shape (N, 4)
-    """Bounding boxes in the specified format."""
+@dataclass
+class DetectionSample:
+    """One item returned by DetectionDataset.__getitem__."""
 
-    labels: torch.Tensor  # shape (N,)
-    """Class labels for each bounding box."""
-
-    image_id: torch.Tensor  # shape (1,)
-    """Image identifier."""
-
-    area: torch.Tensor  # shape (N,)
-    """Area of each bounding box."""
-
-    iscrowd: torch.Tensor  # shape (N,)
-    """Crowd flag for each bounding box."""
+    image: torch.Tensor  # (3, H, W) float in [0, 1]
+    boxes: torch.Tensor  # (N, 4) xyxy absolute pixels
+    labels: torch.Tensor  # (N,) long
+    image_id: int
 
 
-ImageTargetPair: t.TypeAlias = tuple[t.Any, Target]
-"""Type alias for a tuple of (image, target)."""
+class DetectionDataset(Dataset[DetectionSample]):
+    """Wraps a list of RawDetection records + a transform.
 
-
-class TorchDatasetAdapter(TorchDataset[ImageTargetPair]):
-    """Adapter to convert custom datasets to torchvision-compatible format.
-
-    This adapter wraps BaseDataset instances and provides a PyTorch Dataset interface
-    suitable for use with DataLoader and torchvision transforms.
-
-    Args:
-        dataset: Source dataset (COCODataset or YOLOv5Dataset)
-        transform: Optional torchvision transforms for images
-        target_transform: Optional transforms for targets/annotations
-        return_format: Format for bounding boxes ('xyxy', 'xywh', 'cxcywh')
+    Use the ``from_yolo`` / ``from_coco`` classmethods for the common case
+    (load a split from disk). For 5-fold CV, build the list of
+    RawDetection externally and pass it via ``from_records``.
     """
 
     def __init__(
         self,
-        dataset: Dataset,
-        transform: t.Callable[..., torch.Tensor] | None = None,
-        target_transform: t.Callable[[Target], Target] | None = None,
-        return_format: t.Literal["xyxy", "xywh", "cxcywh"] = "xyxy",
+        records: list[RawDetection],
+        transform: DetectionTransform,
     ) -> None:
-        self.dataset = dataset
+        self.records = records
         self.transform = transform
-        self.target_transform = target_transform
-        self.return_format = return_format
 
-        # Create index to image_id mapping
-        self.image_ids = list(dataset.images.keys())
+    @classmethod
+    def from_yolo(
+        cls,
+        root: str | Path,
+        split: str,
+        input_size: int,
+        train: bool = False,
+        augment: bool = True,
+    ) -> DetectionDataset:
+        from cracks_yolo.dataset.yolo import YOLOSource
 
-        logger.info(
-            f"Created TorchvisionDatasetAdapter with {len(self.image_ids)} images, "
-            f"bbox format: {return_format}"
-        )
+        src = YOLOSource(root)
+        records = src.load_split(split)  # type: ignore[arg-type]
+        transform = build_transforms(input_size, train=train, augment=augment)
+        return cls(records=records, transform=transform)
+
+    @classmethod
+    def from_coco(
+        cls,
+        root: str | Path,
+        split: str,
+        input_size: int,
+        train: bool = False,
+        augment: bool = True,
+        image_dir: str | Path | None = None,
+    ) -> DetectionDataset:
+        from cracks_yolo.dataset.coco import COCOSource
+
+        src = COCOSource(root, image_dir=image_dir)
+        records = src.load_split(split)  # type: ignore[arg-type]
+        transform = build_transforms(input_size, train=train, augment=augment)
+        return cls(records=records, transform=transform)
+
+    @classmethod
+    def from_records(
+        cls,
+        records: list[RawDetection],
+        input_size: int,
+        train: bool = False,
+        augment: bool = True,
+    ) -> DetectionDataset:
+        transform = build_transforms(input_size, train=train, augment=augment)
+        return cls(records=records, transform=transform)
 
     def __len__(self) -> int:
-        """Return the total number of samples."""
-        return len(self.image_ids)
+        return len(self.records)
 
-    def __getitem__(self, idx: int) -> ImageTargetPair:
-        """Get a sample by index.
-
-        Args:
-            idx: Sample index
-
-        Returns:
-            Tuple of (image, target) where target is a dict containing:
-                - boxes: Tensor of shape (N, 4) with bounding boxes
-                - labels: Tensor of shape (N,) with class labels
-                - image_id: Image identifier
-                - area: Tensor of shape (N,) with box areas
-                - iscrowd: Tensor of shape (N,) with crowd flags
-        """
-        image_id = self.image_ids[idx]
-        img_info = self.dataset.get_image(image_id)
-
-        if img_info is None:
-            raise DatasetError(f"Image {image_id} not found in dataset")
-
-        if img_info.path is None or not img_info.path.exists():
-            raise DatasetNotFoundError(str(img_info.path), f"Image file not found: {img_info.path}")
-
-        # Load image
-        img = Image.open(img_info.path).convert("RGB")
-
-        # Get annotations
-        annotations = self.dataset.get_annotations(image_id)
-
-        # Prepare target dict
-        target = self._prepare_target(annotations, img_info.image_id)
-
-        # Apply transforms
-        if self.transform is not None:
-            img = self.transform(img)
-
-        if self.target_transform is not None:
-            target = self.target_transform(target)
-
-        return img, target
-
-    def _prepare_target(self, annotations: list[Annotation], image_id: str) -> Target:
-        """Prepare target dictionary from annotations.
-
-        Args:
-            annotations: List of annotations
-            image_id: Image identifier
-
-        Returns:
-            Target dictionary
-        """
-        boxes = []
-        labels = []
-        areas = []
-        iscrowd = []
-
-        for ann in annotations:
-            # Get bounding box in requested format
-            if self.return_format == "xyxy":
-                box = ann.bbox.xyxy
-            elif self.return_format == "xywh":
-                box = ann.bbox.xywh
-            elif self.return_format == "cxcywh":
-                box = ann.bbox.cxcywh
-            else:
-                raise ValidationError(f"Unknown return format: {self.return_format}")
-
-            boxes.append(box)
-            labels.append(ann.category_id)
-            areas.append(ann.get_area())
-            iscrowd.append(ann.iscrowd)
-
-        target: Target = {
-            "boxes": torch.as_tensor(boxes, dtype=torch.float32) if boxes else torch.zeros((0, 4)),
-            "labels": torch.as_tensor(labels, dtype=torch.int64)
-            if labels
-            else torch.zeros((0,), dtype=torch.int64),
-            "image_id": torch.tensor([int(image_id)]),
-            "area": torch.as_tensor(areas, dtype=torch.float32) if areas else torch.zeros((0,)),
-            "iscrowd": torch.as_tensor(iscrowd, dtype=torch.int64)
-            if iscrowd
-            else torch.zeros((0,), dtype=torch.int64),
-        }
-
-        return target
-
-    def collate(self, batch: list[ImageTargetPair]) -> tuple[list[torch.Tensor], list[Target]]:
-        """Custom collate function for DataLoader.
-
-        This is useful when images have different numbers of objects.
-
-        Args:
-            batch: List of (image, target) tuples
-
-        Returns:
-            Tuple of (images, targets) lists
-        """
-        images = [item[0] for item in batch]
-        targets = [item[1] for item in batch]
-        return images, targets
+    def __getitem__(self, idx: int) -> DetectionSample:
+        rec = self.records[idx]
+        with Image.open(rec.image_path) as im:
+            rgb = im.convert("RGB")
+            image_tensor, boxes, labels = self.transform(rgb, rec.boxes_norm, rec.labels)
+        return DetectionSample(
+            image=image_tensor,
+            boxes=boxes,
+            labels=labels,
+            image_id=rec.image_id,
+        )
 
 
-def build_torchdataset(
-    dataset: Dataset,
-    image_size: int | tuple[int, int] | None = None,
-    augment: bool = False,
-    normalize: bool = False,
-    *transforms: t.Callable[..., t.Any],
-    return_format: t.Literal["xyxy", "xywh", "cxcywh"] = "xyxy",
-) -> TorchDatasetAdapter:
-    """Create a torch-compatible dataset with standard transforms.
-
-    Args:
-        dataset: Source dataset (COCODataset or YOLOv5Dataset)
-        image_size: Target image size (single int or (height, width))
-        augment: Whether to apply data augmentation
-        normalize: Whether to normalize images using ImageNet statistics
-        return_format: Format for bounding boxes
+def detection_collate(
+    batch: list[DetectionSample],
+) -> tuple[torch.Tensor, list[dict[str, torch.Tensor]]]:
+    """Collate function for variable-N boxes per image.
 
     Returns:
-        TorchDatasetAdapter instance
+        (images (B, 3, H, W), targets) where ``targets`` is a list of
+        dicts ``{"boxes": (N,4), "labels": (N,), "image_id": Tensor(int)}``.
     """
-    logger.info(
-        f"Creating torchvision dataset: size={image_size}, augment={augment}, normalize={normalize}"
-    )
+    images = torch.stack([s.image for s in batch], dim=0)
+    targets = [
+        {
+            "boxes": s.boxes,
+            "labels": s.labels,
+            "image_id": torch.tensor(s.image_id, dtype=torch.long),
+        }
+        for s in batch
+    ]
+    return images, targets
 
-    transform_list: list[t.Callable[..., t.Any]] = []
 
-    # Resize
-    if image_size is not None:
-        if isinstance(image_size, int):
-            image_size = (image_size, image_size)
-        transform_list.append(T.Resize(image_size))
-
-    # Augmentation
-    if augment:
-        transform_list.extend([
-            T.RandomHorizontalFlip(p=0.5),
-            T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-            T.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
-        ])
-
-    # Normalization
-    if normalize:
-        transform_list.append(T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
-
-    # Additional user-defined transforms
-    transform_list.extend(transforms)
-
-    # Convert to tensor
-    transform_list.append(T.ToTensor())
-
-    # Compose all transforms
-    transform = T.Compose(transform_list)
-
-    return TorchDatasetAdapter(
-        dataset=dataset,
-        transform=transform,
-        return_format=return_format,
+def build_dataloader(
+    dataset: DetectionDataset,
+    batch_size: int,
+    num_workers: int = 0,
+    shuffle: bool = False,
+    pin_memory: bool = False,
+) -> DataLoader[tuple[torch.Tensor, list[dict[str, torch.Tensor]]]]:
+    """Build a DataLoader with the detection-aware collate_fn."""
+    return DataLoader(
+        dataset,  # type: ignore[arg-type]
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        collate_fn=detection_collate,
     )

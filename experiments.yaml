@@ -1,0 +1,260 @@
+# experiments.yaml — full 26-model sweep for cracks detection.
+#
+# Target hardware: single 96 GB GPU (e.g. A100 80GB SXM4 / H100 80GB / H200 96GB).
+# Batch sizes below are tuned to fit ~70 GB VRAM per experiment. If a run
+# OOMs, halve the batch_size and retry.
+#
+# Single-GPU usage (max_parallel=1):
+#   uv sync
+#   uv pip install torch==2.5.1 torchvision==0.20.1 \
+#       --index-url https://download.pytorch.org/whl/cu118
+#   python -m scripts.schedule_experiments \
+#       --config experiments.yaml --output-dir output/full_sweep
+#
+# Multi-GPU usage (max_parallel=4, one GPU per experiment):
+#   Set scheduler.max_parallel: 4 below, and add
+#     env: {CUDA_VISIBLE_DEVICES: "0"}
+#   to each experiment (0/1/2/3 per experiment). Batch sizes can then be
+#   dropped to ~1/4.
+#
+# After the sweep finishes:
+#   python -m scripts.schedule_experiments \
+#       --retry-failed output/full_sweep/scheduler/errors.jsonl \
+#       --output-dir output/full_sweep_retry
+# retries any failed experiments from the captured configs.
+scheduler:
+  max_parallel: 1
+  seed: 42
+# Dataset path is fixed across all experiments. YOLOv5 PyTorch format is read directly by YOLOSource (no COCO conversion needed).
+
+dataset: &dataset data/CrackDetection_Augmentation.v1.yolov5pytorch
+# Common training knobs. 100 epochs * ~1-2 min/epoch (96G GPU) ~= 2-3 h/model. 26 models * ~2.5 h ~= 65 h total (single GPU). Tune --epochs down for faster.
+
+common: &common
+  epochs: 100
+  input_size: 640
+  device: cuda
+  seed: 42
+  num_workers: 8
+  pretrained: true
+experiments:
+  - name: yolov5s_baseline
+    type: train
+    model: yolov5s
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov5s_baseline
+    !!merge <<: *common
+  - name: yolov5s_sac
+    type: train
+    model: yolov5s_sac
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov5s_sac
+    !!merge <<: *common
+  - name: yolov5s_tr
+    type: train
+    model: yolov5s_tr
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov5s_tr
+    !!merge <<: *common
+  - name: yolov5s_sactr
+    type: train
+    model: yolov5s_sactr
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov5s_sactr
+    !!merge <<: *common
+  - name: yolov7w_baseline
+    type: train
+    model: yolov7w
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov7w_baseline
+    !!merge <<: *common
+  - name: yolov7w_sac
+    type: train
+    model: yolov7w_sac
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov7w_sac
+    !!merge <<: *common
+  - name: yolov8n_baseline
+    type: train
+    model: yolov8n
+    dataset: *dataset
+    batch_size: 128
+    lr: 0.01
+    output_dir: output/yolov8n_baseline
+    !!merge <<: *common
+  - name: yolov8n_sac
+    type: train
+    model: yolov8n_sac
+    dataset: *dataset
+    batch_size: 128
+    lr: 0.01
+    output_dir: output/yolov8n_sac
+    !!merge <<: *common
+  - name: yolov8s_baseline
+    type: train
+    model: yolov8s
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov8s_baseline
+    !!merge <<: *common
+  - name: yolov8s_sac
+    type: train
+    model: yolov8s_sac
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov8s_sac
+    !!merge <<: *common
+  - name: yolov8m_baseline
+    type: train
+    model: yolov8m
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov8m_baseline
+    !!merge <<: *common
+  - name: yolov8m_sac
+    type: train
+    model: yolov8m_sac
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov8m_sac
+    !!merge <<: *common
+  - name: yolov8l_baseline
+    type: train
+    model: yolov8l
+    dataset: *dataset
+    batch_size: 16
+    lr: 0.01
+    output_dir: output/yolov8l_baseline
+    !!merge <<: *common
+  - name: yolov8l_sac
+    type: train
+    model: yolov8l_sac
+    dataset: *dataset
+    batch_size: 16
+    lr: 0.01
+    output_dir: output/yolov8l_sac
+    !!merge <<: *common
+  - name: yolov8x_baseline
+    type: train
+    model: yolov8x
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.01
+    output_dir: output/yolov8x_baseline
+    !!merge <<: *common
+  - name: yolov8x_sac
+    type: train
+    model: yolov8x_sac
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.01
+    output_dir: output/yolov8x_sac
+    !!merge <<: *common
+  - name: yolov9c_baseline
+    type: train
+    model: yolov9c
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov9c_baseline
+    !!merge <<: *common
+  - name: yolov9c_sac
+    type: train
+    model: yolov9c_sac
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.01
+    output_dir: output/yolov9c_sac
+    !!merge <<: *common
+  - name: yolov10s_baseline
+    type: train
+    model: yolov10s
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov10s_baseline
+    !!merge <<: *common
+  - name: yolov10s_sac
+    type: train
+    model: yolov10s_sac
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.01
+    output_dir: output/yolov10s_sac
+    !!merge <<: *common
+  - name: retinanet_r50
+    # Torchvision baselines use lr=1e-4 (lower than YOLO). The wrapper's build_optimizer defaults to SGD lr=1e-4 — pass lr explicitly so the train script's --lr flag overrides it consistently.
+
+    type: train
+    model: retinanet_r50
+    dataset: *dataset
+    batch_size: 16
+    lr: 0.0001
+    output_dir: output/retinanet_r50
+    !!merge <<: *common
+  - name: faster_rcnn_r50
+    type: train
+    model: faster_rcnn_r50
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.0001
+    output_dir: output/faster_rcnn_r50
+    !!merge <<: *common
+  - name: mask_rcnn_r50
+    type: train
+    model: mask_rcnn_r50
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.0001
+    output_dir: output/mask_rcnn_r50
+    !!merge <<: *common
+  - name: fcos_r50
+    type: train
+    model: fcos_r50
+    dataset: *dataset
+    batch_size: 16
+    lr: 0.0001
+    output_dir: output/fcos_r50
+    !!merge <<: *common
+  - name: ssd300_vgg16
+    type: train
+    model: ssd300_vgg16
+    dataset: *dataset
+    batch_size: 32
+    lr: 0.0001
+    input_size: 300
+    output_dir: output/ssd300_vgg16
+    epochs: 100
+    device: cuda
+    seed: 42
+    num_workers: 8
+    pretrained: true
+  - name: ssdlite320_mobilenetv3
+    type: train
+    model: ssdlite320_mobilenetv3
+    dataset: *dataset
+    batch_size: 64
+    lr: 0.0001
+    input_size: 320
+    output_dir: output/ssdlite320_mobilenetv3
+    epochs: 100
+    device: cuda
+    seed: 42
+    num_workers: 8
+    pretrained: true
