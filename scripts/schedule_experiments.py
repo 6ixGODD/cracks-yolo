@@ -45,6 +45,42 @@ def _now_iso() -> str:
     return datetime.datetime.now().isoformat(timespec="seconds")
 
 
+def _validate_experiments(experiments: Any) -> list[str]:
+    """Return all structural errors in an experiments list."""
+    if not isinstance(experiments, list):
+        return ["'experiments' must be a list"]
+
+    errors: list[str] = []
+    seen_names: set[str] = set()
+    required_by_type = {
+        "train": ("name", "model", "dataset", "output_dir"),
+        "test": ("name", "model", "weights", "dataset", "output_dir"),
+    }
+    for index, exp in enumerate(experiments):
+        label = f"experiments[{index}]"
+        if not isinstance(exp, dict):
+            errors.append(f"{label} must be a mapping")
+            continue
+
+        name = exp.get("name")
+        if isinstance(name, str) and name:
+            label = f"experiment '{name}'"
+            if name in seen_names:
+                errors.append(f"{label} has a duplicate name")
+            seen_names.add(name)
+
+        exp_type = exp.get("type", "train")
+        required = required_by_type.get(exp_type)
+        if required is None:
+            errors.append(f"{label} has unknown type {exp_type!r}")
+            continue
+        missing = [key for key in required if exp.get(key) in (None, "")]
+        if missing:
+            errors.append(f"{label} is missing required field(s): {', '.join(missing)}")
+
+    return errors
+
+
 def _exp_to_cmd(exp: dict[str, Any]) -> list[str]:
     """Translate one experiment dict to a ``python -m scripts.<type>`` command."""
     exp_type = exp.get("type", "train")
@@ -118,17 +154,17 @@ def _run_one(
 ) -> int:
     name = exp.get("name", "unnamed")
     log_path = scheduler_dir / f"{name}.log"
-    cmd = _exp_to_cmd(exp)
-    logger.info(f"running experiment '{name}': {' '.join(cmd)}")
-    # Per-experiment env overrides (e.g. CUDA_VISIBLE_DEVICES) merged over the
-    # current process env so GPU pinning works without shell wrappers.
-    env = os.environ.copy()
-    env_overrides = exp.get("env")
-    if isinstance(env_overrides, dict):
-        for k, v in env_overrides.items():
-            env[str(k)] = str(v)
     start = datetime.datetime.now()
     try:
+        cmd = _exp_to_cmd(exp)
+        logger.info(f"running experiment '{name}': {' '.join(cmd)}")
+        # Per-experiment env overrides (e.g. CUDA_VISIBLE_DEVICES) merged over
+        # the current process env so GPU pinning works without shell wrappers.
+        env = os.environ.copy()
+        env_overrides = exp.get("env")
+        if isinstance(env_overrides, dict):
+            for k, v in env_overrides.items():
+                env[str(k)] = str(v)
         with log_path.open("w", encoding="utf-8") as logf:
             proc = subprocess.run(
                 cmd,
@@ -190,12 +226,26 @@ def _run_one(
 def run_from_yaml(config_path: Path, output_dir: Path) -> int:
     """Run all experiments from a YAML config."""
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    if not isinstance(cfg, dict):
+        logger.error("invalid scheduler config: YAML root must be a mapping")
+        return 1
     experiments = cfg.get("experiments", [])
     if not experiments:
         logger.warning("no experiments in YAML")
         return 0
 
+    validation_errors = _validate_experiments(experiments)
+    if validation_errors:
+        logger.error(
+            "invalid scheduler config; no experiments were started:\n- "
+            + "\n- ".join(validation_errors)
+        )
+        return 1
+
     scheduler_cfg = cfg.get("scheduler", {}) or {}
+    if not isinstance(scheduler_cfg, dict):
+        logger.error("invalid scheduler config: 'scheduler' must be a mapping")
+        return 1
     max_parallel = int(scheduler_cfg.get("max_parallel", 1))
     if max_parallel < 1:
         max_parallel = 1

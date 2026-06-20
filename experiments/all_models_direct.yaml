@@ -59,6 +59,7 @@ experiments:
     weights: output/yolov5s_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov5s_baseline/test
     batch_size: 64
     input_size: 640
     device: cuda
@@ -77,6 +78,7 @@ experiments:
     weights: output/yolov5s_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov5s_sac/test
     batch_size: 64
     input_size: 640
     device: cuda
@@ -95,6 +97,7 @@ experiments:
     weights: output/yolov5s_tr/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov5s_tr/test
     batch_size: 64
     input_size: 640
     device: cuda
@@ -113,6 +116,7 @@ experiments:
     weights: output/yolov5s_sactr/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov5s_sactr/test
     batch_size: 64
     input_size: 640
     device: cuda
@@ -133,6 +137,7 @@ experiments:
     weights: output/yolov7w_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov7w_baseline/test
     batch_size: 32
     input_size: 640
     device: cuda
@@ -151,6 +156,7 @@ experiments:
     weights: output/yolov7w_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov7w_sac/test
     batch_size: 32
     input_size: 640
     device: cuda
@@ -171,6 +177,7 @@ experiments:
     weights: output/yolov8n_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8n_baseline/test
     batch_size: 128
     input_size: 640
     device: cuda
@@ -189,6 +196,7 @@ experiments:
     weights: output/yolov8n_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8n_sac/test
     batch_size: 128
     input_size: 640
     device: cuda
@@ -207,6 +215,7 @@ experiments:
     weights: output/yolov8s_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8s_baseline/test
     batch_size: 64
     input_size: 640
     device: cuda
@@ -225,6 +234,7 @@ experiments:
     weights: output/yolov8s_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8s_sac/test
     batch_size: 64
     input_size: 640
     device: cuda
@@ -243,6 +253,7 @@ experiments:
     weights: output/yolov8m_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8m_baseline/test
     batch_size: 32
     input_size: 640
     device: cuda
@@ -261,6 +272,7 @@ experiments:
     weights: output/yolov8m_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8m_sac/test
     batch_size: 32
     input_size: 640
     device: cuda
@@ -279,6 +291,7 @@ experiments:
     weights: output/yolov8l_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8l_baseline/test
     batch_size: 16
     input_size: 640
     device: cuda
@@ -297,6 +310,7 @@ experiments:
     weights: output/yolov8l_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8l_sac/test
     batch_size: 16
     input_size: 640
     device: cuda
@@ -315,6 +329,7 @@ experiments:
     weights: output/yolov8x_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8x_baseline/test
     batch_size: 8
     input_size: 640
     device: cuda
@@ -333,6 +348,7 @@ experiments:
     weights: output/yolov8x_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov8x_sac/test
     batch_size: 8
     input_size: 640
     device: cuda
@@ -353,6 +369,7 @@ experiments:
     weights: output/yolov9c_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov9c_baseline/test
     batch_size: 32
     input_size: 640
     device: cuda
@@ -371,6 +388,7 @@ experiments:
     weights: output/yolov9c_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov9c_sac/test
     batch_size: 32
     input_size: 640
     device: cuda
@@ -391,6 +409,7 @@ experiments:
     weights: output/yolov10s_baseline/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov10s_baseline/test
     batch_size: 64
     input_size: 640
     device: cuda
@@ -409,6 +428,7 @@ experiments:
     weights: output/yolov10s_sac/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/yolov10s_sac/test
     batch_size: 64
     input_size: 640
     device: cuda
@@ -429,6 +449,7 @@ experiments:
     weights: output/retinanet_r50/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/retinanet_r50/test
     batch_size: 16
     input_size: 640
     device: cuda
@@ -447,6 +468,7 @@ experiments:
     weights: output/faster_rcnn_r50/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/faster_rcnn_r50/test
     batch_size: 8
     input_size: 640
     device: cuda
@@ -465,6 +487,7 @@ experiments:
     weights: output/mask_rcnn_r50/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/mask_rcnn_r50/test
     batch_size: 8
     input_size: 640
     device: cuda
@@ -483,6 +506,7 @@ experiments:
     weights: output/fcos_r50/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/fcos_r50/test
     batch_size: 16
     input_size: 640
     device: cuda
@@ -506,6 +530,7 @@ experiments:
     weights: output/ssd300_vgg16/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/ssd300_vgg16/test
     batch_size: 32
     input_size: 300
     device: cuda
@@ -529,6 +554,7 @@ experiments:
     weights: output/ssdlite320_mobilenetv3/best.pt
     dataset: *dataset
     split: test
+    output_dir: output/ssdlite320_mobilenetv3/test
     batch_size: 64
     input_size: 320
     device: cuda
