@@ -90,6 +90,8 @@ python -m scripts.compare_models \
 
 支持的指标键：`map50`、`map5095`、`map75`、`precision`、`recall`、`f1`、`auc_pr`、`auc_roc`。
 
+`cv_summary.csv` 与 `comparison.csv` 还会以均值 ± 标准差聚合每折的**效率**指标（`fps_mean`、`latency_mean_ms`、`gflops`、`n_parameters`、`peak_vram_bytes` 等），因此精度对比表自带速度/算力对比。
+
 ## 每折产物
 
 每折的 `output/cv/fold_<i>/` 目录包含单次训练运行的完整产物集（参见 `docs/pipeline.md`），因此可以事后检查单个折——例如确认某一折的训练曲线没有发散。

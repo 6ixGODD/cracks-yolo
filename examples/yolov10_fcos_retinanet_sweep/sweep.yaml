@@ -1,0 +1,84 @@
+# examples/yolov10_fcos_retinanet_sweep/sweep.yaml — 3-model scheduler smoke sweep
+# for tongue surface crack detection.
+#
+# Trains + tests three paradigms in one unattended sweep:
+#   yolov10s       — anchor-free, NMS-free (one2many + one2one head)
+#   fcos_r50       — anchor-free, center-ness (torchvision)
+#   retinanet_r50  — anchor-based, focal loss (torchvision)
+#
+# 5 epochs each, batch sizes tuned for a 4 GB GPU (R50 detectors halved to 4).
+# Sequential (max_parallel=1) on a single GPU. Each model trains on the train
+# split, then best.pt is tested on the held-out test split.
+#
+# Usage:
+#   uv run python -m scripts.schedule_experiments \
+#       --config examples/yolov10_fcos_retinanet_sweep/sweep.yaml \
+#       --output-dir examples/yolov10_fcos_retinanet_sweep/output
+scheduler:
+  max_parallel: 1
+  seed: 42
+dataset: &dataset data/CrackDetection_Augmentation.v1.yolov5pytorch
+common: &common
+  epochs: 5
+  input_size: 640
+  device: cuda
+  seed: 42
+  num_workers: 0
+experiments:
+  - name: yolov10s_train
+    type: train
+    model: yolov10s
+    dataset: *dataset
+    batch_size: 8
+    lr: 0.001
+    output_dir: examples/yolov10_fcos_retinanet_sweep/output/yolov10s
+    !!merge <<: *common
+  - name: yolov10s_test
+    type: test
+    model: yolov10s
+    weights: examples/yolov10_fcos_retinanet_sweep/output/yolov10s/best.pt
+    dataset: *dataset
+    split: test
+    output_dir: examples/yolov10_fcos_retinanet_sweep/output/yolov10s/test
+    batch_size: 8
+    input_size: 640
+    device: cuda
+    num_workers: 0
+  - name: fcos_r50_train
+    type: train
+    model: fcos_r50
+    dataset: *dataset
+    batch_size: 4
+    lr: 0.0001
+    output_dir: examples/yolov10_fcos_retinanet_sweep/output/fcos_r50
+    !!merge <<: *common
+  - name: fcos_r50_test
+    type: test
+    model: fcos_r50
+    weights: examples/yolov10_fcos_retinanet_sweep/output/fcos_r50/best.pt
+    dataset: *dataset
+    split: test
+    output_dir: examples/yolov10_fcos_retinanet_sweep/output/fcos_r50/test
+    batch_size: 4
+    input_size: 640
+    device: cuda
+    num_workers: 0
+  - name: retinanet_r50_train
+    type: train
+    model: retinanet_r50
+    dataset: *dataset
+    batch_size: 4
+    lr: 0.0001
+    output_dir: examples/yolov10_fcos_retinanet_sweep/output/retinanet_r50
+    !!merge <<: *common
+  - name: retinanet_r50_test
+    type: test
+    model: retinanet_r50
+    weights: examples/yolov10_fcos_retinanet_sweep/output/retinanet_r50/best.pt
+    dataset: *dataset
+    split: test
+    output_dir: examples/yolov10_fcos_retinanet_sweep/output/retinanet_r50/test
+    batch_size: 4
+    input_size: 640
+    device: cuda
+    num_workers: 0

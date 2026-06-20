@@ -66,6 +66,13 @@ class TestLog(TypedDict):
     recall: float
     f1: float
     elapsed_sec: float
+    # Efficiency (0.0 when measure_efficiency=False). fps_mean is the real
+    # end-to-end throughput (forward+decode+NMS) over the test loader.
+    n_images: int
+    fps_mean: float
+    latency_mean_ms: float
+    gflops: float
+    n_parameters: int
     timestamp: str
 
 

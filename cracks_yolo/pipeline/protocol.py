@@ -53,6 +53,43 @@ class TestConfig(BaseModel):
     max_dets: int = 300
     device: str = "cuda"
     num_workers: int = 4
+    # When True, the test pipeline measures end-to-end FPS/latency (forward +
+    # decode + NMS) over the real test loader and reports params/MACs/GFLOPs/
+    # peak-VRAM via analyze_model. Disable to skip the extra forward passes.
+    measure_efficiency: bool = True
+
+
+class EfficiencyReport(BaseModel):
+    """End-to-end efficiency metrics measured during a test run.
+
+    ``fps_*`` and ``latency_*`` are measured on the real test loader (forward
+    + decode + NMS, batch=``TestConfig.batch_size``), so they reflect actual
+    inference throughput — not a synthetic single-image forward. ``n_*``,
+    ``macs``, ``gflops`` come from :func:`cracks_yolo.analysis.analyze_model`
+    on a single-image input; ``peak_vram_bytes`` is the high-water mark over
+    the real inference loop (falls back to the synthetic value on CPU).
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    n_images: int = 0
+    # Real end-to-end inference throughput (images/sec).
+    fps_mean: float = 0.0
+    fps_p50: float = 0.0
+    fps_p95: float = 0.0
+    # Per-image latency (ms) = batch time / batch size.
+    latency_mean_ms: float = 0.0
+    latency_p50_ms: float = 0.0
+    latency_p95_ms: float = 0.0
+    # Structural / compute-budget metrics (single-image analysis).
+    n_parameters: int = 0
+    n_trainable_parameters: int = 0
+    macs: float = 0.0
+    gflops: float = 0.0
+    peak_vram_bytes: int = 0
+    input_size: int = 0
+    device: str = ""
+    batch_size: int = 1
 
 
 class TrainReport(BaseModel):
@@ -78,6 +115,7 @@ class TestReport(BaseModel):
     output_dir: Path
     metrics: MetricReport
     elapsed_sec: float
+    efficiency: EfficiencyReport | None = None
 
 
 @runtime_checkable
