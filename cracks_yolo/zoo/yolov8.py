@@ -28,6 +28,7 @@ from cracks_yolo.ops.csp import Concat
 from cracks_yolo.ops.detect_heads import DetectAnchorFree
 from cracks_yolo.weights.loader import load_pretrained
 from cracks_yolo.weights.registry import PRETRAINED_URLS
+from cracks_yolo.weights.remappers import yolo_remapper
 from cracks_yolo.zoo.base import PretrainedSpec
 from cracks_yolo.zoo.base import default_optimizer
 
@@ -310,11 +311,12 @@ def _make_v8_class(size: str, sac: bool, pretrained_key: str | None = None) -> t
         )
 
     attrs: dict[str, object] = {"__init__": _init}
-    if pretrained_key is not None and not sac:
+    if pretrained_key is not None:
         attrs["pretrained_spec"] = PretrainedSpec(
             key=pretrained_key,
             url=PRETRAINED_URLS[pretrained_key],
             state_dict_key_map={},
+            remapper=yolo_remapper,
         )
     else:
         attrs["pretrained_spec"] = None
@@ -327,11 +329,11 @@ YOLOv8s_CIoU_DFL_AdamW_SILU = _make_v8_class("s", sac=False, pretrained_key="yol
 YOLOv8m_CIoU_DFL_AdamW_SILU = _make_v8_class("m", sac=False, pretrained_key="yolov8m")
 YOLOv8l_CIoU_DFL_AdamW_SILU = _make_v8_class("l", sac=False, pretrained_key="yolov8l")
 YOLOv8x_CIoU_DFL_AdamW_SILU = _make_v8_class("x", sac=False, pretrained_key="yolov8x")
-YOLOv8nSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("n", sac=True)
-YOLOv8sSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("s", sac=True)
-YOLOv8mSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("m", sac=True)
-YOLOv8lSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("l", sac=True)
-YOLOv8xSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("x", sac=True)
+YOLOv8nSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("n", sac=True, pretrained_key="yolov8n")
+YOLOv8sSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("s", sac=True, pretrained_key="yolov8s")
+YOLOv8mSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("m", sac=True, pretrained_key="yolov8m")
+YOLOv8lSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("l", sac=True, pretrained_key="yolov8l")
+YOLOv8xSAC_CIoU_DFL_AdamW_SILU = _make_v8_class("x", sac=True, pretrained_key="yolov8x")
 
 
 # Short aliases for ergonomic use.

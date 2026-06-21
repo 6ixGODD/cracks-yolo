@@ -118,6 +118,10 @@ def _exp_to_cmd(exp: dict[str, Any]) -> list[str]:
             cmd.append("--no-amp")
         if exp.get("pretrained"):
             cmd.append("--pretrained")
+        if exp.get("clip_grad_norm") is not None:
+            cmd.extend(["--clip-grad-norm", str(exp["clip_grad_norm"])])
+        if exp.get("early_stopping_patience") is not None:
+            cmd.extend(["--early-stopping-patience", str(exp["early_stopping_patience"])])
         return cmd
     if exp_type == "test":
         return [

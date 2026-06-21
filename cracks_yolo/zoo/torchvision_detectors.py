@@ -361,37 +361,81 @@ def _build_maskrcnn(num_classes: int, pretrained: bool) -> nn.Module:
 
 
 def _build_fcos(num_classes: int, pretrained: bool) -> nn.Module:
-    """Build a torchvision FCOS with ``num_classes+1`` outputs (bg=0)."""
+    """Build a torchvision FCOS with ``num_classes+1`` outputs (bg=0).
+
+    torchvision refuses to load COCO weights when ``num_classes != 91``, so we
+    build the full COCO model (91 classes + pretrained backbone/head) then swap
+    the prediction head for ``num_classes+1`` — the backbone+FPN weights are
+    retained, only the head is reinitialized.
+    """
     if pretrained and num_classes == 80:
         model: nn.Module = fcos_resnet50_fpn(weights="DEFAULT", num_classes=91)
         return model
-    # FCOS constructor accepts num_classes directly — head is built for nc+1.
-    model2: nn.Module = fcos_resnet50_fpn(
-        weights="DEFAULT" if pretrained else None, num_classes=num_classes + 1
-    )
-    return model2
+    model = fcos_resnet50_fpn(weights="DEFAULT" if pretrained else None, num_classes=91)
+    if num_classes != 80:
+        from torchvision.models.detection.fcos import FCOSHead
+
+        in_channels = model.head.classification_head.conv[0].in_channels
+        num_anchors = model.head.classification_head.num_anchors
+        model.head = FCOSHead(
+            in_channels=in_channels, num_anchors=num_anchors, num_classes=num_classes + 1
+        )
+    return model
+
+
+def _probe_ssd_feature_channels(model: nn.Module, input_size: int) -> list[int]:
+    """Run a dummy forward through the SSD feature extractor to read each
+    feature level's channel count (version-agnostic: the feature extractor
+    class doesn't expose ``out_channels`` consistently across torchvision
+    versions)."""
+    model.eval()
+    x = torch.zeros(1, 3, input_size, input_size)
+    with torch.no_grad():
+        feats = model.backbone(x)
+    if isinstance(feats, dict):
+        feats = list(feats.values())
+    return [int(f.shape[1]) for f in feats]
 
 
 def _build_ssd300(num_classes: int, pretrained: bool) -> nn.Module:
-    """Build a torchvision SSD300 (VGG16 backbone) with ``num_classes+1``."""
+    """Build a torchvision SSD300 (VGG16 backbone) with ``num_classes+1``.
+
+    Same pattern as FCOS: build COCO (91) + pretrained, then swap the SSDHead
+    for ``num_classes+1``. Backbone + extras weights are retained.
+    """
     if pretrained and num_classes == 80:
         m: nn.Module = ssd300_vgg16(weights="DEFAULT", num_classes=91)
         return m
-    m2: nn.Module = ssd300_vgg16(
-        weights="DEFAULT" if pretrained else None, num_classes=num_classes + 1
-    )
-    return m2
+    m = ssd300_vgg16(weights="DEFAULT" if pretrained else None, num_classes=91)
+    if num_classes != 80:
+        from torchvision.models.detection.ssd import SSDHead
+
+        in_channels_list = _probe_ssd_feature_channels(m, 300)
+        num_anchors = m.anchor_generator.num_anchors_per_location()
+        m.head = SSDHead(
+            in_channels=in_channels_list, num_anchors=num_anchors, num_classes=num_classes + 1
+        )
+    return m
 
 
 def _build_ssdlite320(num_classes: int, pretrained: bool) -> nn.Module:
-    """Build a torchvision SSDlite320 (MobileNetV3-Large) with ``num_classes+1``."""
+    """Build a torchvision SSDlite320 (MobileNetV3-Large) with ``num_classes+1``.
+
+    Same pattern as SSD300: build COCO (91) + pretrained, then swap the head.
+    """
     if pretrained and num_classes == 80:
         m: nn.Module = ssdlite320_mobilenet_v3_large(weights="DEFAULT", num_classes=91)
         return m
-    m2: nn.Module = ssdlite320_mobilenet_v3_large(
-        weights="DEFAULT" if pretrained else None, num_classes=num_classes + 1
-    )
-    return m2
+    m = ssdlite320_mobilenet_v3_large(weights="DEFAULT" if pretrained else None, num_classes=91)
+    if num_classes != 80:
+        from torchvision.models.detection.ssd import SSDHead
+
+        in_channels_list = _probe_ssd_feature_channels(m, 320)
+        num_anchors = m.anchor_generator.num_anchors_per_location()
+        m.head = SSDHead(
+            in_channels=in_channels_list, num_anchors=num_anchors, num_classes=num_classes + 1
+        )
+    return m
 
 
 # Long-form class names (documentation-is-the-name).

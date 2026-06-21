@@ -34,21 +34,45 @@ class ModelAnalysisReport:
 
 
 def _count_macs(model: nn.Module, input_size: int) -> float:
-    """Best-effort MAC count via fvcore.FlopCountAnalysis (returns MACs)."""
+    """Best-effort MAC count via thop (primary) or fvcore (fallback).
+
+    thop registers per-layer forward hooks so it counts conv/linear MACs
+    without tracing the Detect head's non-tensor control flow — robust for
+    YOLO + torchvision. fvcore's FlopCountAnalysis traces the forward and
+    aborts on custom Detect heads (returns 0); kept only as a fallback.
+
+    Returns MACs (multiply-accumulate ops). ``gflops = 2 * macs`` upstream.
+    """
+    was_training = model.training
+    model.eval()
+    # Place the dummy input on the same device as the model parameters
+    # (analyze_model may call us before/after .to(device); thop runs a real
+    # forward so input and model must agree).
+    dev = next(model.parameters()).device
+    x = torch.zeros((1, 3, input_size, input_size), device=dev)
+    macs = 0.0
     try:
-        from fvcore.nn import FlopCountAnalysis
-    except ImportError:
-        return 0.0
-    try:
-        x = torch.zeros((1, 3, input_size, input_size))
-        flops = (
-            FlopCountAnalysis(model, x)
-            .unsupported_ops_warnings(False)
-            .uncalled_modules_warnings(False)
-        )
-        return float(flops.total()) / 2.0  # flops = 2 * macs convention
+        from thop import profile
+
+        # thop returns (macs, params); wrap to silence its verbose prints.
+        macs, _ = profile(model, inputs=(x,), verbose=False)
+        macs = float(macs)
     except Exception:
-        return 0.0
+        try:
+            from fvcore.nn import FlopCountAnalysis
+
+            flops = (
+                FlopCountAnalysis(model, x)
+                .unsupported_ops_warnings(False)
+                .uncalled_modules_warnings(False)
+            )
+            macs = float(flops.total()) / 2.0  # flops = 2 * macs convention
+        except Exception:
+            macs = 0.0
+    finally:
+        if was_training:
+            model.train()
+    return macs
 
 
 def analyze_model(

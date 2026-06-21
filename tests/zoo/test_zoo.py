@@ -223,7 +223,12 @@ def test_zoo_registry_keys() -> None:
 
 
 def test_zoo_pretrained_specs() -> None:
-    """Only the baseline variants (no SAC/TR) declare COCO pretrained specs."""
+    """Baseline and SAC/TR variants all declare COCO pretrained specs.
+
+    SAC/TR variants load the same COCO weights as the baseline; SAC/TR layers
+    have no COCO counterpart and stay randomly initialized via ``strict=False``
+    (the remapper + load_pretrained handle the partial load).
+    """
     from cracks_yolo.zoo import YOLOv5s
     from cracks_yolo.zoo import YOLOv5sSAC
     from cracks_yolo.zoo import YOLOv5sSACTR
@@ -237,22 +242,23 @@ def test_zoo_pretrained_specs() -> None:
     from cracks_yolo.zoo import YOLOv10s
     from cracks_yolo.zoo import YOLOv10sSAC
 
-    for baseline in (YOLOv5s, YOLOv7w, YOLOv8s, YOLOv10s, YOLOv9c):
-        assert baseline.pretrained_spec is not None, (  # type: ignore[attr-defined]
-            f"{baseline.__name__} should have a pretrained_spec"
-        )
-    for variant in (
+    for model in (
+        YOLOv5s,
         YOLOv5sSAC,
         YOLOv5sTR,
         YOLOv5sSACTR,
+        YOLOv7w,
         YOLOv7wSAC,
+        YOLOv8s,
         YOLOv8sSAC,
+        YOLOv10s,
         YOLOv10sSAC,
+        YOLOv9c,
         YOLOv9cSAC,
     ):
-        assert variant.pretrained_spec is None, (  # type: ignore[attr-defined]
-            f"{variant.__name__} should have pretrained_spec=None "
-            "(SAC/TR layers have no COCO weights)"
+        assert model.pretrained_spec is not None, (  # type: ignore[attr-defined]
+            f"{model.__name__} should have a pretrained_spec (load COCO weights; "
+            "SAC/TR layers stay random init via strict=False)"
         )
 
 

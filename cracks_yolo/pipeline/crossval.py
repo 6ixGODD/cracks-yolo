@@ -289,6 +289,15 @@ def run_cross_validation(
             device=train_cfg.device,
             num_workers=num_workers,
         )
+        # Reload the best checkpoint (by val mAP@50) before testing — the
+        # in-memory model holds the LAST epoch's weights, which may have
+        # diverged from the best. This makes the held-out-fold test score
+        # reflect the model's best generalization, not its final state.
+        best_path = fold_dir / "best.pt"
+        if best_path.exists():
+            ckpt = torch.load(best_path, map_location="cpu", weights_only=False)
+            state = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
+            model.load_state_dict(state, strict=False)
         # Evaluate on the HELD-OUT fold (= test), not the val loader.
         test_report = test_pipeline.run(model, test_loader, test_cfg)
         metrics: MetricReport = test_report.metrics

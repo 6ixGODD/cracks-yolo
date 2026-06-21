@@ -70,6 +70,18 @@ def main() -> None:
     parser.add_argument("--input-size", type=int, default=640)
     parser.add_argument("--amp", action="store_true", default=True)
     parser.add_argument("--no-amp", dest="amp", action="store_false")
+    parser.add_argument(
+        "--clip-grad-norm",
+        type=float,
+        default=None,
+        help="Max grad norm for gradient clipping (stabilizes AMP + higher lr).",
+    )
+    parser.add_argument(
+        "--early-stopping-patience",
+        type=int,
+        default=None,
+        help="Stop training after N epochs without val mAP@50 improvement.",
+    )
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
@@ -124,6 +136,8 @@ def main() -> None:
             lr=args.lr,
             weight_decay=args.weight_decay,
             amp=args.amp,
+            clip_grad_norm=args.clip_grad_norm,
+            early_stopping_patience=args.early_stopping_patience,
             seed=args.seed,
             device=args.device,
             num_workers=args.num_workers,
@@ -188,6 +202,8 @@ def main() -> None:
         lr=args.lr,
         weight_decay=args.weight_decay,
         amp=args.amp,
+        clip_grad_norm=args.clip_grad_norm,
+        early_stopping_patience=args.early_stopping_patience,
         seed=args.seed,
         device=args.device,
         num_workers=args.num_workers,

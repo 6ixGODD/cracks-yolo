@@ -43,6 +43,7 @@ from cracks_yolo.ops.csp import Concat
 from cracks_yolo.ops.detect_heads import DetectAnchorBased
 from cracks_yolo.weights.loader import load_pretrained
 from cracks_yolo.weights.registry import PRETRAINED_URLS
+from cracks_yolo.weights.remappers import yolo_remapper
 from cracks_yolo.zoo.base import PretrainedSpec
 from cracks_yolo.zoo.base import default_optimizer
 
@@ -284,6 +285,7 @@ class YOLOv5s_CIoU_BCEObj_BCECls_AdamW_SILU(_YOLOv5sBase):  # noqa: N801
         key="yolov5s",
         url=PRETRAINED_URLS["yolov5s"],
         state_dict_key_map={},
+        remapper=yolo_remapper,
     )
 
     def __init__(self, num_classes: int = 80, input_size: int = 640) -> None:
@@ -291,27 +293,53 @@ class YOLOv5s_CIoU_BCEObj_BCECls_AdamW_SILU(_YOLOv5sBase):  # noqa: N801
 
 
 class YOLOv5sSAC_CIoU_BCEObj_BCECls_AdamW_SILU(_YOLOv5sBase):  # noqa: N801
-    """YOLOv5s with SAC in the backbone C3 stages (P2/P3/P4/P5)."""
+    """YOLOv5s with SAC in the backbone C3 stages (P2/P3/P4/P5).
 
-    pretrained_spec = None  # No official COCO weights — random init for SAC layers.
+    Loads the same COCO weights as the baseline; SAC-specific layers (the
+    SAConv2d switches / ConvAWS2d) have no COCO counterpart and stay randomly
+    initialized via ``strict=False``.
+    """
+
+    pretrained_spec = PretrainedSpec(
+        key="yolov5s",
+        url=PRETRAINED_URLS["yolov5s"],
+        state_dict_key_map={},
+        remapper=yolo_remapper,
+    )
 
     def __init__(self, num_classes: int = 80, input_size: int = 640) -> None:
         super().__init__(num_classes=num_classes, input_size=input_size, sac=True, tr=False)
 
 
 class YOLOv5sTR_CIoU_BCEObj_BCECls_AdamW_SILU(_YOLOv5sBase):  # noqa: N801
-    """YOLOv5s with TR (TransformerBlock) in the P5 backbone stage."""
+    """YOLOv5s with TR (TransformerBlock) in the P5 backbone stage.
 
-    pretrained_spec = None
+    Loads COCO weights; the TransformerBlock layers stay random init.
+    """
+
+    pretrained_spec = PretrainedSpec(
+        key="yolov5s",
+        url=PRETRAINED_URLS["yolov5s"],
+        state_dict_key_map={},
+        remapper=yolo_remapper,
+    )
 
     def __init__(self, num_classes: int = 80, input_size: int = 640) -> None:
         super().__init__(num_classes=num_classes, input_size=input_size, sac=False, tr=True)
 
 
 class YOLOv5sSACTR_CIoU_BCEObj_BCECls_AdamW_SILU(_YOLOv5sBase):  # noqa: N801
-    """YOLOv5s with both SAC (backbone C3 stages) and TR (P5 stage)."""
+    """YOLOv5s with both SAC (backbone C3 stages) and TR (P5 stage).
 
-    pretrained_spec = None
+    Loads COCO weights; SAC and TR layers stay random init.
+    """
+
+    pretrained_spec = PretrainedSpec(
+        key="yolov5s",
+        url=PRETRAINED_URLS["yolov5s"],
+        state_dict_key_map={},
+        remapper=yolo_remapper,
+    )
 
     def __init__(self, num_classes: int = 80, input_size: int = 640) -> None:
         super().__init__(num_classes=num_classes, input_size=input_size, sac=True, tr=True)

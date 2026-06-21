@@ -143,7 +143,7 @@ class ComputeLossOTA:
         bs = tobj.shape[0]
 
         loss = lbox + lobj + lcls
-        return loss * bs, torch.cat((lbox, lobj, lcls, loss)).detach()
+        return loss * bs, torch.cat((lbox, lcls, lobj)).detach()
 
     def build_targets(
         self,
@@ -235,7 +235,8 @@ class ComputeLossOTA:
 
             num_gt = this_target.shape[0]
             gt_cls_per_image = (
-                F.one_hot(this_target[:, 1].to(torch.int64), self.nc)
+                F
+                .one_hot(this_target[:, 1].to(torch.int64), self.nc)
                 .float()
                 .unsqueeze(1)
                 .repeat(1, pxyxys_cat.shape[0], 1)

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 
+import pytest
 import yaml
 
 from scripts import schedule_experiments as scheduler
@@ -18,7 +20,7 @@ def test_all_models_direct_config_is_valid() -> None:
     assert scheduler._validate_experiments(config["experiments"]) == []
 
 
-def test_invalid_config_starts_no_subprocess(tmp_path: Path, monkeypatch) -> None:
+def test_invalid_config_starts_no_subprocess(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = tmp_path / "invalid.yaml"
     config_path.write_text(
         yaml.safe_dump({
@@ -35,10 +37,10 @@ def test_invalid_config_starts_no_subprocess(tmp_path: Path, monkeypatch) -> Non
         encoding="utf-8",
     )
 
-    def fail_if_called(*_args, **_kwargs):
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("subprocess.run must not be called for invalid config")
 
-    monkeypatch.setattr(scheduler.subprocess, "run", fail_if_called)
+    monkeypatch.setattr(subprocess, "run", fail_if_called)
 
     assert scheduler.run_from_yaml(config_path, tmp_path / "output") == 1
     assert not (tmp_path / "output" / "scheduler").exists()

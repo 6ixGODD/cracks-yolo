@@ -121,11 +121,12 @@ class TestComputeLoss:
         targets = torch.zeros(0, 6, dtype=torch.float32)
         total, parts = loss_fn(v5_predictions, targets)
         assert torch.isfinite(total)
-        # box and cls should be 0
+        # parts order is (box, cls, obj) — matches loss_parts_schema.
+        # box and cls should be 0 with no targets.
         assert parts[0].item() == pytest.approx(0.0, abs=1e-6)
-        assert parts[2].item() == pytest.approx(0.0, abs=1e-6)
+        assert parts[1].item() == pytest.approx(0.0, abs=1e-6)
         # obj loss should be positive
-        assert parts[1].item() > 0
+        assert parts[2].item() > 0
 
 
 if __name__ == "__main__":

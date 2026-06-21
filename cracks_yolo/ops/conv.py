@@ -189,7 +189,8 @@ class ConvAWS2d(nn.Conv2d):
         # state_dict trained without AWS.
         weight = self.weight.data
         weight_mean = (
-            weight.data.mean(dim=1, keepdim=True)
+            weight.data
+            .mean(dim=1, keepdim=True)
             .mean(dim=2, keepdim=True)
             .mean(dim=3, keepdim=True)
         )

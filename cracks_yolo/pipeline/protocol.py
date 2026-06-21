@@ -35,6 +35,7 @@ class TrainConfig(BaseModel):
     amp: bool = True
     grad_accum_steps: int = Field(default=1, ge=1)
     clip_grad_norm: float | None = None
+    early_stopping_patience: int | None = None
     log_every_n_steps: int = Field(default=50, ge=1)
     val_interval: int = Field(default=1, ge=1)
     save_top_k: int = Field(default=3, ge=0)
@@ -104,6 +105,7 @@ class TrainReport(BaseModel):
     total_steps: int
     total_epochs: int
     elapsed_sec: float
+    early_stopped: bool = False
     checkpoint_paths: list[Path] = Field(default_factory=list)
 
 

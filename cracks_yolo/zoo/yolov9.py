@@ -39,6 +39,7 @@ from cracks_yolo.ops.yolov9 import ADown
 from cracks_yolo.ops.yolov9 import RepNCSPELAN4
 from cracks_yolo.weights.loader import load_pretrained
 from cracks_yolo.weights.registry import PRETRAINED_URLS
+from cracks_yolo.weights.remappers import yolo_remapper
 from cracks_yolo.zoo.base import PretrainedSpec
 from cracks_yolo.zoo.base import default_optimizer
 
@@ -278,6 +279,7 @@ YOLOv9c_CIoU_DFL_AdamW_SILU = type(
             key="yolov9c",
             url=PRETRAINED_URLS["yolov9c"],
             state_dict_key_map={},
+            remapper=yolo_remapper,
         ),
     },
 )
@@ -287,7 +289,12 @@ YOLOv9cSAC_CIoU_DFL_AdamW_SILU = type(
     (_YOLOv9cBase,),
     {
         "__init__": _v9c_sac_init,
-        "pretrained_spec": None,
+        "pretrained_spec": PretrainedSpec(
+            key="yolov9c",
+            url=PRETRAINED_URLS["yolov9c"],
+            state_dict_key_map={},
+            remapper=yolo_remapper,
+        ),
     },
 )
 

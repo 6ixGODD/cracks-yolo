@@ -64,7 +64,7 @@ class TrainPipelineImpl:
             else None
         )
 
-        # Save the resolved config for reproducibility.
+        # Save the resolved config for reproducibility (JSON is valid YAML).
         (cfg.output_dir / "config.yaml").write_text(cfg.model_dump_json(indent=2), encoding="utf-8")
 
         best_map50 = -1.0
@@ -72,6 +72,8 @@ class TrainPipelineImpl:
         checkpoint_paths: list[Path] = []
         history: list[dict[str, float]] = []
         total_steps = 0
+        epochs_since_best = 0
+        early_stopped = False
         start_time = time.time()
 
         for epoch in range(cfg.epochs):
@@ -95,6 +97,23 @@ class TrainPipelineImpl:
                 with torch.amp.autocast("cuda", enabled=scaler is not None):  # type: ignore[attr-defined]
                     preds = model(images)
                     loss, parts = model.compute_loss(preds, yolo_targets, imgs=images)
+
+                # All compute_loss variants return a batch-SUMMED loss (×batch_size).
+                # Normalize to a per-image mean so the configured lr matches
+                # upstream conventions (AdamW lr=1e-3 behaves like ultralytics,
+                # not 16× too hot on batch 16).
+                batch_size = images.shape[0]
+                loss = loss / batch_size
+
+                # Linear warmup: ramp lr from warmup_lr to cfg.lr over the first
+                # ``warmup_epochs`` (computed per-step). Without this the first
+                # epoch's full-lr gradients destroy the pretrained features.
+                if cfg.warmup_epochs > 0 and epoch < cfg.warmup_epochs:
+                    warmup_progress = (epoch + step / max(len(train_loader), 1)) / cfg.warmup_epochs
+                    warmup_progress = min(warmup_progress, 1.0)
+                    cur_lr = cfg.warmup_lr + (cfg.lr - cfg.warmup_lr) * warmup_progress
+                    for g in optimizer.param_groups:
+                        g["lr"] = cur_lr
 
                 optimizer.zero_grad()
                 if scaler is not None:
@@ -195,6 +214,7 @@ class TrainPipelineImpl:
             if val_map50 > best_map50:
                 best_map50 = val_map50
                 best_epoch = epoch
+                epochs_since_best = 0
                 best_path = cfg.output_dir / "best.pt"
                 torch.save(
                     {
@@ -207,6 +227,24 @@ class TrainPipelineImpl:
                 )
                 if best_path not in checkpoint_paths:
                     checkpoint_paths.append(best_path)
+            else:
+                epochs_since_best += 1
+
+            # Early stopping: bail out once val mAP@50 has failed to improve
+            # for ``cfg.early_stopping_patience`` consecutive epochs. Only
+            # armed after we have seen at least one real validation pass.
+            if (
+                cfg.early_stopping_patience is not None
+                and best_map50 >= 0.0
+                and epochs_since_best >= cfg.early_stopping_patience
+            ):
+                logger.info(
+                    f"early stopping at epoch {epoch}: no val mAP@50 "
+                    f"improvement for {epochs_since_best} epochs "
+                    f"(best={best_map50:.4f} @ epoch {best_epoch})"
+                )
+                early_stopped = True
+                break
 
         # Write metrics.csv.
         csv_path = cfg.output_dir / "metrics.csv"
@@ -235,8 +273,9 @@ class TrainPipelineImpl:
             final_val_map50=history[-1]["val_map50"] if history else 0.0,
             final_val_map5095=history[-1]["val_map5095"] if history else 0.0,
             total_steps=total_steps,
-            total_epochs=cfg.epochs,
+            total_epochs=len(history),
             elapsed_sec=elapsed_total,
+            early_stopped=early_stopped,
             checkpoint_paths=checkpoint_paths,
         )
 
@@ -264,7 +303,7 @@ class TrainPipelineImpl:
                     decoded,
                     targets,
                     model.input_size,
-                    conf_thr=0.25,
+                    conf_thr=0.001,
                     iou_thr=0.6,
                     is_anchor_free=anchor_free,
                 )

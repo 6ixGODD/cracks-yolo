@@ -84,8 +84,8 @@ class TestComputeLossOTA:
         loss_fn = _make_loss(v7_anchors, v7_hyp)
         total, parts = loss_fn(v7_predictions, v7_targets, v7_imgs)
         assert torch.isfinite(total)
-        # parts = cat((lbox, lobj, lcls, loss))
-        assert parts.shape == (4,)
+        # parts = cat((lbox, lcls, lobj)) — matches loss_parts_schema ("box","cls","obj").
+        assert parts.shape == (3,)
 
     def test_grad_flow(
         self,

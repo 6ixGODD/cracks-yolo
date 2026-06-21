@@ -9,8 +9,10 @@ knows which COCO weights to fetch and how to remap state_dict keys.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from collections.abc import Iterator
 from dataclasses import dataclass
+from dataclasses import field
 from typing import Any
 from typing import Protocol
 from typing import Self
@@ -18,6 +20,10 @@ from typing import runtime_checkable
 
 import torch
 import torch.nn as nn
+
+# A remapper rewrites the raw checkpoint state_dict keys into this model's
+# layout. signature: (raw_state_dict, model) -> remapped_state_dict.
+Remapper = Callable[[dict[str, torch.Tensor], nn.Module], dict[str, torch.Tensor]]
 
 
 @dataclass(frozen=True)
@@ -28,12 +34,20 @@ class PretrainedSpec:
         key: Short identifier used as ``weights/{key}.pt`` cache filename.
         url: HTTPS URL to the official ``.pt`` release.
         state_dict_key_map: Mapping from official state_dict key prefixes
-            to the cracks_yolo layout. Empty means no remap needed.
+            to the cracks_yolo layout. Empty means no prefix remap needed.
+        remapper: Optional callable that rewrites the raw checkpoint
+            state_dict into this model's layout, given the model instance.
+            Used when the official checkpoint stores layers under a single
+            ``model.<global_idx>`` Sequential (ultralytics) but our model
+            splits them into ``backbone./neck./head.`` subsections. When
+            provided, it runs after ``state_dict_key_map`` and supersedes
+            simple prefix remapping.
     """
 
     key: str
     url: str
     state_dict_key_map: dict[str, str]
+    remapper: Remapper | None = field(default=None)
 
 
 @runtime_checkable

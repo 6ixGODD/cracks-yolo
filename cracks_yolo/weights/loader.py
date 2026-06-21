@@ -12,8 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-import sys
-import types
+import pickle
 from typing import TYPE_CHECKING
 from typing import Any
 
@@ -83,82 +82,60 @@ def _download(url: str, dest: Path) -> None:
                     logger.info("downloading %s: %d bytes", url, downloaded)
 
 
-class _StateCapture:
-    """Stand-in class for unpickling checkpoint objects whose real module
-    isn't importable.
+class _StateCapture(nn.Module):
+    """Stand-in for unpickling checkpoint model objects whose real modules
+    (``models.*``, ``ultralytics.*``) aren't importable.
 
-    YOLOv5/v7 checkpoints pickle the full ``DetectionModel`` object, which
-    references ``models.yolo.DetectionModel``, ``models.common.Conv``, etc.
-    We don't have those modules (they live in ``deps/`` and we never import
-    from there at runtime). This dummy accepts any ``__setstate__`` payload
-    into ``__dict__`` and exposes ``state_dict()`` so the caller can extract
-    the weight tensors.
+    Subclasses :class:`nn.Module` so that ``state_dict()`` recurses the
+    captured ``_modules`` / ``_parameters`` / ``_buffers`` and produces a
+    flat tensor dict (matching the ultralytics/YOLOv5 layer naming). A plain
+    object returning ``self.__dict__`` would instead expose nn.Module's
+    internal bookkeeping dicts, not the weights.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        # Don't call super().__init__ here — the pickled __setstate__ payload
+        # restores the full nn.Module internal state (including hook dicts
+        # whose presence the torch version on disk may differ from ours).
+        # We run nn.Module.__init__ inside __setstate__ to guarantee every
+        # expected internal attribute exists before the payload overwrites it.
         pass
 
     def __setstate__(self, state: Any) -> None:
+        nn.Module.__init__(self)
         if isinstance(state, dict):
             self.__dict__.update(state)
 
-    def state_dict(self) -> dict[str, torch.Tensor]:
-        return self.__dict__
 
+class _LenientUnpickler(pickle.Unpickler):
+    """Unpickler that resolves ``models.*`` / ``utils.*`` / ``ultralytics.*``
+    references to :class:`_StateCapture` so YOLO checkpoints saved by the
+    upstream repos unpickle without those packages installed.
 
-class _DummyModule(types.ModuleType):
-    """Module that returns :class:`_StateCapture` for any attribute access.
-
-    Installed temporarily in ``sys.modules`` so :func:`torch.load` can
-    unpickle YOLOv5/v7 checkpoint objects whose real classes we don't
-    import. After unpickling, we extract ``.state_dict()`` and discard the
-    object — we never call any of its methods.
+    Unlike injecting dummy modules into ``sys.modules`` (which leaks and can
+    break ``inspect`` for unrelated imports), this only affects this one
+    ``torch.load`` call via the ``pickle_module`` parameter.
     """
 
-    def __getattr__(self, name: str) -> type[_StateCapture]:
-        return _StateCapture
+    _TOP_LEVELS = ("models", "utils", "ultralytics")
+
+    def find_class(self, module: str, name: str) -> Any:
+        if module.split(".", 1)[0] in self._TOP_LEVELS:
+            return _StateCapture
+        return super().find_class(module, name)
 
 
-_YOLOV5_PICKLE_MODULES = (
-    "models",
-    "models.yolo",
-    "models.common",
-    "models.experimental",
-    "utils",
-    "utils.general",
-    "utils.torch_utils",
-    "utils.loss",
-    "utils.metrics",
-    "utils.autoanchor",
-    "utils.plots",
-    "utils.dataloaders",
-    "utils.augmentations",
-    "utils.downloads",
-)
+class _PickleShim:
+    """Shim passed as ``torch.load(pickle_module=...)`` to use
+    :class:`_LenientUnpickler` without polluting ``sys.modules``."""
+
+    Unpickler = _LenientUnpickler
 
 
 def _torch_load_lenient(path: Path) -> Any:
-    """``torch.load`` with dummy modules for YOLOv5/v7 checkpoint unpickling.
-
-    Restores ``sys.modules`` exactly as it was on exit.
-    """
-    saved: dict[str, types.ModuleType | None] = {}
-    installed: list[str] = []
-    try:
-        for mod_name in _YOLOV5_PICKLE_MODULES:
-            if mod_name in sys.modules:
-                saved[mod_name] = sys.modules[mod_name]
-            else:
-                saved[mod_name] = None
-                sys.modules[mod_name] = _DummyModule(mod_name)
-                installed.append(mod_name)
-        return torch.load(path, map_location="cpu", weights_only=False)
-    finally:
-        for mod_name, original in saved.items():
-            if original is None:
-                sys.modules.pop(mod_name, None)
-            else:
-                sys.modules[mod_name] = original
+    """``torch.load`` that unpickles YOLOv5/v7/v8/v9/v10 checkpoints without
+    requiring ``models``/``utils``/``ultralytics`` to be importable."""
+    return torch.load(path, map_location="cpu", weights_only=False, pickle_module=_PickleShim)
 
 
 def _load_state_dict(path: Path) -> dict[str, torch.Tensor]:
@@ -225,8 +202,20 @@ def load_pretrained(
 
     raw = _load_state_dict(dest)
     remapped = _remap_keys(raw, spec.state_dict_key_map)
+    if spec.remapper is not None:
+        remapped = spec.remapper(remapped, model)
 
     result = model.load_state_dict(remapped, strict=strict)
+    n_matched = sum(1 for k in remapped if k in model.state_dict())
+    n_total = len(model.state_dict())
+    logger.info(
+        "pretrained load %s: matched %d/%d keys, missing %d, unexpected %d",
+        spec.key,
+        n_matched,
+        n_total,
+        len(result.missing_keys),
+        len(result.unexpected_keys),
+    )
     return LoadReport(
         model=model,
         matched=[k for k in remapped if k in model.state_dict()],

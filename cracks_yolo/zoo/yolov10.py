@@ -30,6 +30,7 @@ from cracks_yolo.ops.csp import SCDown
 from cracks_yolo.ops.detect_heads import v10Detect
 from cracks_yolo.weights.loader import load_pretrained
 from cracks_yolo.weights.registry import PRETRAINED_URLS
+from cracks_yolo.weights.remappers import yolo_remapper
 from cracks_yolo.zoo.base import PretrainedSpec
 from cracks_yolo.zoo.base import default_optimizer
 
@@ -246,6 +247,7 @@ class YOLOv10s_CIoU_DFL_E2E_AdamW_SILU(_YOLOv10sBase):  # noqa: N801
         key="yolov10s",
         url=PRETRAINED_URLS["yolov10s"],
         state_dict_key_map={},
+        remapper=yolo_remapper,
     )
 
     def __init__(self, num_classes: int = 80, input_size: int = 640) -> None:
@@ -253,9 +255,17 @@ class YOLOv10s_CIoU_DFL_E2E_AdamW_SILU(_YOLOv10sBase):  # noqa: N801
 
 
 class YOLOv10sSAC_CIoU_DFL_E2E_AdamW_SILU(_YOLOv10sBase):  # noqa: N801
-    """YOLOv10s with SAC in the backbone C2f stages (P2/P3/P4/P5)."""
+    """YOLOv10s with SAC in the backbone C2f stages (P2/P3/P4/P5).
 
-    pretrained_spec = None
+    Loads the same COCO weights as the baseline; SAC layers stay random init.
+    """
+
+    pretrained_spec = PretrainedSpec(
+        key="yolov10s",
+        url=PRETRAINED_URLS["yolov10s"],
+        state_dict_key_map={},
+        remapper=yolo_remapper,
+    )
 
     def __init__(self, num_classes: int = 80, input_size: int = 640) -> None:
         super().__init__(num_classes=num_classes, input_size=input_size, sac=True)

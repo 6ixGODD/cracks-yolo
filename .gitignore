@@ -101,6 +101,7 @@ TODO.md
 
 # Cracks-YOLO artifacts
 output/
+*.zip
 weights/
 !/tests/weights/
 !/cracks_yolo/weights/

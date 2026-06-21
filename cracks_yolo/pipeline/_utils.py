@@ -89,31 +89,46 @@ def detections_to_per_image(
     for b in range(n_images):
         if is_anchor_free:
             preds = decoded[b].permute(1, 0).cpu().float()
-            boxes = preds[:, :4]
-            if preds.shape[1] > 5:
-                scores = preds[:, 4] * preds[:, 5:].max(dim=1).values
-            else:
-                scores = preds[:, 4]
         else:
             preds = decoded[b].cpu().float()
-            boxes = preds[:, :4]
-            scores = (
-                preds[:, 4] * preds[:, 5:].max(dim=1).values if preds.shape[1] > 5 else preds[:, 4]
-            )
+        # Anchor-based (v5/v7) decode emits (cx, cy, w, h, obj, cls...) —
+        # convert to xyxy. Anchor-free (v8/v10) decode already emits xyxy.
+        if not is_anchor_free and preds.shape[1] >= 4:
+            cx, cy, w, h = preds[:, 0], preds[:, 1], preds[:, 2], preds[:, 3]
+            preds = preds.clone()
+            preds[:, 0] = cx - w / 2
+            preds[:, 1] = cy - h / 2
+            preds[:, 2] = cx + w / 2
+            preds[:, 3] = cy + h / 2
+        boxes = preds[:, :4]
+        if preds.shape[1] > 5:
+            scores = preds[:, 4] * preds[:, 5:].max(dim=1).values
+            class_ids = preds[:, 5:].argmax(dim=1)
+        else:
+            scores = preds[:, 4]
+            class_ids = torch.zeros(preds.shape[0], dtype=torch.long)
 
         keep = scores >= conf_thr
         boxes = boxes[keep]
         scores = scores[keep]
+        class_ids = class_ids[keep]
+        # Drop degenerate boxes (x2<=x1 or y2<=y1) — low-quality anchor
+        # predictions that survive NMS because their IoU with everything is 0.
+        valid = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1])
+        boxes = boxes[valid]
+        scores = scores[valid]
+        class_ids = class_ids[valid]
         if boxes.numel() == 0:
             det_list: list[DetectionMetric] = []
         else:
             keep_idx = nms(boxes, scores, iou_thr)
             boxes = boxes[keep_idx]
             scores = scores[keep_idx]
+            class_ids = class_ids[keep_idx]
             det_list = [
                 {
                     "image_id": int(_extract_image_id(targets[b])),
-                    "class_id": 0,
+                    "class_id": int(class_ids[k].item()),
                     "score": float(scores[k].item()),
                     "bbox_xyxy": (
                         float(boxes[k][0]),

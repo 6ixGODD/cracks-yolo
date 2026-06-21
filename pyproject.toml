@@ -51,6 +51,7 @@ dev = [
   "pytest-cov>=5",
   "pytest-xdist>=3.5,<4",
   "ruff>=0.15.13",
+  "thop>=0.1,<0.2",
 ]
 
 [tool.setuptools.packages.find]
