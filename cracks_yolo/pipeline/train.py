@@ -68,6 +68,7 @@ class TrainPipelineImpl:
         (cfg.output_dir / "config.yaml").write_text(cfg.model_dump_json(indent=2), encoding="utf-8")
 
         best_map50 = -1.0
+        best_train_loss = float("inf")
         best_epoch = -1
         checkpoint_paths: list[Path] = []
         history: list[dict[str, float]] = []
@@ -210,9 +211,17 @@ class TrainPipelineImpl:
                 "val_map5095": val_map5095,
             })
 
-            # Save best checkpoint.
-            if val_map50 > best_map50:
+            # Save best checkpoint. Tie-break on train loss when val mAP is
+            # equal (early in training mAP can sit at 0.0 for many epochs;
+            # without the tie-break, best.pt freezes at epoch 0's random head
+            # and never captures the improving weights).
+            mean_loss = history[-1]["train_loss"] if history else 0.0
+            is_better = val_map50 > best_map50 or (
+                abs(val_map50 - best_map50) < 1e-9 and mean_loss < best_train_loss
+            )
+            if is_better:
                 best_map50 = val_map50
+                best_train_loss = mean_loss
                 best_epoch = epoch
                 epochs_since_best = 0
                 best_path = cfg.output_dir / "best.pt"
@@ -229,6 +238,17 @@ class TrainPipelineImpl:
                     checkpoint_paths.append(best_path)
             else:
                 epochs_since_best += 1
+            # Always save last.pt so the final-epoch weights are recoverable
+            # (useful when val mAP plateaus and best.pt stops updating).
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "best_map50": best_map50,
+                },
+                cfg.output_dir / "last.pt",
+            )
 
             # Early stopping: bail out once val mAP@50 has failed to improve
             # for ``cfg.early_stopping_patience`` consecutive epochs. Only
