@@ -37,7 +37,7 @@ python val.py --weights ../../${OUT}/weights/best.pt --data /tmp/v5_data.yaml \
 echo "=== METRICS ${MODEL} ==="
 cd /root/cracks-yolo
 python -c "
-import torch, csv, json, time, io, os
+import torch, csv, json, time, io, os, sys; sys.path.insert(0, 'deps/yolov5')
 from pathlib import Path
 # Load model + compute params/GFLOPs/FPS
 ckpt = torch.load('${OUT}/weights/best.pt', map_location='cpu', weights_only=False)
