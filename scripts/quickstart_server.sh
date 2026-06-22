@@ -49,20 +49,22 @@ mkdir -p "$WEIGHTS_DIR"
 GH="https://ghfast.top/https://github.com/ultralytics/assets/releases/download/v8.4.0"
 GH_V7="https://ghfast.top/https://github.com/WongKinYiu/yolov7/releases/download/v0.1"
 
-download() {  # download <url> <filename>
-  local url="$1" f="$WEIGHTS_DIR/$2"
+download() {  # download <url> <filename> [mirror_url]
+  local url="$1" f="$WEIGHTS_DIR/$2" mirror="${3:-}"
   if [ -f "$f" ] && [ "$(stat -c%s "$f" 2>/dev/null || echo 0)" -gt 1000000 ]; then
     echo "  $2 already present ($(stat -c%s "$f") bytes)"
     return 0
   fi
   echo -n "  $2 ... "
   for attempt in 1 2 3 4 5; do
-    if curl -sL --connect-timeout 30 --max-time 900 -o "$f" "$url"; then
+    local u="$url"
+    [ "$attempt" -le 2 ] && [ -n "$mirror" ] && u="$mirror"
+    if curl -sL --connect-timeout 60 --max-time 1800 --retry 3 --retry-delay 10 -o "$f" "$u"; then
       local sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
       if [ "$sz" -gt 1000000 ]; then echo "OK (${sz}B)"; return 0; fi
     fi
     echo -n "retry$attempt "
-    rm -f "$f"; sleep 3
+    rm -f "$f"; sleep 5
   done
   echo "FAILED"
   return 1
@@ -78,14 +80,21 @@ for a in yolov5nu yolov5su yolov5mu yolov5lu yolov5xu \
 done
 echo "  -- YOLOv7 (WongKinYiu, github mirror) --"
 download "${GH_V7}/yolov7.pt" "yolov7.pt" || true
-echo "  -- torchvision (pytorch.org) --"
-download "https://download.pytorch.org/models/retinanet_resnet50_fpn_coco-eeacb38b.pth" "retinanet_resnet50_fpn_coco.pth" || true
-download "https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth" "fasterrcnn_resnet50_fpn_coco.pth" || true
-download "https://download.pytorch.org/models/maskrcnn_resnet50_fpn_coco-bf2d0c1e.pth" "maskrcnn_resnet50_fpn_coco.pth" || true
-download "https://download.pytorch.org/models/fcos_resnet50_fpn_coco-99b0c9b7.pth" "fcos_resnet50_fpn_coco.pth" || true
-download "https://download.pytorch.org/models/ssd300_vgg16_coco-b556d3b4.pth" "ssd300_vgg16_coco.pth" || true
-download "https://download.pytorch.org/models/ssdlite320_mobilenet_v3_large_coco-a79551df.pth" "ssdlite320_mobilenet_v3_large_coco.pth" || true
-echo "  -- DETR (fbaipublicfiles) --"
+echo "  -- torchvision (pytorch.org -> mirror first, direct fallback) --"
+PT_MIRROR="https://ghfast.top/https://download.pytorch.org/models"  # fast mirror, fallback direct
+download "https://download.pytorch.org/models/retinanet_resnet50_fpn_coco-eeacb38b.pth" \
+  "retinanet_resnet50_fpn_coco.pth" "${PT_MIRROR}/retinanet_resnet50_fpn_coco-eeacb38b.pth" || true
+download "https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth" \
+  "fasterrcnn_resnet50_fpn_coco.pth" "${PT_MIRROR}/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth" || true
+download "https://download.pytorch.org/models/maskrcnn_resnet50_fpn_coco-bf2d0c1e.pth" \
+  "maskrcnn_resnet50_fpn_coco.pth" "${PT_MIRROR}/maskrcnn_resnet50_fpn_coco-bf2d0c1e.pth" || true
+download "https://download.pytorch.org/models/fcos_resnet50_fpn_coco-99b0c9b7.pth" \
+  "fcos_resnet50_fpn_coco.pth" "${PT_MIRROR}/fcos_resnet50_fpn_coco-99b0c9b7.pth" || true
+download "https://download.pytorch.org/models/ssd300_vgg16_coco-b556d3b4.pth" \
+  "ssd300_vgg16_coco.pth" "${PT_MIRROR}/ssd300_vgg16_coco-b556d3b4.pth" || true
+download "https://download.pytorch.org/models/ssdlite320_mobilenet_v3_large_coco-a79551df.pth" \
+  "ssdlite320_mobilenet_v3_large_coco.pth" "${PT_MIRROR}/ssdlite320_mobilenet_v3_large_coco-a79551df.pth" || true
+echo "  -- DETR (fbaipublicfiles, direct) --"
 download "https://dl.fbaipublicfiles.com/detr/detr-r50-e632da11.pth" "detr-r50-e632da11.pth" || true
 
 echo "=== [4b/7] symlink weights to where each loader looks ==="
