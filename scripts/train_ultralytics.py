@@ -59,8 +59,8 @@ def main() -> None:
     # Determine the ultralytics model spec: baseline loads from .pt, SAC/TR
     # loads from .yaml + apply_sac_tr.
     from cracks_yolo.zoo import ZOO
-    from cracks_yolo.zoo.ultralytics import _CFG_ASSET, _SAC_TR, _family_for_cfg
-    from cracks_yolo.zoo.ultralytics_sac import apply_sac_tr
+    from cracks_yolo.zoo.ultralytics import _CFG_ASSET
+    from cracks_yolo.zoo.ultralytics.sac import apply_sac_tr
     from ultralytics import YOLO
 
     cls = ZOO[args.model]
