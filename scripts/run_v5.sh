@@ -19,7 +19,7 @@ names: {0: 'cracks'}
 EOF
 
 CFG="experiments/v5_configs/${MODEL}.yaml"
-WT="yolov5su.pt"  # symlinked to shared weights
+WT="/root/autodl-fs/weights/yolov5su.pt"  # symlinked to shared weights
 OUT="output/${MODEL}"
 
 echo "=== TRAIN ${MODEL} ==="
