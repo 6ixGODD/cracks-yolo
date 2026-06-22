@@ -1,6 +1,6 @@
 [submodule "deps/yolov5"]
 	path = deps/yolov5
-	url = https://github.com/6ixGODD/yolov5.git
+	url = https://ghfast.top/https://github.com/6ixGODD/yolov5.git
 	branch = cracks-yolo
 [submodule "deps/ultralytics"]
 	path = deps/ultralytics
