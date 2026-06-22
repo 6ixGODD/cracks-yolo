@@ -40,49 +40,84 @@ $PY -m pip install -q ultralytics thop torchsummary pycocotools opencv-python \
   tabulate tqdm requests 2>&1 | tail -3
 $PY -c "import torch; print('  torch', torch.__version__, 'cuda', torch.cuda.is_available())"
 
-echo "=== [4/7] predownload ALL YOLO weights via ghfast.top mirror ==="
-# ultralytics downloads from github at runtime (slow/corrupt from China).
-# Pre-fetch every asset the sweep needs via the ghfast.top mirror, placing them
-# where ultralytics' YOLO() looks first (cwd). This avoids runtime download failures.
-# Also purge any corrupt partial .pt files (ultralytics detects + retries endlessly).
-MIRROR="https://ghfast.top/https://github.com/ultralytics/assets/releases/download/v8.4.0"
-ASSETS="yolov5nu yolov5su yolov5mu yolov5lu yolov5xu \
-        yolov8n yolov8s yolov8m yolov8l yolov8x \
-        yolov9t yolov9s yolov9m yolov9c yolov9e \
-        yolov10n yolov10s yolov10m yolov10b yolov10l yolov10x \
-        yolov3u yolov3-tinyu yolov3-sppu"
-# purge corrupt/empty .pt files in cwd
-for f in *.pt; do
-  [ -f "$f" ] || continue
-  sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
-  if [ "$sz" -lt 1000000 ]; then
-    echo "  purging corrupt $f (${sz} bytes)"
-    rm -f "$f"
+echo "=== [4/7] predownload ALL pretrained weights to shared autodl-fs ==="
+# Shared cache on autodl-fs (persists across servers). github assets via
+# ghfast.top mirror (China-friendly); pytorch.org + fbaipublicfiles direct.
+# Existing files are skipped (size-checked) so re-runs are fast.
+WEIGHTS_DIR="${WEIGHTS_DIR:-/root/autodl-fs/weights}"
+mkdir -p "$WEIGHTS_DIR"
+GH="https://ghfast.top/https://github.com/ultralytics/assets/releases/download/v8.4.0"
+GH_V7="https://ghfast.top/https://github.com/WongKinYiu/yolov7/releases/download/v0.1"
+
+download() {  # download <url> <filename>
+  local url="$1" f="$WEIGHTS_DIR/$2"
+  if [ -f "$f" ] && [ "$(stat -c%s "$f" 2>/dev/null || echo 0)" -gt 1000000 ]; then
+    echo "  $2 already present ($(stat -c%s "$f") bytes)"
+    return 0
   fi
-done
-for asset in $ASSETS; do
-  f="${asset}.pt"
-  if [ -f "$f" ] && [ $(stat -c%s "$f" 2>/dev/null || echo 0) -gt 1000000 ]; then
-    echo "  $f already present"
-  else
-    echo -n "  downloading $f ... "
-    # retry up to 5 times
-    for attempt in 1 2 3 4 5; do
-      if curl -sL --connect-timeout 30 --max-time 600 -o "$f" "${MIRROR}/${f}"; then
-        sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
-        if [ "$sz" -gt 1000000 ]; then
-          echo "OK (${sz} bytes)"
-          break
-        fi
-      fi
-      echo "retry $attempt..."
-      rm -f "$f"
-    done
-    if [ ! -f "$f" ] || [ $(stat -c%s "$f" 2>/dev/null || echo 0) -lt 1000000 ]; then
-      echo "FAILED — try: curl -L -o $f ${MIRROR}/${f}"
+  echo -n "  $2 ... "
+  for attempt in 1 2 3 4 5; do
+    if curl -sL --connect-timeout 30 --max-time 900 -o "$f" "$url"; then
+      local sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
+      if [ "$sz" -gt 1000000 ]; then echo "OK (${sz}B)"; return 0; fi
     fi
+    echo -n "retry$attempt "
+    rm -f "$f"; sleep 3
+  done
+  echo "FAILED"
+  return 1
+}
+
+echo "  -- YOLO (ultralytics, github mirror) --"
+for a in yolov5nu yolov5su yolov5mu yolov5lu yolov5xu \
+         yolov8n yolov8s yolov8m yolov8l yolov8x \
+         yolov9t yolov9s yolov9m yolov9c yolov9e \
+         yolov10n yolov10s yolov10m yolov10b yolov10l yolov10x \
+         yolov3u yolov3-tinyu yolov3-sppu; do
+  download "${GH}/${a}.pt" "${a}.pt" || true
+done
+echo "  -- YOLOv7 (WongKinYiu, github mirror) --"
+download "${GH_V7}/yolov7.pt" "yolov7.pt" || true
+echo "  -- torchvision (pytorch.org) --"
+download "https://download.pytorch.org/models/retinanet_resnet50_fpn_coco-eeacb38b.pth" "retinanet_resnet50_fpn_coco.pth" || true
+download "https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth" "fasterrcnn_resnet50_fpn_coco.pth" || true
+download "https://download.pytorch.org/models/maskrcnn_resnet50_fpn_coco-bf2d0c1e.pth" "maskrcnn_resnet50_fpn_coco.pth" || true
+download "https://download.pytorch.org/models/fcos_resnet50_fpn_coco-99b0c9b7.pth" "fcos_resnet50_fpn_coco.pth" || true
+download "https://download.pytorch.org/models/ssd300_vgg16_coco-b556d3b4.pth" "ssd300_vgg16_coco.pth" || true
+download "https://download.pytorch.org/models/ssdlite320_mobilenet_v3_large_coco-a79551df.pth" "ssdlite320_mobilenet_v3_large_coco.pth" || true
+echo "  -- DETR (fbaipublicfiles) --"
+download "https://dl.fbaipublicfiles.com/detr/detr-r50-e632da11.pth" "detr-r50-e632da11.pth" || true
+
+echo "=== [4b/7] symlink weights to where each loader looks ==="
+cd "$REPO_DIR"
+# (a) ultralytics: looks for <asset>.pt in cwd.
+for f in "$WEIGHTS_DIR"/*.pt; do
+  [ -f "$f" ] || continue
+  ln -sfn "$f" "$(basename "$f")"
+done
+# (b) torchvision: looks in ~/.cache/torch/hub/checkpoints/<official-name>.pth
+TV_CACHE="$HOME/.cache/torch/hub/checkpoints"
+mkdir -p "$TV_CACHE"
+declare -A TV_MAP=(
+  ["retinanet_resnet50_fpn_coco.pth"]="retinanet_resnet50_fpn_coco-eeacb38b.pth"
+  ["fasterrcnn_resnet50_fpn_coco.pth"]="fasterrcnn_resnet50_fpn_coco-258fb6c6.pth"
+  ["maskrcnn_resnet50_fpn_coco.pth"]="maskrcnn_resnet50_fpn_coco-bf2d0c1e.pth"
+  ["fcos_resnet50_fpn_coco.pth"]="fcos_resnet50_fpn_coco-99b0c9b7.pth"
+  ["ssd300_vgg16_coco.pth"]="ssd300_vgg16_coco-b556d3b4.pth"
+  ["ssdlite320_mobilenet_v3_large_coco.pth"]="ssdlite320_mobilenet_v3_large_coco-a79551df.pth"
+)
+for friendly in "${!TV_MAP[@]}"; do
+  official="${TV_MAP[$friendly]}"
+  if [ -f "$WEIGHTS_DIR/$friendly" ]; then
+    ln -sfn "$WEIGHTS_DIR/$friendly" "$TV_CACHE/$official"
   fi
 done
+# (c) cracks_yolo weights/loader.py: caches to weights/{key}.pt (key = spec.key).
+#     v7 key=yolov7w -> weights/yolov7w.pt; detr key=detr_r50 -> weights/detr_r50.pt
+mkdir -p "$REPO_DIR/weights"
+[ -f "$WEIGHTS_DIR/yolov7.pt" ] && ln -sfn "$WEIGHTS_DIR/yolov7.pt" "$REPO_DIR/weights/yolov7w.pt"
+[ -f "$WEIGHTS_DIR/detr-r50-e632da11.pth" ] && ln -sfn "$WEIGHTS_DIR/detr-r50-e632da11.pth" "$REPO_DIR/weights/detr_r50.pt"
+echo "  symlinks created (cwd for ultralytics, ~/.cache for torchvision, weights/ for v7+detr)"
 
 echo "=== [5/7] free disk ==="
 rm -rf "$REPO_DIR/output" 2>/dev/null
