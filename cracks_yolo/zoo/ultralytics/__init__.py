@@ -19,19 +19,34 @@ import torch
 import torch.nn as nn
 
 from cracks_yolo.zoo.base import PretrainedSpec
-from cracks_yolo.zoo.ultralytics_sac import apply_sac_tr
+from cracks_yolo.zoo.ultralytics.sac import apply_sac_tr
 
 # Ultralytics asset name for each cfg (so we can fetch COCO pretrained).
 _CFG_ASSET = {
-    "yolov3": "yolov3u", "yolov3-tiny": "yolov3-tinyu", "yolov3-spp": "yolov3-sppu",
-    "yolov5n": "yolov5nu", "yolov5s": "yolov5su", "yolov5m": "yolov5mu",
-    "yolov5l": "yolov5lu", "yolov5x": "yolov5xu",
-    "yolov8n": "yolov8n", "yolov8s": "yolov8s", "yolov8m": "yolov8m",
-    "yolov8l": "yolov8l", "yolov8x": "yolov8x",
-    "yolov9t": "yolov9t", "yolov9s": "yolov9s", "yolov9m": "yolov9m",
-    "yolov9c": "yolov9c", "yolov9e": "yolov9e",
-    "yolov10n": "yolov10n", "yolov10s": "yolov10s", "yolov10m": "yolov10m",
-    "yolov10b": "yolov10b", "yolov10l": "yolov10l", "yolov10x": "yolov10x",
+    "yolov3": "yolov3u",
+    "yolov3-tiny": "yolov3-tinyu",
+    "yolov3-spp": "yolov3-sppu",
+    "yolov5n": "yolov5nu",
+    "yolov5s": "yolov5su",
+    "yolov5m": "yolov5mu",
+    "yolov5l": "yolov5lu",
+    "yolov5x": "yolov5xu",
+    "yolov8n": "yolov8n",
+    "yolov8s": "yolov8s",
+    "yolov8m": "yolov8m",
+    "yolov8l": "yolov8l",
+    "yolov8x": "yolov8x",
+    "yolov9t": "yolov9t",
+    "yolov9s": "yolov9s",
+    "yolov9m": "yolov9m",
+    "yolov9c": "yolov9c",
+    "yolov9e": "yolov9e",
+    "yolov10n": "yolov10n",
+    "yolov10s": "yolov10s",
+    "yolov10m": "yolov10m",
+    "yolov10b": "yolov10b",
+    "yolov10l": "yolov10l",
+    "yolov10x": "yolov10x",
 }
 
 # SAC/TR insertion indices per family (into model.model Sequential).
@@ -80,8 +95,12 @@ class _UltralyticsDetector(nn.Module):
     def forward(self, x: torch.Tensor) -> Any:
         return self._inner(x)
 
-    def compute_loss(self, preds, targets, imgs=None):
-        batch = {"batch_idx": targets[:, 0].long(), "cls": targets[:, 1:2], "bboxes": targets[:, 2:6]}
+    def compute_loss(self, preds, targets, imgs=None):  # noqa: ARG002
+        batch = {
+            "batch_idx": targets[:, 0].long(),
+            "cls": targets[:, 1:2],
+            "bboxes": targets[:, 2:6],
+        }
         loss, parts = self._inner.loss(batch, preds)
         return loss.sum(), parts
 
@@ -113,13 +132,14 @@ class _UltralyticsDetector(nn.Module):
         return torch.optim.AdamW(self.parameters(), lr=1e-3)
 
     @classmethod
-    def from_pretrained(cls, num_classes, weights_dir=None, strict=False):
+    def from_pretrained(cls, num_classes, weights_dir=None, strict=False):  # noqa: ARG003
         m = cls(num_classes=num_classes)
         cfg_key = cls.cfg.replace(".yaml", "")
         asset = _CFG_ASSET.get(cfg_key, cfg_key)
         # Load COCO weights via ultralytics' YOLO() (handles v5/v8/v9/v10 formats).
         try:
             from ultralytics import YOLO
+
             src_sd = YOLO(f"{asset}.pt").model.state_dict()
             msd = m.state_dict()
             matched = 0
@@ -142,15 +162,21 @@ def _make_class(name, cfg, sac=None, tr=None, decode_format="anchor_free"):
     # sac/tr=None → use family default; sac/tr=() → explicitly none (baseline).
     sac_idx = spec.get("sac", ()) if sac is None else tuple(sac)
     tr_idx = spec.get("tr", ()) if tr is None else tuple(tr)
-    return type(name, (_UltralyticsDetector,), {
-        "cfg": cfg,
-        "sac_indices": sac_idx,
-        "tr_indices": tr_idx,
-        "decode_format": decode_format,
-        "pretrained_spec": PretrainedSpec(
-            key=_CFG_ASSET.get(cfg, cfg), url="", state_dict_key_map={},
-        ),
-    })
+    return type(
+        name,
+        (_UltralyticsDetector,),
+        {
+            "cfg": cfg,
+            "sac_indices": sac_idx,
+            "tr_indices": tr_idx,
+            "decode_format": decode_format,
+            "pretrained_spec": PretrainedSpec(
+                key=_CFG_ASSET.get(cfg, cfg),
+                url="",
+                state_dict_key_map={},
+            ),
+        },
+    )
 
 
 ULTRALYTICS_ZOO: dict[str, type[_UltralyticsDetector]] = {}
@@ -162,28 +188,38 @@ ULTRALYTICS_ZOO["yolov3_spp"] = _make_class("YOLOv3SPP", "yolov3-spp.yaml", sac=
 
 # v5 family: n/s/m/l/x baseline; s gets sac/tr/sactr variants.
 for _sz in ("n", "s", "m", "l", "x"):
-    ULTRALYTICS_ZOO[f"yolov5{_sz}"] = _make_class(f"YOLOv5{_sz.upper()}", f"yolov5{_sz}.yaml", sac=(), tr=())
+    ULTRALYTICS_ZOO[f"yolov5{_sz}"] = _make_class(
+        f"YOLOv5{_sz.upper()}", f"yolov5{_sz}.yaml", sac=(), tr=()
+    )
 ULTRALYTICS_ZOO["yolov5s_sac"] = _make_class("YOLOv5sSAC", "yolov5s.yaml", sac=(2, 4, 6), tr=())
 ULTRALYTICS_ZOO["yolov5s_tr"] = _make_class("YOLOv5sTR", "yolov5s.yaml", sac=(), tr=(8,))
-ULTRALYTICS_ZOO["yolov5s_sactr"] = _make_class("YOLOv5sSACTR", "yolov5s.yaml", sac=(2, 4, 6), tr=(8,))
+ULTRALYTICS_ZOO["yolov5s_sactr"] = _make_class(
+    "YOLOv5sSACTR", "yolov5s.yaml", sac=(2, 4, 6), tr=(8,)
+)
 
 # v8 family: n/s/m/l/x baseline; n/s get sac.
 for _sz in ("n", "s", "m", "l", "x"):
-    ULTRALYTICS_ZOO[f"yolov8{_sz}"] = _make_class(f"YOLOv8{_sz.upper()}", f"yolov8{_sz}.yaml", sac=(), tr=())
+    ULTRALYTICS_ZOO[f"yolov8{_sz}"] = _make_class(
+        f"YOLOv8{_sz.upper()}", f"yolov8{_sz}.yaml", sac=(), tr=()
+    )
 ULTRALYTICS_ZOO["yolov8n_sac"] = _make_class("YOLOv8nSAC", "yolov8n.yaml", sac=(2, 4, 6, 8), tr=())
 ULTRALYTICS_ZOO["yolov8s_sac"] = _make_class("YOLOv8sSAC", "yolov8s.yaml", sac=(2, 4, 6, 8), tr=())
 
 # v9 family
 for _sz in ("t", "s", "m", "c", "e"):
-    ULTRALYTICS_ZOO[f"yolov9{_sz}"] = _make_class(f"YOLOv9{_sz.upper()}", f"yolov9{_sz}.yaml", sac=(), tr=())
+    ULTRALYTICS_ZOO[f"yolov9{_sz}"] = _make_class(
+        f"YOLOv9{_sz.upper()}", f"yolov9{_sz}.yaml", sac=(), tr=()
+    )
 ULTRALYTICS_ZOO["yolov9c_sac"] = _make_class("YOLOv9cSAC", "yolov9c.yaml", sac=(2, 4, 6, 8), tr=())
 
 # v10 family (anchor_based decode)
 for _sz in ("n", "s", "m", "b", "l", "x"):
     ULTRALYTICS_ZOO[f"yolov10{_sz}"] = _make_class(
-        f"YOLOv10{_sz.upper()}", f"yolov10{_sz}.yaml", sac=(), tr=(), decode_format="anchor_based")
+        f"YOLOv10{_sz.upper()}", f"yolov10{_sz}.yaml", sac=(), tr=(), decode_format="anchor_based"
+    )
 ULTRALYTICS_ZOO["yolov10s_sac"] = _make_class(
-    "YOLOv10sSAC", "yolov10s.yaml", sac=(2, 4, 6, 8), tr=(), decode_format="anchor_based")
+    "YOLOv10sSAC", "yolov10s.yaml", sac=(2, 4, 6, 8), tr=(), decode_format="anchor_based"
+)
 
 
 __all__ = ["ULTRALYTICS_ZOO", "_UltralyticsDetector"]
