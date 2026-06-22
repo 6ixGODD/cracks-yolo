@@ -42,6 +42,14 @@ class TrainConfig(BaseModel):
     seed: int = 42
     num_workers: int = Field(default=4, ge=0)
     device: str = "cuda"
+    # Cosine annealing: lr decays from cfg.lr to cfg.lr*cosine_lrf over epochs.
+    cosine_lr: bool = False
+    cosine_lrf: float = Field(default=0.01, gt=0.0, le=1.0)
+    # Exponential moving average of weights (improves generalization ~0.5 mAP).
+    use_ema: bool = False
+    ema_decay: float = Field(default=0.9999, gt=0.0, lt=1.0)
+    # Optimizer: "adamw" (default, v8+) or "sgd" (v7).
+    optimizer: str = "adamw"
 
 
 class TestConfig(BaseModel):

@@ -135,7 +135,12 @@ class _PickleShim:
 def _torch_load_lenient(path: Path) -> Any:
     """``torch.load`` that unpickles YOLOv5/v7/v8/v9/v10 checkpoints without
     requiring ``models``/``utils``/``ultralytics`` to be importable."""
-    return torch.load(path, map_location="cpu", weights_only=False, pickle_module=_PickleShim)
+    try:
+        # Plain state-dict checkpoints (including official DETR)
+        # need no pickle globals and should use PyTorch's restricted loader.
+        return torch.load(path, map_location="cpu", weights_only=True)
+    except (pickle.UnpicklingError, RuntimeError):
+        return torch.load(path, map_location="cpu", weights_only=False, pickle_module=_PickleShim)
 
 
 def _load_state_dict(path: Path) -> dict[str, torch.Tensor]:
@@ -205,9 +210,22 @@ def load_pretrained(
     if spec.remapper is not None:
         remapped = spec.remapper(remapped, model)
 
-    result = model.load_state_dict(remapped, strict=strict)
-    n_matched = sum(1 for k in remapped if k in model.state_dict())
-    n_total = len(model.state_dict())
+    model_state = model.state_dict()
+    # ``strict=False`` still raises for shape mismatches.  Detection
+    # checkpoints commonly have a COCO-sized classification head while the
+    # target model has a project-specific class count, so only pass compatible
+    # tensors to PyTorch and leave the new head randomly initialized.
+    compatible = {
+        k: v for k, v in remapped.items() if k in model_state and model_state[k].shape == v.shape
+    }
+    shape_mismatches = [
+        k for k, v in remapped.items() if k in model_state and model_state[k].shape != v.shape
+    ]
+    if strict and shape_mismatches:
+        raise RuntimeError(f"pretrained tensor shape mismatch: {shape_mismatches}")
+    result = model.load_state_dict(compatible, strict=strict)
+    n_matched = len(compatible)
+    n_total = len(model_state)
     logger.info(
         "pretrained load %s: matched %d/%d keys, missing %d, unexpected %d",
         spec.key,
@@ -218,9 +236,11 @@ def load_pretrained(
     )
     return LoadReport(
         model=model,
-        matched=[k for k in remapped if k in model.state_dict()],
+        matched=list(compatible),
         missing=list(result.missing_keys),
-        unexpected=list(result.unexpected_keys),
+        unexpected=list(result.unexpected_keys)
+        + [k for k in remapped if k not in model_state]
+        + shape_mismatches,
         key=spec.key,
         url=spec.url,
         cached=cached,

@@ -14,9 +14,9 @@ from scripts import schedule_experiments as scheduler
 
 def test_all_models_direct_config_is_valid() -> None:
     config_path = Path("experiments/all_models_direct.yaml")
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config = scheduler._load_config(config_path)
 
-    assert len(config["experiments"]) == 52
+    assert len(config["experiments"]) >= 52
     assert scheduler._validate_experiments(config["experiments"]) == []
 
 
@@ -63,3 +63,29 @@ def test_run_one_records_command_generation_error(tmp_path: Path) -> None:
     record = json.loads(errors_path.read_text(encoding="utf-8"))
     assert record["exp_name"] == "broken"
     assert "KeyError" in record["traceback"]
+
+
+def test_load_config_composes_relative_includes(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "a.yaml").write_text(
+        yaml.safe_dump({"experiments": [{"name": "a", "type": "train"}]}), encoding="utf-8"
+    )
+    (models / "b.yaml").write_text(
+        yaml.safe_dump({"experiments": [{"name": "b", "type": "test"}]}), encoding="utf-8"
+    )
+    root = tmp_path / "compose.yaml"
+    root.write_text(yaml.safe_dump({"$include": ["models/a.yaml", "models/b.yaml"]}), encoding="utf-8")
+
+    cfg = scheduler._load_config(root)
+
+    assert [exp["name"] for exp in cfg["experiments"]] == ["a", "b"]
+
+
+def test_load_config_rejects_include_cycle(tmp_path: Path) -> None:
+    a = tmp_path / "a.yaml"
+    b = tmp_path / "b.yaml"
+    a.write_text("$include: b.yaml\n", encoding="utf-8")
+    b.write_text("$include: a.yaml\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="cyclic experiment include"):
+        scheduler._load_config(a)

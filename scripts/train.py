@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import datetime
 from pathlib import Path
 from typing import Protocol
 from typing import cast
@@ -62,7 +63,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train a cracks_yolo model.")
     parser.add_argument("--model", required=True, help="ZOO key (e.g. yolov5s_sactr)")
     parser.add_argument("--dataset", required=True, help="YOLO dataset root (contains data.yaml)")
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-root", type=Path, default=Path("output"),
+                        help="outputs go to {output-root}/{timestamp}/{model}/")
+    parser.add_argument("--output-dir", type=Path, default=None,
+                        help="exact output directory (used by composed experiments)")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -70,6 +74,11 @@ def main() -> None:
     parser.add_argument("--input-size", type=int, default=640)
     parser.add_argument("--amp", action="store_true", default=True)
     parser.add_argument("--no-amp", dest="amp", action="store_false")
+    parser.add_argument("--mosaic-prob", type=float, default=0.5, help="Mosaic augmentation probability.")
+    parser.add_argument("--cosine-lr", action="store_true", help="Cosine annealing LR scheduler.")
+    parser.add_argument("--cosine-lrf", type=float, default=0.01, help="Final LR fraction (cosine).")
+    parser.add_argument("--use-ema", action="store_true", help="Exponential moving average of weights.")
+    parser.add_argument("--optimizer", choices=["adamw", "sgd"], default="adamw")
     parser.add_argument(
         "--clip-grad-norm",
         type=float,
@@ -117,6 +126,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # output/{ISO_timestamp}/{model}/ — standardized across all wrappers.
+    ts = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    output_dir = args.output_dir or args.output_root / ts / args.model
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"=== output: {output_dir} ===")
+
     if args.model not in ZOO:
         raise SystemExit(f"unknown model: {args.model!r}. Available: {sorted(ZOO.keys())}")
     cls = ZOO[args.model]
@@ -130,7 +145,7 @@ def main() -> None:
         # remaining records further split into train + val (val_fraction).
         records = src.load_split("train") + src.load_split("valid") + src.load_split("test")
         train_cfg = TrainConfig(
-            output_dir=args.output_dir,
+            output_dir=output_dir,
             epochs=args.epochs,
             batch_size=args.batch_size,
             lr=args.lr,
@@ -138,6 +153,10 @@ def main() -> None:
             amp=args.amp,
             clip_grad_norm=args.clip_grad_norm,
             early_stopping_patience=args.early_stopping_patience,
+            cosine_lr=args.cosine_lr,
+            cosine_lrf=args.cosine_lrf,
+            use_ema=args.use_ema,
+            optimizer=args.optimizer,
             seed=args.seed,
             device=args.device,
             num_workers=args.num_workers,
@@ -165,16 +184,18 @@ def main() -> None:
             num_workers=args.num_workers,
             val_fraction=args.val_fraction,
         )
-        print(f"CV complete: {args.output_dir}/cv_summary.csv")
+        print(f"CV complete: {output_dir}/cv_summary.csv")
         print(f"aggregated map50: {cv_report.aggregated()['map50']}")
         return
 
     # Single train/val run.
     train_records = src.load_split(args.train_split)
     val_records = src.load_split(args.val_split)
-    train_ds = DetectionDataset(
-        train_records,
-        transform=build_transforms(args.input_size, train=True, augment=True),
+    # Mosaic + HSV augmentation for training (matches official yolov5 strategy).
+    from cracks_yolo.dataset.augment import MosaicDetectionDataset
+
+    train_ds = MosaicDetectionDataset(
+        train_records, input_size=args.input_size, mosaic_prob=args.mosaic_prob, hsv=True, augment=True
     )
     val_ds = DetectionDataset(
         val_records,
@@ -196,7 +217,7 @@ def main() -> None:
     )
 
     cfg = TrainConfig(
-        output_dir=args.output_dir,
+        output_dir=output_dir,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
@@ -204,6 +225,10 @@ def main() -> None:
         amp=args.amp,
         clip_grad_norm=args.clip_grad_norm,
         early_stopping_patience=args.early_stopping_patience,
+        cosine_lr=args.cosine_lr,
+        cosine_lrf=args.cosine_lrf,
+        use_ema=args.use_ema,
+        optimizer=args.optimizer,
         seed=args.seed,
         device=args.device,
         num_workers=args.num_workers,
@@ -219,7 +244,7 @@ def main() -> None:
     )
     report = TrainPipelineImpl().run(model, train_loader, val_loader, cfg)
     print(f"Train complete: best_epoch={report.best_epoch} best_map50={report.best_map50:.4f}")
-    print(f"  output: {args.output_dir}")
+    print(f"  output: {output_dir}")
 
 
 if __name__ == "__main__":

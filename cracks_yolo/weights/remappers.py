@@ -144,7 +144,8 @@ def _greedy_align(
 
 
 def yolo_remapper(
-    raw: dict[str, torch.Tensor], model: nn.Module
+    raw: dict[str, torch.Tensor],
+    model: nn.Module,
 ) -> dict[str, torch.Tensor]:
     """Generic remapper for YOLOv5/v7/v8/v9/v10 checkpoints.
 

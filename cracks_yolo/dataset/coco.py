@@ -54,6 +54,8 @@ class COCOSource:
 
     def __init__(self, root: str | Path, image_dir: str | Path | None = None) -> None:
         self.root = Path(root)
+        self.class_names = []
+        self.num_classes = 0
         self._image_dir_override = Path(image_dir) if image_dir is not None else None
 
     def _image_dir(self, split: str) -> Path:

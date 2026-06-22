@@ -123,12 +123,21 @@ def test_zoo_eval_forward(key: str) -> None:
         assert decoded.shape[1] == 25200, (
             f"{cls_name}: expected 25200 anchors, got {decoded.shape[1]}"
         )
-    elif cls_name.startswith(("RetinaNet", "FasterRCNN", "MaskRCNN", "FCOS", "SSD")):
+    elif cls_name.startswith(("RetinaNet", "FasterRCNN", "MaskRCNN", "FCOS", "SSD", "DETR")):
         # torchvision wrapper: (B, N_max, 6) where N_max is variable per batch.
         # Just check the last-dim contract (4 bbox + 1 score + 1 cls = 6).
         assert decoded.shape[-1] == 6, (
             f"{cls_name}: expected last dim 6 (4+1+1), got {decoded.shape[-1]}"
         )
+    elif cls_name.endswith("Official"):
+        if detector.decode_format == "anchor_based":
+            # Ultralytics v10 is end-to-end and returns at most 300 final rows.
+            assert decoded.shape[-1] == 6
+            assert decoded.shape[1] <= 300
+        else:
+            # Ultralytics v3/v9 variants have different feature-map counts.
+            assert decoded.shape[1] == 5
+            assert decoded.shape[-1] > 0
     else:  # v8/v10/v9
         # (B, 4+nc, N) — 5 channels, 8400 grid cells.
         assert decoded.shape[1] == 5, (
@@ -146,8 +155,14 @@ def test_zoo_stride(key: str) -> None:
     model = _instantiate(cls, num_classes=1)
     stride = _as_detector(model).stride
     assert isinstance(stride, torch.Tensor)
-    assert stride.tolist() == [8.0, 16.0, 32.0], (
-        f"{cls.__name__}: stride = {stride.tolist()}, expected [8, 16, 32]"
+    if cls.__name__.startswith("DETR"):
+        expected = [32.0]
+    elif cls.__name__.startswith("YOLOv3Tiny"):
+        expected = [16.0, 32.0]
+    else:
+        expected = [8.0, 16.0, 32.0]
+    assert stride.tolist() == expected, (
+        f"{cls.__name__}: stride = {stride.tolist()}, expected {expected}"
     )
 
 
@@ -219,6 +234,14 @@ def test_zoo_registry_keys() -> None:
         "ssd300_vgg16",
         "ssdlite320_mobilenetv3",
     }
+    expected.update({
+        "detr_r50",
+        "yolov3_official",
+        "yolov3_tiny_official",
+        "yolov3_spp_official",
+    })
+    expected.update({f"yolov9{size}_official" for size in "tsme"})
+    expected.update({f"yolov10{size}_official" for size in "nmblx"})
     assert set(ZOO.keys()) == expected, f"ZOO keys = {set(ZOO.keys())}"
 
 

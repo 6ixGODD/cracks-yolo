@@ -198,7 +198,8 @@ class _YOLOv5sBase(nn.Module):
         return self.head.stride
 
     def _forward_impl(
-        self, x: torch.Tensor
+        self,
+        x: torch.Tensor,
     ) -> list[torch.Tensor] | tuple[torch.Tensor, list[torch.Tensor]]:
         # Backbone: track outputs by index for skip connections.
         bb_out: list[torch.Tensor] = []

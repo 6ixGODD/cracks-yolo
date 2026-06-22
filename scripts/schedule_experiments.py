@@ -122,6 +122,14 @@ def _exp_to_cmd(exp: dict[str, Any]) -> list[str]:
             cmd.extend(["--clip-grad-norm", str(exp["clip_grad_norm"])])
         if exp.get("early_stopping_patience") is not None:
             cmd.extend(["--early-stopping-patience", str(exp["early_stopping_patience"])])
+        if exp.get("cosine_lr"):
+            cmd.append("--cosine-lr")
+        if exp.get("use_ema"):
+            cmd.append("--use-ema")
+        if exp.get("mosaic_prob") is not None:
+            cmd.extend(["--mosaic-prob", str(exp["mosaic_prob"])])
+        if exp.get("optimizer"):
+            cmd.extend(["--optimizer", str(exp["optimizer"])])
         return cmd
     if exp_type == "test":
         return [
@@ -148,6 +156,33 @@ def _exp_to_cmd(exp: dict[str, Any]) -> list[str]:
             str(exp.get("num_workers", 0)),
         ]
     raise ValueError(f"unknown experiment type: {exp_type!r}")
+
+
+def _load_config(config_path: Path, stack: tuple[Path, ...] = ()) -> dict[str, Any]:
+    """Load a scheduler YAML and recursively compose its ``$include`` files."""
+    path = config_path.resolve()
+    if path in stack:
+        chain = " -> ".join(str(item) for item in (*stack, path))
+        raise ValueError(f"cyclic experiment include: {chain}")
+    cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(cfg, dict):
+        raise ValueError(f"{path}: YAML root must be a mapping")
+    includes = cfg.pop("$include", [])
+    if isinstance(includes, str):
+        includes = [includes]
+    if not isinstance(includes, list) or not all(isinstance(item, str) for item in includes):
+        raise ValueError(f"{path}: '$include' must be a path or list of paths")
+    experiments: list[dict[str, Any]] = []
+    for include in includes:
+        child = _load_config(path.parent / include, (*stack, path))
+        experiments.extend(child.get("experiments", []))
+    local = cfg.get("experiments", [])
+    if local:
+        if not isinstance(local, list):
+            raise ValueError(f"{path}: 'experiments' must be a list")
+        experiments.extend(local)
+    cfg["experiments"] = experiments
+    return cfg
 
 
 def _run_one(
@@ -229,9 +264,10 @@ def _run_one(
 
 def run_from_yaml(config_path: Path, output_dir: Path) -> int:
     """Run all experiments from a YAML config."""
-    cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    if not isinstance(cfg, dict):
-        logger.error("invalid scheduler config: YAML root must be a mapping")
+    try:
+        cfg = _load_config(config_path)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        logger.error(f"invalid scheduler config: {exc}")
         return 1
     experiments = cfg.get("experiments", [])
     if not experiments:

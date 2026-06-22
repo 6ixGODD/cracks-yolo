@@ -5,5 +5,7 @@
     <mapping directory="$PROJECT_DIR$/deps/mmdetection" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/deps/ultralytics" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/deps/yolov5" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/deps/yolov7" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/deps/yolov9" vcs="Git" />
   </component>
 </project>

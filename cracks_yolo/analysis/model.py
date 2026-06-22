@@ -50,7 +50,6 @@ def _count_macs(model: nn.Module, input_size: int) -> float:
     # forward so input and model must agree).
     dev = next(model.parameters()).device
     x = torch.zeros((1, 3, input_size, input_size), device=dev)
-    macs = 0.0
     try:
         from thop import profile
 

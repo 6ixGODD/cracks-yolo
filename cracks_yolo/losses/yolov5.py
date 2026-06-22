@@ -102,13 +102,13 @@ class ComputeLoss:
         lcls = torch.zeros(1, device=self.device)
         lbox = torch.zeros(1, device=self.device)
         lobj = torch.zeros(1, device=self.device)
+        tobj = [torch.zeros_like(pi[..., 0], device=self.device) for pi in p]
         tcls, tbox, indices, anchors = self.build_targets(p, targets)
 
         for i, pi in enumerate(p):
             b, a, gj, gi = indices[i]
             tobj = torch.zeros(pi.shape[:4], dtype=pi.dtype, device=self.device)
 
-            n = b.shape[0]
             if n := b.shape[0]:
                 pxy, pwh, _, pcls = pi[b, a, gj, gi].split((2, 2, 1, self.nc), 1)  # type: ignore[no-untyped-call]
 

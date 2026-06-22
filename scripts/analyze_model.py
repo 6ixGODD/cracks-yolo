@@ -15,6 +15,8 @@ from cracks_yolo.analysis.model import analyze_model
 from cracks_yolo.analysis.model import save_model_analysis
 from cracks_yolo.zoo import ZOO
 
+from . import _console
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -36,16 +38,16 @@ def main() -> None:
     summaries: list[dict[str, object]] = []
     for key in keys:
         cls = ZOO[key]
-        print(f"analyzing {key} ...")
-        model = cls(num_classes=1, input_size=args.input_size)
-        report = analyze_model(
-            model,
-            input_size=args.input_size,
-            device=args.device,
-            n_runs=args.n_runs,
-        )
-        save_model_analysis(report, args.output_dir / key)
-        summaries.append({"model": key, **report.to_dict()})
+        with _console.loading(f"analyzing {key} ..."):
+            model = cls(num_classes=1, input_size=args.input_size)
+            report = analyze_model(
+                model,
+                input_size=args.input_size,
+                device=args.device,
+                n_runs=args.n_runs,
+            )
+            save_model_analysis(report, args.output_dir / key)
+            summaries.append({"model": key, **report.to_dict()})
 
     if summaries:
         csv_path = args.output_dir / "model_analysis_summary.csv"
@@ -54,7 +56,7 @@ def main() -> None:
             writer.writeheader()
             for row in summaries:
                 writer.writerow(row)
-        print(f"summary: {csv_path}")
+        _console.success(f"summary: {csv_path}")
 
 
 if __name__ == "__main__":

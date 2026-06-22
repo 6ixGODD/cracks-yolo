@@ -9,6 +9,7 @@ applies — this lets post-hoc queries filter by record type.
 from __future__ import annotations
 
 from typing import Literal
+from typing import TypeAlias
 
 from typing_extensions import TypedDict
 
@@ -101,5 +102,5 @@ class PretrainedLoadLog(TypedDict):
     timestamp: str
 
 
-LogRecord = TrainStepLog | TrainEpochLog | ValLog | TestLog | MetricLog | PretrainedLoadLog
+LogRecord: TypeAlias = TrainStepLog | TrainEpochLog | ValLog | TestLog | MetricLog | PretrainedLoadLog
 """Union of all log record TypedDicts."""

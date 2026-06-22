@@ -17,6 +17,8 @@ from cracks_yolo.viz.dataset import plot_bbox_size_distribution
 from cracks_yolo.viz.dataset import plot_class_distribution
 from cracks_yolo.viz.dataset import plot_image_size_distribution
 
+from . import _console
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Analyze dataset diversity + distributions.")
@@ -34,12 +36,15 @@ def main() -> None:
     plot_bbox_size_distribution(records, args.output_dir / "bbox_size_distribution.png")
     plot_bbox_position_heatmap(records, args.output_dir / "bbox_position_heatmap.png")
     plot_image_size_distribution(records, args.output_dir / "image_size_distribution.png")
-    print(f"Done: {args.output_dir}")
-    print(f"  n_images={report.n_images} n_annotations={report.n_annotations}")
-    print(
-        f"  imbalance_ratio={report.imbalance_ratio:.2f} shannon_entropy={report.class_shannon_entropy:.3f}"
+    _console.success(f"Done: {args.output_dir}")
+    _console.key_value(
+        {
+            "n_classes": report.n_classes,
+            "imbalance_ratio": f"{report.imbalance_ratio:.2f}",
+            "class_shannon_entropy": f"{report.class_shannon_entropy:.3f}",
+            "spatial_coverage": f"{report.spatial_coverage:.3f}",
+        }
     )
-    print(f"  spatial_coverage={report.spatial_coverage:.3f}")
 
 
 if __name__ == "__main__":

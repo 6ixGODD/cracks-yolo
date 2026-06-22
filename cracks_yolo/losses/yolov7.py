@@ -100,6 +100,7 @@ class ComputeLossOTA:
         lcls = torch.zeros(1, device=device)
         lbox = torch.zeros(1, device=device)
         lobj = torch.zeros(1, device=device)
+        tobj = [torch.zeros_like(pi[..., 0], device=device) for pi in p]
         bs_t, as_t, gjs_t, gis_t, targets_t, anchors_t = self.build_targets(p, targets, imgs)
         pre_gen_gains = [torch.tensor(pp.shape, device=device)[[3, 2, 3, 2]] for pp in p]
 

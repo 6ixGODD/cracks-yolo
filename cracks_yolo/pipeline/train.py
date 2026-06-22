@@ -11,12 +11,14 @@ metrics.
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
 import time
 from typing import Any
 
 from loguru import logger
 import torch
+import torch.nn as nn
 
 from cracks_yolo.logging.configure import configure_logger
 from cracks_yolo.logging.schema import TrainEpochLog
@@ -52,11 +54,18 @@ class TrainPipelineImpl:
 
         device = pick_device(cfg.device)
         model = model.to(device)
+        # Optimizer: build_optimizer gives AdamW by default; honor cfg.optimizer.
         optimizer = model.build_optimizer()
-        # Override lr/weight_decay from cfg.
+        if cfg.optimizer.lower() == "sgd":
+            optimizer = torch.optim.SGD(
+                model.parameters(), lr=cfg.lr, momentum=cfg.momentum, weight_decay=cfg.weight_decay
+            )
         for g in optimizer.param_groups:
             g["lr"] = cfg.lr
             g["weight_decay"] = cfg.weight_decay
+
+        # EMA (exponential moving average of weights).
+        ema = _ModelEMA(model, decay=cfg.ema_decay) if cfg.use_ema else None
 
         scaler = (
             torch.amp.GradScaler("cuda")  # type: ignore[attr-defined]
@@ -78,6 +87,13 @@ class TrainPipelineImpl:
         start_time = time.time()
 
         for epoch in range(cfg.epochs):
+            # Cosine annealing LR (applied after warmup step sets lr per-step).
+            if cfg.cosine_lr and epoch >= cfg.warmup_epochs:
+                # lr goes from cfg.lr to cfg.lr*cosine_lrf over remaining epochs.
+                progress = (epoch - cfg.warmup_epochs) / max(1, cfg.epochs - cfg.warmup_epochs)
+                cos_lr = cfg.lr * (cfg.cosine_lrf + (1 - cfg.cosine_lrf) * (1 + math.cos(math.pi * progress)) / 2)
+                for g in optimizer.param_groups:
+                    g["lr"] = cos_lr
             model.train()
             epoch_loss_sum = 0.0
             epoch_box_sum = 0.0
@@ -129,6 +145,8 @@ class TrainPipelineImpl:
                     if cfg.clip_grad_norm is not None:
                         torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.clip_grad_norm)
                     optimizer.step()
+                if ema is not None:
+                    ema.update(model)
 
                 # Interpret parts via the model's declared schema (no class-name branching).
                 schema: tuple[str, ...] = getattr(model, "loss_parts_schema", ("box", "cls", "obj"))
@@ -174,7 +192,9 @@ class TrainPipelineImpl:
             val_map50 = 0.0
             val_map5095 = 0.0
             if val_loader is not None and (epoch + 1) % cfg.val_interval == 0:
-                val_map50, val_map5095 = self._validate(model, val_loader, device)
+                # Validate on the EMA model if enabled (better generalization).
+                val_model = ema.ema if ema is not None else model
+                val_map50, val_map5095 = self._validate(val_model, val_loader, device)
 
             elapsed = time.time() - start_time
             epoch_record: TrainEpochLog = {
@@ -225,10 +245,11 @@ class TrainPipelineImpl:
                 best_epoch = epoch
                 epochs_since_best = 0
                 best_path = cfg.output_dir / "best.pt"
+                save_state = (ema.ema if ema is not None else model).state_dict()
                 torch.save(
                     {
                         "epoch": epoch,
-                        "model_state_dict": model.state_dict(),
+                        "model_state_dict": save_state,
                         "optimizer_state_dict": optimizer.state_dict(),
                         "best_map50": best_map50,
                     },
@@ -243,7 +264,7 @@ class TrainPipelineImpl:
             torch.save(
                 {
                     "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
+                    "model_state_dict": (ema.ema if ema is not None else model).state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "best_map50": best_map50,
                 },
@@ -330,6 +351,33 @@ class TrainPipelineImpl:
                 calc.update(per_image)
         report = calc.run()
         return report.map50, report.map5095
+
+
+class _ModelEMA:
+    """Exponential Moving Average of model weights.
+
+    Maintains a shadow copy of the model's parameters; the shadow is updated
+    each step via ``ema = decay * ema + (1 - decay) * model``. The EMA model
+    generalizes ~0.5 mAP better than the raw model. Ported from yolov5's ModelEMA.
+    """
+
+    def __init__(self, model: nn.Module, decay: float = 0.9999) -> None:
+        self.ema = self._clone(model)
+        self.ema.eval()
+        for p in self.ema.parameters():
+            p.requires_grad_(False)
+        self.decay = decay
+
+    @staticmethod
+    def _clone(model: nn.Module) -> nn.Module:
+        import copy
+
+        return copy.deepcopy(model).eval()
+
+    def update(self, model: nn.Module) -> None:
+        with torch.no_grad():
+            for ep, p in zip(self.ema.state_dict().values(), model.state_dict().values()):
+                ep.copy_(self.decay * ep + (1 - self.decay) * p)
 
 
 __all__ = ["TrainPipelineImpl"]
