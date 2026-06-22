@@ -3,7 +3,8 @@
 	url = https://github.com/open-mmlab/mmdetection.git
 [submodule "deps/yolov5"]
 	path = deps/yolov5
-	url = https://github.com/ultralytics/yolov5.git
+	url = https://github.com/6ixGODD/yolov5.git
+	branch = cracks-yolo
 [submodule "deps/ultralytics"]
 	path = deps/ultralytics
 	url = https://github.com/ultralytics/ultralytics.git
