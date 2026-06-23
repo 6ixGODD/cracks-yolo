@@ -90,21 +90,27 @@ def main() -> None:
         except Exception as e:
             print(f"WARNING: pretrained load failed: {e}")
         # Save the modified model for YOLO() to pick up.
-        # Use pickle protocol 2 + skip ultralytics' patched torch_save which
-        # fails on SAC modules (SAConv2d with nested ConvAWS2d). Save the
-        # DetectionModel directly (not a checkpoint dict) so YOLO() can load it.
+        # Can't pickle the full DetectionModel (SAC modules have closures).
+        # Instead: save state_dict, build a fresh model from cfg, load state.
         ckpt_path = out_dir / "init_sac_tr.pt"
         import torch
-        from ultralytics.utils.patches import torch_save as _ul_save
-        # Bypass ultralytics patch: use raw torch serialization.
-        import pickle as _pickle
-        with open(ckpt_path, "wb") as f:
-            # ultralytics YOLO() expects a checkpoint dict with "model" key.
-            # Save model as-is (pickle handles nn.Module subclasses fine;
-            # the patch failure is ultralytics adding extra hooks).
-            _pickle.dump({"model": model, "ema": None, "optimizer": None,
-                          "train_args": {}, "date": ts}, f, protocol=2)
-        trainer = YOLO(str(ckpt_path))
+        # Build a fresh model from cfg, apply SAC/TR, load our weights.
+        # Use ultralytics' own save (it handles state_dict-only checkpoints).
+        # Trick: temporarily strip hooks/closures, save via torch.save (not
+        # the ultralytics patch), then load.
+        # Simplest: save just state_dict in a checkpoint dict.
+        raw_sd = model.state_dict()
+        # Build a minimal checkpoint that YOLO() can load: it needs "model"
+        # to be a DetectionModel or a path to .yaml. We save .yaml path +
+        # state_dict, then use YOLO(cfg) + load_state_dict.
+        torch.save(raw_sd, ckpt_path)
+        # Load: YOLO(cfg) builds the model, then we inject SAC + load weights.
+        trainer = YOLO(cfg)
+        # Apply SAC/TR to the trainer's model
+        from cracks_yolo.zoo.ultralytics.sac import apply_sac_tr as _apply
+        _apply(trainer.model, sac_indices=cls.sac_indices, tr_indices=cls.tr_indices)
+        # Load our pretrained state_dict (intersect)
+        trainer.model.load_state_dict(raw_sd, strict=False)
     else:
         # Baseline: load pretrained directly.
         trainer = YOLO(f"{asset}.pt")
