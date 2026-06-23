@@ -90,10 +90,20 @@ def main() -> None:
         except Exception as e:
             print(f"WARNING: pretrained load failed: {e}")
         # Save the modified model for YOLO() to pick up.
+        # Use pickle protocol 2 + skip ultralytics' patched torch_save which
+        # fails on SAC modules (SAConv2d with nested ConvAWS2d). Save the
+        # DetectionModel directly (not a checkpoint dict) so YOLO() can load it.
         ckpt_path = out_dir / "init_sac_tr.pt"
         import torch
-        torch.save({"model": model, "ema": None, "optimizer": None,
-                     "train_args": {}, "date": ts}, ckpt_path)
+        from ultralytics.utils.patches import torch_save as _ul_save
+        # Bypass ultralytics patch: use raw torch serialization.
+        import pickle as _pickle
+        with open(ckpt_path, "wb") as f:
+            # ultralytics YOLO() expects a checkpoint dict with "model" key.
+            # Save model as-is (pickle handles nn.Module subclasses fine;
+            # the patch failure is ultralytics adding extra hooks).
+            _pickle.dump({"model": model, "ema": None, "optimizer": None,
+                          "train_args": {}, "date": ts}, f, protocol=2)
         trainer = YOLO(str(ckpt_path))
     else:
         # Baseline: load pretrained directly.
