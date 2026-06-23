@@ -73,9 +73,13 @@ def main() -> None:
     print(f"=== model={args.model} cfg={cfg} sac={has_sac} tr={has_tr} asset={asset} ===")
 
     if has_sac or has_tr:
-        # Build from YAML, apply SAC/TR, then wrap in YOLO for training.
+        # Build from YAML, apply SAC/TR, load pretrained, then inject directly
+        # into YOLO instance (NO serialization — avoids pickle failure on
+        # SAC closure classes).
         from ultralytics.nn.tasks import DetectionModel
+        from ultralytics.utils import DEFAULT_CFG
         model = DetectionModel(cfg, ch=3, nc=args.num_classes, verbose=False)
+        model.args = DEFAULT_CFG
         apply_sac_tr(model, sac_indices=cls.sac_indices, tr_indices=cls.tr_indices)
         # Load pretrained COCO weights (intersect).
         try:
@@ -89,28 +93,10 @@ def main() -> None:
             print(f"pretrained: matched {matched}/{len(msd)}")
         except Exception as e:
             print(f"WARNING: pretrained load failed: {e}")
-        # Can't pickle the full DetectionModel (SAC modules have closures).
-        # Instead: save state_dict, then build a fresh model with correct nc,
-        # apply SAC/TR, load state_dict, and wrap in YOLO for training.
-        ckpt_path = out_dir / "init_sac_tr.pt"
-        import torch
-        raw_sd = model.state_dict()
-        # Build fresh model with correct nc (YOLO(cfg) defaults to nc=80,
-        # we need nc=1). Use DetectionModel directly.
-        from ultralytics.nn.tasks import DetectionModel as _DM
-        from ultralytics.utils import DEFAULT_CFG as _DC
-        fresh = _DM(cfg, ch=3, nc=args.num_classes, verbose=False)
-        fresh.args = _DC
-        apply_sac_tr(fresh, sac_indices=cls.sac_indices, tr_indices=cls.tr_indices)
-        fresh.load_state_dict(raw_sd, strict=False)
-        # Save checkpoint. ultralytics patches torch.save globally and it
-        # fails on SAC modules. Use raw pickle.dump to bypass everything.
-        import pickle as _pkl
-        ckpt_data = {"model": fresh, "ema": None, "optimizer": None,
-                     "train_args": {}, "date": ts}
-        with open(ckpt_path, "wb") as _f:
-            _pkl.dump(ckpt_data, _f, protocol=_pkl.DEFAULT_PROTOCOL)
-        trainer = YOLO(str(ckpt_path))
+        # Direct injection: build YOLO from cfg, then replace its model.
+        trainer = YOLO(cfg)
+        trainer.model = model
+        print("SAC/TR model injected directly (no serialization)")
     else:
         # Baseline: load pretrained directly.
         trainer = YOLO(f"{asset}.pt")
