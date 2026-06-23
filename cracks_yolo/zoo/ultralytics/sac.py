@@ -108,27 +108,41 @@ def _make_bottleneck_sac(ultralytics_conv):
         def forward(self, x):
             return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
 
+    BottleneckSAC.__module__ = "cracks_yolo.zoo.ultralytics.sac"
+    BottleneckSAC.__qualname__ = "BottleneckSAC"
+    globals()["BottleneckSAC"] = BottleneckSAC
     return BottleneckSAC
 
 
 def _make_c3_sac(ultralytics_c3, ultralytics_conv):
     """C3SAC = ultralytics C3 with BottleneckSAC inner sequence."""
     BottleneckSAC = _make_bottleneck_sac(ultralytics_conv)
+
     class C3SAC(ultralytics_c3):
         def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
             super().__init__(c1, c2, n, shortcut, g, e)
             c_ = int(c2 * e)
             self.m = nn.Sequential(*(BottleneckSAC(c_, c_, shortcut, g, e=1.0) for _ in range(n)))
+
+    # Promote to module-level so pickle can find it by qualified name.
+    C3SAC.__module__ = "cracks_yolo.zoo.ultralytics.sac"
+    C3SAC.__qualname__ = "C3SAC"
+    globals()["C3SAC"] = C3SAC
     return C3SAC
 
 
 def _make_c2f_sac(ultralytics_c2f, ultralytics_conv):
     """C2fSAC = ultralytics C2f with BottleneckSAC inner sequence."""
     BottleneckSAC = _make_bottleneck_sac(ultralytics_conv)
+
     class C2fSAC(ultralytics_c2f):
         def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
             super().__init__(c1, c2, n, shortcut, g, e)
             self.m = nn.Sequential(*(BottleneckSAC(self.c, self.c, shortcut, g, e=1.0) for _ in range(n)))
+
+    C2fSAC.__module__ = "cracks_yolo.zoo.ultralytics.sac"
+    C2fSAC.__qualname__ = "C2fSAC"
+    globals()["C2fSAC"] = C2fSAC
     return C2fSAC
 
 
