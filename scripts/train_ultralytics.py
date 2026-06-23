@@ -103,9 +103,21 @@ def main() -> None:
         fresh.args = _DC
         apply_sac_tr(fresh, sac_indices=cls.sac_indices, tr_indices=cls.tr_indices)
         fresh.load_state_dict(raw_sd, strict=False)
-        # Save as ultralytics checkpoint (state_dict only, no full model object).
+        # Save as ultralytics checkpoint. Bypass ultralytics' patched torch_save
+        # (which intercepts and adds hooks that break on SAC modules).
+        import torch.serialization as _ts
+        _orig_save = torch.save
+        # Temporarily restore original torch.save (un-patched).
+        torch.save = getattr(torch, "_orig_save", None) or _orig_save
+        try:
+            # ultralytics patches torch.save; get the unpatched version.
+            import ultralytics.utils.patches as _up
+            torch.save = _up._torch_save  # the original before patching
+        except Exception:
+            pass
         torch.save({"model": fresh, "ema": None, "optimizer": None,
-                     "train_args": {}, "date": ts}, ckpt_path, _use_new_zipfile_serialization=False)
+                     "train_args": {}, "date": ts}, ckpt_path)
+        torch.save = _orig_save  # restore
         trainer = YOLO(str(ckpt_path))
     else:
         # Baseline: load pretrained directly.
