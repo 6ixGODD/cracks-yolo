@@ -89,28 +89,24 @@ def main() -> None:
             print(f"pretrained: matched {matched}/{len(msd)}")
         except Exception as e:
             print(f"WARNING: pretrained load failed: {e}")
-        # Save the modified model for YOLO() to pick up.
         # Can't pickle the full DetectionModel (SAC modules have closures).
-        # Instead: save state_dict, build a fresh model from cfg, load state.
+        # Instead: save state_dict, then build a fresh model with correct nc,
+        # apply SAC/TR, load state_dict, and wrap in YOLO for training.
         ckpt_path = out_dir / "init_sac_tr.pt"
         import torch
-        # Build a fresh model from cfg, apply SAC/TR, load our weights.
-        # Use ultralytics' own save (it handles state_dict-only checkpoints).
-        # Trick: temporarily strip hooks/closures, save via torch.save (not
-        # the ultralytics patch), then load.
-        # Simplest: save just state_dict in a checkpoint dict.
         raw_sd = model.state_dict()
-        # Build a minimal checkpoint that YOLO() can load: it needs "model"
-        # to be a DetectionModel or a path to .yaml. We save .yaml path +
-        # state_dict, then use YOLO(cfg) + load_state_dict.
-        torch.save(raw_sd, ckpt_path)
-        # Load: YOLO(cfg) builds the model, then we inject SAC + load weights.
-        trainer = YOLO(cfg)
-        # Apply SAC/TR to the trainer's model
-        from cracks_yolo.zoo.ultralytics.sac import apply_sac_tr as _apply
-        _apply(trainer.model, sac_indices=cls.sac_indices, tr_indices=cls.tr_indices)
-        # Load our pretrained state_dict (intersect)
-        trainer.model.load_state_dict(raw_sd, strict=False)
+        # Build fresh model with correct nc (YOLO(cfg) defaults to nc=80,
+        # we need nc=1). Use DetectionModel directly.
+        from ultralytics.nn.tasks import DetectionModel as _DM
+        from ultralytics.utils import DEFAULT_CFG as _DC
+        fresh = _DM(cfg, ch=3, nc=args.num_classes, verbose=False)
+        fresh.args = _DC
+        apply_sac_tr(fresh, sac_indices=cls.sac_indices, tr_indices=cls.tr_indices)
+        fresh.load_state_dict(raw_sd, strict=False)
+        # Save as ultralytics checkpoint (state_dict only, no full model object).
+        torch.save({"model": fresh, "ema": None, "optimizer": None,
+                     "train_args": {}, "date": ts}, ckpt_path, _use_new_zipfile_serialization=False)
+        trainer = YOLO(str(ckpt_path))
     else:
         # Baseline: load pretrained directly.
         trainer = YOLO(f"{asset}.pt")
