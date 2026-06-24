@@ -182,8 +182,11 @@ class TorchvisionBase(BaseModel):
         self,
         lr: float = 1e-4,
         weight_decay: float = 0.0,
+        optimizer_name: str = "sgd",
     ) -> torch.optim.Optimizer:
-        """Default optimizer for torchvision detectors (SGD)."""
+        """Build optimizer for torchvision detectors."""
+        if optimizer_name.lower() == "adamw":
+            return torch.optim.AdamW(self._inner.parameters(), lr=lr, weight_decay=weight_decay)
         return torch.optim.SGD(
             self._inner.parameters(),
             lr=lr,
@@ -237,7 +240,9 @@ class TorchvisionBase(BaseModel):
                 pin_memory=device.type == "cuda",
             )
 
-        optimizer = self._build_optimizer(lr=config.lr, weight_decay=config.weight_decay)
+        optimizer = self._build_optimizer(
+            lr=config.lr, weight_decay=config.weight_decay, optimizer_name=config.optimizer
+        )
         scaler = torch.amp.GradScaler("cuda") if config.amp and device.type == "cuda" else None
 
         best_map50 = -1.0
