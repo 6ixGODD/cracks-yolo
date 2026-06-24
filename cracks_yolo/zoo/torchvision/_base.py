@@ -29,6 +29,23 @@ if TYPE_CHECKING:
     from cracks_yolo.zoo.base import TrainConfig
 
 
+def _fix_tv_transform_device(model: nn.Module, device: torch.device) -> None:
+    """Move torchvision transform mean/std tensors to *device*.
+
+    ``GeneralizedRCNNTransform`` stores ``image_mean`` / ``image_std``
+    as plain tensors (not ``nn.Buffer``), so ``model.to(device)`` skips
+    them.  On CUDA this causes illegal-memory-access crashes in
+    ``normalize()`` for RetinaNet / MaskRCNN / FasterRCNN.
+    """
+    t = getattr(model, "transform", None)
+    if t is None:
+        return
+    for attr in ("image_mean", "image_std", "mean", "std"):
+        val = getattr(t, attr, None)
+        if isinstance(val, torch.Tensor) and val.device != device:
+            setattr(t, attr, val.to(device))
+
+
 class TorchvisionBase(BaseModel):
     """Shared base for torchvision detection models.
 
@@ -216,6 +233,9 @@ class TorchvisionBase(BaseModel):
         config.output_dir.mkdir(parents=True, exist_ok=True)
         device = torch.device(config.device if torch.cuda.is_available() else "cpu")
         self._inner = self._inner.to(device)
+        # torchvision GeneralisedRCNNTransform stores mean/std as plain tensors
+        # (not buffers), so .to() does not move them. Fix them up here.
+        _fix_tv_transform_device(self._inner, device)
 
         if train_loader is None:
             train_ds = DetectionDataset.from_yolo(
