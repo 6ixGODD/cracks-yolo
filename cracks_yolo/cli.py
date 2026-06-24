@@ -237,3 +237,135 @@ def compose(
     from cracks_yolo.pipeline.compose import run_compose
 
     run_compose(config=config, output_dir=output_dir, max_parallel=max_parallel)
+
+
+@app.command()
+def aggregate(
+    root: Annotated[
+        Path,
+        Option("--root", "-r", help="Root directory containing model subdirs (e.g. output/)"),
+    ],
+    output: Annotated[
+        Path,
+        Option("--output", "-o", help="Output CSV path"),
+    ] = Path("test_metrics.csv"),
+    excel: Annotated[
+        bool,
+        Option("--excel/--no-excel", help="Also write Excel (.xlsx)"),
+    ] = True,
+) -> None:
+    """Aggregate test/metrics.csv across model subdirectories into one table."""
+    from cracks_yolo.analysis.aggregate import aggregate as _aggregate
+
+    out_csv = output
+    out_xlsx = output.with_suffix(".xlsx") if excel else None
+    result = _aggregate(root.resolve(), out_csv, out_xlsx)
+    print(f"Aggregated to {result}")
+    if out_xlsx:
+        print(f"Excel: {out_xlsx}")
+
+
+@app.command()
+def visualize(
+    root: Annotated[
+        Path,
+        Option("--root", "-r", help="Root directory containing model subdirs (e.g. output/)"),
+    ],
+    dataset: Annotated[
+        str,
+        Option("--dataset", "-d", help="Dataset root path"),
+    ],
+    output_dir: Annotated[
+        Path,
+        Option("--output-dir", "-o", help="Output directory for plots"),
+    ] = Path("plots"),
+    split: Annotated[
+        str,
+        Option("--split", "-s", help="Dataset split: test or valid"),
+    ] = "test",
+    models: Annotated[
+        str | None,
+        Option("--models", "-m", help="Comma-separated model names (default: all in root)"),
+    ] = None,
+) -> None:
+    """Visualize: PR/ROC curves, confusion matrix, metric bars from predictions."""
+    from cracks_yolo.viz.plotting import _compute_confusion
+    from cracks_yolo.viz.plotting import _compute_pr_roc
+    from cracks_yolo.viz.plotting import _load_ground_truths
+    from cracks_yolo.viz.plotting import _load_predictions
+    from cracks_yolo.viz.plotting import plot_confusion_matrix
+    from cracks_yolo.viz.plotting import plot_metric_bars
+    from cracks_yolo.viz.plotting import plot_pr_curve
+    from cracks_yolo.viz.plotting import plot_roc_curve
+
+    root = root.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine model list
+    if models:
+        model_names = [m.strip() for m in models.split(",")]
+    else:
+        model_names = sorted(
+            d.name
+            for d in root.iterdir()
+            if d.is_dir() and (d / "test" / f"best_predictions_{split}.json").exists()
+        )
+
+    if not model_names:
+        raise ValueError(f"no models found with predictions for split={split} in {root}")
+
+    pred_file = f"best_predictions_{split}.json"
+
+    # Load GT once
+    gts, img_sizes = _load_ground_truths(dataset, split)
+    model_isize = 640  # default; adjustable if needed
+
+    # Compute per-model data
+    pr_data: dict[str, dict] = {}
+    roc_data: dict[str, dict] = {}
+    metrics_data: dict[str, dict[str, float]] = {}
+
+    for name in model_names:
+        pred_path = root / name / "test" / pred_file
+        if not pred_path.exists():
+            print(f"  skip {name}: {pred_path} not found")
+            continue
+        preds = _load_predictions(pred_path)
+        curve_data = _compute_pr_roc(preds, gts, img_sizes, model_isize)
+        pr_data[name] = curve_data
+        roc_data[name] = curve_data
+        metrics_data[name] = {
+            "auc_pr": curve_data["auc_pr"],
+            "auc_roc": curve_data["auc_roc"],
+            "f1_max": curve_data["f1_max"],
+        }
+
+        # Per-model confusion matrix
+        cm = _compute_confusion(preds, gts, img_sizes, model_isize)
+        plot_confusion_matrix(
+            cm,
+            output_dir / f"confusion_{name}_{split}.png",
+            title=f"{name} — {split}",
+        )
+
+        print(
+            f"  {name}: AUC-PR={curve_data['auc_pr']:.4f}  "
+            f"AUC-ROC={curve_data['auc_roc']:.4f}  F1-max={curve_data['f1_max']:.4f}"
+        )
+
+    # Multi-model comparison plots
+    plot_pr_curve(
+        pr_data, output_dir / f"pr_curve_{split}.png", title=f"Precision-Recall — {split}"
+    )
+    plot_roc_curve(roc_data, output_dir / f"roc_curve_{split}.png", title=f"ROC — {split}")
+
+    # Metric bar charts
+    for metric in ("auc_pr", "auc_roc", "f1_max"):
+        plot_metric_bars(
+            metrics_data,
+            metric,
+            output_dir / f"bar_{metric}_{split}.png",
+            title=f"{metric.upper()} — {split}",
+        )
+
+    print(f"\nPlots saved to {output_dir}/")

@@ -5,8 +5,7 @@
 面向舌面裂纹检测的自包含 PyTorch 检测模型库。涵盖 YOLOv3/v5/v6/v8/v9/v10/v11/v12/v26、
 RT-DETR 及六种 torchvision 基线（RetinaNet、Faster R-CNN、Mask R-CNN、FCOS、SSD300、
 SSDlite320），共计 45 个模型。每个模型均为显式 `nn.Module` 子类，内聚其层、损失函数、
-优化器构建器与预训练权重加载器。无运行时 YAML 解析，无 ultralytics 猴子补丁，无抽象
-基类钩子系统。
+优化器构建器与预训练权重加载器。
 
 ## 快速开始
 
@@ -164,21 +163,19 @@ pytest -q
 
 ## 文档
 
-| 文档 | 内容 |
-| --- | --- |
-| `docs/models.md` | 逐模型架构、损失公式、SAC/TR 插入点 |
-| `docs/ops.md` | 算子参考（SAC, C3TR, Conv, CSP, 检测头） |
-| `docs/pipeline.md` | TrainPipeline、TestPipeline、compose 调度器 |
-| `docs/dataset.md` | 数据格式、转换、变换、目标约定 |
-| `docs/metrics.md` | COCO mAP、PR/ROC、统计检验（t 检验、Wilcoxon、bootstrap） |
-| `docs/logging.md` | JSONL 日志模式、loguru 配置 |
-| `docs/usage.md` | 端到端教程 |
-| `docs/heatmap.md` | Grad-CAM 方法与输出结构 |
-| `docs/scripts.md` | CLI 参考（全部命令与标志） |
-| `docs/scheduler.md` | Compose YAML 格式、`$include`、重试工作流 |
-| `docs/models.md` | 如何添加新模型变体 |
-
-中文翻译：`docs/*.zh-CN.md`。
+| 文档                     | 内容 |
+|------------------------| --- |
+| `docs/models.zh-CN.md` | 逐模型架构、损失公式、SAC/TR 插入点 |
+| `docs/ops.zh-CN.md`          | 算子参考（SAC, C3TR, Conv, CSP, 检测头） |
+| `docs/pipeline.zh-CN.md`     | TrainPipeline、TestPipeline、compose 调度器 |
+| `docs/dataset.zh-CN.md`      | 数据格式、转换、变换、目标约定 |
+| `docs/metrics.zh-CN.md`      | COCO mAP、PR/ROC、统计检验（t 检验、Wilcoxon、bootstrap） |
+| `docs/logging.zh-CN.md`      | JSONL 日志模式、loguru 配置 |
+| `docs/usage.zh-CN.md`        | 端到端教程 |
+| `docs/heatmap.zh-CN.md`      | Grad-CAM 方法与输出结构 |
+| `docs/scripts.zh-CN.md`      | CLI 参考（全部命令与标志） |
+| `docs/scheduler.zh-CN.md`    | Compose YAML 格式、`$include`、重试工作流 |
+| `docs/models.zh-CN.md`       | 如何添加新模型变体 |
 
 ## 许可证
 
