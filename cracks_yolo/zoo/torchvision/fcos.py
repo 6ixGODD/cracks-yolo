@@ -38,6 +38,7 @@ class FCOSModel(TorchvisionBase):
             num_anchors=num_anchors,
             num_classes=num_classes + 1,
         )
+        self._print_model_summary()
 
     def train_model(self, config: TrainConfig) -> TrainReport:
         return self._run_train_loop(config, train_loader=None, val_loader=None, score_thresh=0.01)

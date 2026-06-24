@@ -34,6 +34,7 @@ class FasterRCNNModel(TorchvisionBase):
         )
         in_features = self._inner.roi_heads.box_predictor.cls_score.in_features
         self._inner.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes + 1)
+        self._print_model_summary()
 
     def train_model(self, config: TrainConfig) -> TrainReport:
         return self._run_train_loop(config, train_loader=None, val_loader=None, score_thresh=0.01)

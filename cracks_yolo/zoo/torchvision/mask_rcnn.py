@@ -41,6 +41,7 @@ class MaskRCNNModel(TorchvisionBase):
             num_classes=num_classes + 1,
         )
         self._needs_masks = True
+        self._print_model_summary()
 
     def train_model(self, config: TrainConfig) -> TrainReport:
         return self._run_train_loop(config, train_loader=None, val_loader=None, score_thresh=0.01)

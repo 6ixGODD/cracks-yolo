@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import csv
 import math
-from pathlib import Path
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
@@ -19,8 +18,15 @@ import torch.nn as nn
 from cracks_yolo.zoo.base import BaseModel
 from cracks_yolo.zoo.base import InferenceResult
 from cracks_yolo.zoo.base import ModelState
-from cracks_yolo.zoo.base import TrainConfig
 from cracks_yolo.zoo.base import TrainReport
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Any
+
+    from loguru import Logger
+
+    from cracks_yolo.zoo.base import TrainConfig
 
 
 class TorchvisionBase(BaseModel):
@@ -31,9 +37,57 @@ class TorchvisionBase(BaseModel):
         - ``inference(images)``: own decode logic
     """
 
-    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Logger = None) -> None:
         super().__init__(num_classes=num_classes, input_size=input_size, logger=logger)
         self._inner: nn.Module | None = None
+
+    def _print_model_summary(self, dummy_input: torch.Tensor | None = None) -> None:
+        """Print a torchsummary-style table: layer, output shape, params."""
+        if self._inner is None:
+            return
+        if dummy_input is None:
+            dummy_input = torch.randn(1, 3, self.input_size, self.input_size)
+
+        model = self._inner
+        hooks: list[Any] = []
+        rows: list[tuple[str, str, int]] = []
+
+        def _hook(m: nn.Module, inp: Any, out: Any, name: str) -> None:  # noqa: ARG001
+            shape = str(list(out.shape)) if isinstance(out, torch.Tensor) else "-"
+            rows.append((name, shape, sum(p.numel() for p in m.parameters())))
+
+        for name, mod in model.named_modules():
+            # Only hook leaf modules (no children)
+            if not list(mod.children()):
+                h = mod.register_forward_hook(lambda m, i, o, n=name: _hook(m, i, o, n))
+                hooks.append(h)
+
+        # Dry run
+        orig_train = model.training
+        model.eval()
+        try:
+            with torch.no_grad():
+                _ = model(dummy_input.unsqueeze(0) if dummy_input.dim() == 3 else dummy_input)
+        finally:
+            if orig_train:
+                model.train()
+            for h in hooks:
+                h.remove()
+
+        # Print table
+        total_params = sum(r[2] for r in rows)
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(
+            f"\n{type(self).__name__}  input={list(dummy_input.shape)}  "
+            f"params={total_params:,}  trainable={trainable_params:,}"
+        )
+        print("-" * 95)
+        print(f"{'layer':<55} {'output':<25} {'params':>12}")
+        print("-" * 95)
+        for name, shape, n_p in rows:
+            print(f"{name:<55} {shape:<25} {n_p:>12,}")
+        print("-" * 95)
+        print()
 
     @property
     def stride(self) -> torch.Tensor:
@@ -149,6 +203,8 @@ class TorchvisionBase(BaseModel):
         Subclasses can override train_model entirely, or call this with
         model-specific score_thresh.
         """
+        from io import StringIO
+
         from cracks_yolo.dataset.torchadapter import DetectionDataset
         from cracks_yolo.dataset.torchadapter import build_dataloader
         from cracks_yolo.pipeline._helpers import set_seed
@@ -190,15 +246,35 @@ class TorchvisionBase(BaseModel):
         epochs_since_best = 0
         start_time = time.time()
 
+        # GPU info
+        gpu_name = ""
+        gpu_total_mb = 0
+        if device.type == "cuda":
+            gpu_name = torch.cuda.get_device_name(device.index or 0)
+            gpu_total_mb = torch.cuda.get_device_properties(device.index or 0).total_memory // (
+                1024 * 1024
+            )
+
+        print(f"\nTraining {type(self).__name__} on {device} ({gpu_name}, {gpu_total_mb}MiB)")
+        print(
+            f"  epochs={config.epochs} batch={config.batch_size} lr={config.lr} "
+            f"optimizer={config.optimizer} amp={config.amp}"
+        )
+        print(
+            f"  train samples: {len(train_loader.dataset)}  "
+            f"val samples: {len(val_loader.dataset) if val_loader else 0}"
+        )
+        print()
+
         for epoch in range(config.epochs):
             # Cosine LR
             if config.cosine_lr and epoch >= config.warmup_epochs:
-                progress = (epoch - config.warmup_epochs) / max(
+                progress_val = (epoch - config.warmup_epochs) / max(
                     1, config.epochs - config.warmup_epochs
                 )
                 cos_lr = config.lr * (
                     config.cosine_lrf
-                    + (1 - config.cosine_lrf) * (1 + math.cos(math.pi * progress)) / 2
+                    + (1 - config.cosine_lrf) * (1 + math.cos(math.pi * progress_val)) / 2
                 )
                 for g in optimizer.param_groups:
                     g["lr"] = cos_lr
@@ -253,12 +329,22 @@ class TorchvisionBase(BaseModel):
 
             mean_loss = epoch_loss / max(n_steps, 1)
 
-            # Validation
+            # GPU memory
+            gpu_used_mb = 0
+            if device.type == "cuda":
+                gpu_used_mb = torch.cuda.max_memory_allocated(device) // (1024 * 1024)
+                torch.cuda.reset_peak_memory_stats(device)
+
+            # Validation (suppress pycocotools noise)
             val_map50 = 0.0
-            if (
-                val_loader and (epoch + 1) % max(1, config.early_stopping_patience or 1) == 0
-            ) or val_loader:
-                val_map50 = self._validate_torchvision(val_loader, device, score_thresh)
+            if val_loader and (epoch + 1) % 1 == 0:  # every epoch
+                import contextlib
+
+                with (
+                    contextlib.redirect_stdout(StringIO()),
+                    contextlib.redirect_stderr(StringIO()),
+                ):
+                    val_map50 = self._validate_torchvision(val_loader, device, score_thresh)
 
             history.append({"epoch": epoch, "train_loss": mean_loss, "val_map50": val_map50})
 
@@ -266,7 +352,6 @@ class TorchvisionBase(BaseModel):
                 best_map50 = val_map50
                 best_epoch = epoch
                 epochs_since_best = 0
-                # Save best
                 best_path = config.output_dir / "best.pt"
                 torch.save(
                     {
@@ -279,6 +364,21 @@ class TorchvisionBase(BaseModel):
             else:
                 epochs_since_best += 1
 
+            # Per-epoch stdout log
+            lr_str = f"{optimizer.param_groups[0]['lr']:.2e}"
+            gpu_str = f"GPU={gpu_used_mb}/{gpu_total_mb}MiB" if device.type == "cuda" else "GPU=N/A"
+            best_str = f"best={best_map50:.4f}@{best_epoch}"
+            now = time.time()
+            since_start = now - start_time
+            eta = (since_start / (epoch + 1)) * (config.epochs - epoch - 1) if epoch > 0 else 0
+            eta_str = f"{eta / 60:.0f}m" if eta > 60 else f"{eta:.0f}s"
+            print(
+                f"[{epoch + 1:>4}/{config.epochs}]  "
+                f"loss={mean_loss:.4f}  mAP50={val_map50:.4f}  "
+                f"lr={lr_str}  {gpu_str}  {best_str}  "
+                f"elapsed={since_start / 60:.1f}m  ETA={eta_str}"
+            )
+
             if self._logger:
                 self._logger.info(
                     f"epoch {epoch}: loss={mean_loss:.4f} val_map50={val_map50:.4f} "
@@ -289,6 +389,7 @@ class TorchvisionBase(BaseModel):
                 config.early_stopping_patience
                 and epochs_since_best >= config.early_stopping_patience
             ):
+                print(f"Early stopping at epoch {epoch}")
                 if self._logger:
                     self._logger.info(f"early stopping at epoch {epoch}")
                 break

@@ -50,6 +50,7 @@ class SSDlite320Model(TorchvisionBase):
             norm_layer=norm_layer,
         )
         self._inner.num_classes = ssd_num_classes
+        self._print_model_summary()
 
     def train_model(self, config: TrainConfig) -> TrainReport:
         return self._run_train_loop(config, train_loader=None, val_loader=None, score_thresh=0.01)
