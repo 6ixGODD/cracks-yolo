@@ -138,7 +138,3 @@ def compose(
     from cracks_yolo.pipeline.compose import run_compose
 
     run_compose(config=config, output_dir=output_dir, max_parallel=max_parallel)
-
-
-if __name__ == "__main__":
-    app()

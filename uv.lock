@@ -266,14 +266,12 @@ dependencies = [
     { name = "scipy" },
     { name = "torch" },
     { name = "torchvision" },
+    { name = "typer" },
     { name = "typing-extensions" },
     { name = "ultralytics" },
 ]
 
 [package.dev-dependencies]
-cli = [
-    { name = "typer" },
-]
 dev = [
     { name = "fvcore" },
     { name = "mypy" },
@@ -302,19 +300,19 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.7,<4" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "opencv-python", specifier = ">=4.10,<5" },
-    { name = "pillow", specifier = ">=10.0" },
+    { name = "pillow", specifier = ">=10" },
     { name = "pycocotools", specifier = ">=2.0.10,<3" },
     { name = "pyyaml", specifier = ">=6.0.3,<7" },
     { name = "scikit-learn", specifier = ">=1.5,<2" },
     { name = "scipy", specifier = ">=1.13,<2" },
     { name = "torch", specifier = ">=2.2,<2.6", index = "https://download.pytorch.org/whl/cu118" },
     { name = "torchvision", specifier = ">=0.17,<0.21", index = "https://download.pytorch.org/whl/cu118" },
+    { name = "typer", specifier = ">=0.26.7" },
     { name = "typing-extensions", specifier = ">=4.14" },
     { name = "ultralytics", specifier = ">=8.3,<9" },
 ]
 
 [package.metadata.requires-dev]
-cli = [{ name = "typer", specifier = ">=0.26.7" }]
 dev = [
     { name = "fvcore", specifier = ">=0.1.5,<0.2" },
     { name = "mypy", specifier = ">=2.1" },

@@ -32,11 +32,20 @@ dependencies = [
   "scipy>=1.13,<2",
   "torch>=2.2,<2.6",
   "torchvision>=0.17,<0.21",
+  "typer>=0.26.7",
   "typing-extensions>=4.14",
   "ultralytics>=8.3,<9",
 ]
+scripts.cracks-yolo = "cracks_yolo.cli:app"
+scripts.cy = "cracks_yolo.cli:app"
 
 [dependency-groups]
+# PEP 735 dependency groups. Install with `uv sync --group <name>`:
+#   uv sync                    → dependencies only (library)
+#   uv sync --group dev        → library + CLI + test + typing + linters
+#   uv sync --group test       → library + test
+#   uv sync --group typing     → library + typing
+#   uv sync --group cli --group dev → everything
 dev = [
   # Linters & analysis tools
   "fvcore>=0.1.5,<0.2",
@@ -55,20 +64,6 @@ test = [
   "pytest-cov>=5",
   "pytest-xdist>=3.5,<4",
 ]
-# PEP 735 dependency groups. Install with `uv sync --group <name>`:
-#   uv sync                    → dependencies only (library)
-#   uv sync --group cli        → library + CLI
-#   uv sync --group dev        → library + CLI + test + typing + linters
-#   uv sync --group test       → library + test
-#   uv sync --group typing     → library + typing
-#   uv sync --group cli --group dev → everything
-#
-# Force torch/torchvision to use the CUDA 11.8 wheel index. The constraint
-# above (torch<2.6, torchvision<0.21) keeps us on a build that ships a cu118
-# wheel. To switch back to CPU-only, comment this block out and re-run `uv sync`.
-cli = [
-  "typer>=0.26.7",
-]
 typing = [
   "mypy>=2.1",
   "pandas-stubs>=3.0.3.260530",
@@ -79,6 +74,9 @@ typing = [
 where = [ "." ]
 include = [ "cracks_yolo*" ]
 
+# Force torch/torchvision to use the CUDA 11.8 wheel index. The constraint
+# above (torch<2.6, torchvision<0.21) keeps us on a build that ships a cu118
+# wheel. To switch back to CPU-only, comment this block out and re-run `uv sync`.
 [tool.setuptools.exclude-package-data]
 "*" = [
   "**/.ruff_cache/**",
