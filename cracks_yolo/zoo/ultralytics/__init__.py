@@ -138,8 +138,6 @@ class UltralyticsAdapter(BaseModel):
             "amp": config.amp,
             "momentum": config.momentum,
         }
-        if config.clip_grad_norm is not None:
-            overrides["clip_grad_norm"] = config.clip_grad_norm
         if config.warmup_epochs:
             overrides["warmup_epochs"] = config.warmup_epochs
 
