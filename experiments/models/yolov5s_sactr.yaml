@@ -10,7 +10,7 @@ pretrained: true
 device: cuda
 seed: 42
 num_workers: 8
-optimizer: adamw
+optimizer: sgd
 cosine_lr: true
 use_ema: true
 early_stopping_patience: 150
