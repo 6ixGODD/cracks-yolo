@@ -81,11 +81,13 @@ def run_test(
                 imgs = imgs.to(device)
                 results_list = model.inference(imgs)
                 for b, res in enumerate(results_list):
-                    img_id = (
+                    # Dataset target image_id is 0-based; GT records are 1-based.
+                    raw_id = (
                         targets[b].get("image_id", torch.tensor(b)).item()
                         if isinstance(targets, list)
                         else b
                     )
+                    img_id = int(raw_id) + 1
                     for j in range(len(res.boxes)):
                         bx = res.boxes[j].tolist()
                         all_preds.append({
