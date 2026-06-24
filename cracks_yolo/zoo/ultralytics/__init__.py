@@ -214,54 +214,39 @@ class UltralyticsAdapter(BaseModel):
 
     def inference(self, images: torch.Tensor) -> list[InferenceResult]:
         self._assert_state(ModelState.TRAINED, "inference")
+        from ultralytics.utils.nms import non_max_suppression
+
         self._inner.eval()
         results: list[InferenceResult] = []
         with torch.no_grad():
-            outs = self._inner(images)
-            if isinstance(outs, (list, tuple)) and len(outs) > 0:
-                pred = outs[0]
-            elif isinstance(outs, torch.Tensor):
-                pred = outs
-            elif isinstance(outs, dict):
-                pred = outs.get("one2one", outs.get("one2many", None))
-                if pred is None:
-                    return []
-            else:
-                return []
-
-            if not isinstance(pred, torch.Tensor):
-                return []
-
-            bsz = pred.shape[0]
-            for b in range(bsz):
-                if self._decode_format == "anchor_free":
-                    d = (
-                        pred[b].permute(1, 0)
-                        if pred.ndim == 3 and pred.shape[1] < pred.shape[2]
-                        else pred[b]
+            raw = self._inner(images)
+            # non_max_suppression decodes raw grid-offset output → pixel xyxy
+            preds = non_max_suppression(
+                raw,
+                conf_thres=0.001,
+                iou_thres=0.7,
+                nc=self.num_classes,
+                max_det=300,
+            )
+            for det in preds:
+                if det is None or len(det) == 0:
+                    results.append(
+                        InferenceResult(
+                            boxes=torch.zeros((0, 4)),
+                            scores=torch.zeros(0),
+                            labels=torch.zeros(0, dtype=torch.long),
+                        )
                     )
-                    boxes = d[:, :4]
-                    cls_data = d[:, 4 : 4 + self.num_classes]
-                    scores = cls_data.max(dim=1).values
-                    labels = cls_data.argmax(dim=1)
                 else:
-                    d = pred[b]
-                    boxes = d[:, :4]
-                    scores = d[:, 4]
-                    labels = (
-                        d[:, 5].long()
-                        if d.shape[-1] > 5
-                        else torch.zeros(d.shape[0], dtype=torch.long)
+                    # det: (N, 6) = (x1, y1, x2, y2, conf, cls), clipped to image
+                    boxes = det[:, :4].clamp(0, self.input_size)
+                    results.append(
+                        InferenceResult(
+                            boxes=boxes.cpu(),
+                            scores=det[:, 4].cpu(),
+                            labels=det[:, 5].long().cpu(),
+                        )
                     )
-
-                mask = scores > 0.001
-                results.append(
-                    InferenceResult(
-                        boxes=boxes[mask].cpu(),
-                        scores=scores[mask].cpu(),
-                        labels=labels[mask].cpu(),
-                    )
-                )
         return results
 
     # ------------------------------------------------------------------
