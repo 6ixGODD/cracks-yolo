@@ -24,9 +24,10 @@ class SSD300Model(TorchvisionBase):
         from torchvision.models import VGG16_Weights
         from torchvision.models.detection import SSD300_VGG16_Weights
         from torchvision.models.detection import ssd300_vgg16
+        from torchvision.models.detection.ssd import SSD
         from torchvision.models.detection.ssd import SSDHead
 
-        self._inner = ssd300_vgg16(
+        self._inner: SSD = ssd300_vgg16(
             weights=SSD300_VGG16_Weights.DEFAULT,
             weights_backbone=VGG16_Weights.IMAGENET1K_FEATURES,
             num_classes=91,

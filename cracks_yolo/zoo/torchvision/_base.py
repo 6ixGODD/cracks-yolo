@@ -149,12 +149,37 @@ class TorchvisionBase(BaseModel):
         Subclasses can override train_model entirely, or call this with
         model-specific score_thresh.
         """
+        from cracks_yolo.dataset.torchadapter import DetectionDataset
+        from cracks_yolo.dataset.torchadapter import build_dataloader
         from cracks_yolo.pipeline._helpers import set_seed
 
         set_seed(config.seed)
         config.output_dir.mkdir(parents=True, exist_ok=True)
         device = torch.device(config.device if torch.cuda.is_available() else "cpu")
         self._inner = self._inner.to(device)
+
+        if train_loader is None:
+            train_ds = DetectionDataset.from_yolo(
+                config.dataset, "train", self.input_size, train=True, augment=True
+            )
+            train_loader = build_dataloader(
+                train_ds,
+                config.batch_size,
+                config.num_workers,
+                shuffle=True,
+                pin_memory=device.type == "cuda",
+            )
+        if val_loader is None:
+            val_ds = DetectionDataset.from_yolo(
+                config.dataset, "valid", self.input_size, train=False, augment=False
+            )
+            val_loader = build_dataloader(
+                val_ds,
+                config.batch_size,
+                config.num_workers,
+                shuffle=False,
+                pin_memory=device.type == "cuda",
+            )
 
         optimizer = self._build_optimizer(lr=config.lr, weight_decay=config.weight_decay)
         scaler = torch.amp.GradScaler("cuda") if config.amp and device.type == "cuda" else None
@@ -378,6 +403,11 @@ class TorchvisionBase(BaseModel):
         if onnx:
             dummy = torch.zeros(1, 3, self.input_size, self.input_size)
             torch.onnx.export(self._inner.eval(), dummy, path.with_suffix(".onnx"))
+
+    @classmethod
+    def from_pretrained(cls, num_classes: int = 1, **kwargs: Any) -> TorchvisionBase:
+        """Create a new instance — pretrained weights are loaded in __init__."""
+        return cls(num_classes=num_classes, **kwargs)
 
     def load(self, path: Path) -> None:
         ckpt = torch.load(path, map_location="cpu", weights_only=False)
