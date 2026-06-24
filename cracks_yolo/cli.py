@@ -340,8 +340,8 @@ def visualize(
             "f1_max": curve_data["f1_max"],
         }
 
-        # Per-model confusion matrix
-        cm = _compute_confusion(preds, gts, img_sizes, model_isize)
+        # Per-model confusion matrix (image-level)
+        cm = _compute_confusion(preds, gts, total_imgs=len(img_sizes))
         plot_confusion_matrix(
             cm,
             output_dir / f"confusion_{name}_{split}.png",

@@ -266,50 +266,32 @@ def _iou_xywh(b1: list[float], b2: list[float]) -> float:
 def _compute_confusion(
     preds: list[dict],
     gts: list[dict],
-    img_sizes: dict[int, tuple[int, int]],
-    model_input_size: int = 640,
-    iou_thr: float = 0.5,
     score_thr: float = 0.25,
+    total_imgs: int = 110,
 ) -> np.ndarray:
-    """Return 2x2 confusion matrix [[TN, FP], [FN, TP]]."""
-    from collections import defaultdict
+    """Return image-level 2x2 confusion matrix [[TN, FP], [FN, TP]].
 
-    gt_per_img: dict[int, list] = defaultdict(list)
+    Each image is classified as positive (≥1 crack) or negative (no crack).
+    A detection ≥ *score_thr* counts as a positive prediction.
+    """
+
+    # GT: which images have cracks
+    gt_positive_imgs: set[int] = set()
     for g in gts:
-        w, h = img_sizes.get(g["image_id"], (model_input_size, model_input_size))
-        b = g["bbox"]
-        gt_per_img[g["image_id"]].append([b[0] / w, b[1] / h, b[2] / w, b[3] / h])
+        gt_positive_imgs.add(g["image_id"])
 
-    pred_per_img: dict[int, list[tuple[list[float], float]]] = defaultdict(list)
+    # Predictions: which images have detections above threshold
+    dt_positive_imgs: set[int] = set()
     for p in preds:
-        if p["score"] < score_thr:
-            continue
-        b = p["bbox"]
-        nb = [v / model_input_size for v in b[:4]]
-        pred_per_img[p["image_id"]].append((nb, p["score"]))
+        if p.get("score", 0) >= score_thr:
+            dt_positive_imgs.add(int(p["image_id"]))
 
-    tp, fp, fn = 0, 0, 0
-    for img_id, gts_list in gt_per_img.items():
-        dts = sorted(pred_per_img.get(img_id, []), key=lambda x: -x[1])
-        matched = [False] * len(gts_list)
-        for bbox, _score in dts:
-            best_iou = 0.0
-            best_idx = -1
-            for i, gb in enumerate(gts_list):
-                if matched[i]:
-                    continue
-                iou = _iou_xywh(bbox, gb)
-                if iou > best_iou:
-                    best_iou = iou
-                    best_idx = i
-            if best_iou >= iou_thr and best_idx >= 0:
-                matched[best_idx] = True
-                tp += 1
-            else:
-                fp += 1
-        fn += sum(1 for m in matched if not m)
+    tp_img = len(gt_positive_imgs & dt_positive_imgs)
+    fp_img = len(dt_positive_imgs - gt_positive_imgs)
+    fn_img = len(gt_positive_imgs - dt_positive_imgs)
+    tn_img = total_imgs - tp_img - fp_img - fn_img
 
-    return np.array([[0, fp], [fn, tp]], dtype=np.float64)  # TN undefined for detection
+    return np.array([[tn_img, fp_img], [fn_img, tp_img]], dtype=np.float64)
 
 
 # ---------------------------------------------------------------------------
@@ -396,7 +378,7 @@ def plot_confusion_matrix(
     title: str = "Confusion Matrix",
     labels: tuple[str, str] = ("Negative", "Positive"),
 ) -> Path:
-    """Plot a detection-oriented confusion matrix (FP, FN, TP)."""
+    """Plot an image-level confusion matrix: [[TN, FP], [FN, TP]]."""
     import matplotlib.pyplot as plt
 
     _setup_style()
