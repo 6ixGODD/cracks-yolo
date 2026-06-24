@@ -2,122 +2,98 @@
 
 [English](scheduler.md) | [中文](scheduler.zh-CN.md)
 
-`scripts/schedule_experiments.py` runs a YAML-defined batch of experiments with subprocess isolation, error capture, and retry mode.
-
-## Configuration directory
-
-Two ready-to-run YAML configs live in [`experiments/`](../experiments/):
-
-- **`experiments/all_models_direct.yaml`** — 26 models × 2 experiments (train + test) = 52 experiments. Train on `train` split, validate on `valid` split during training, then test `best.pt` on the held-out `test` split.
-- **`experiments/all_models_cv5.yaml`** — 26 models × 1 cross-validation experiment = 26 experiments. CV mode merges train+valid+test into one pool, runs 5-fold CV (held-out fold = test, remaining 90/10 train/val).
-
-See [`experiments/README.md`](../experiments/README.md) for batch-size tuning and multi-GPU instructions.
+`cracks_yolo.pipeline.compose` executes a YAML-defined batch of experiments via subprocess
+isolation. Each experiment resolves to a `cy run` or `cy test` invocation; the scheduler
+serialises execution, captures per-experiment logs, and records outcomes in JSONL.
 
 ## YAML format
 
+A compose file aggregates individual experiment YAMLs via `$include`. Each included file is a
+single experiment dict (an explicit `experiments` list is also accepted). A top-level `scheduler`
+block carries metadata but is not consumed at runtime.
+
 ```yaml
-# experiments/my_sweep.yaml
+# experiments/compose_all.yaml
 scheduler:
-  max_parallel: 1              # serial by default; >1 spawns subprocesses
+  max_parallel: 1
   seed: 42
-
-experiments:
-  - name: yolov5s_baseline
-    type: train                # train | test (cross-val is `type: train` + cross_val: true)
-    model: yolov5s
-    dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
-    epochs: 100
-    batch_size: 32
-    lr: 0.001
-    output_dir: output/yolov5s_baseline
-    seed: 42
-    pretrained: true           # load official COCO weights (strict=False)
-
-  - name: yolov5s_sactr_cv
-    type: train
-    model: yolov5s_sactr
-    dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
-    cross_val: true
-    n_folds: 5
-    val_fraction: 0.1          # 10% of per-fold training pool → val (backprop)
-    epochs: 100
-    batch_size: 32
-    output_dir: output/yolov5s_sactr_cv
-
-  - name: yolov5s_sactr_test
-    type: test
-    model: yolov5s_sactr
-    weights: output/yolov5s_sactr_cv/best.pt
-    dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
-    split: test
-    output_dir: output/yolov5s_sactr_test
+$include:
+  - models/yolov5s.yaml
+  - models/yolov5s_sac.yaml
 ```
 
-### Per-experiment fields
+An individual experiment YAML (`experiments/models/yolov5s.yaml`):
 
-| Field | Type | Applies to | Description |
-| --- | --- | --- | --- |
-| `name` | str | all | Unique experiment identifier (used in log filenames). |
-| `type` | `train` \| `test` | all | `train` runs `scripts.train`; `test` runs `scripts.test`. CV mode is `type: train` with `cross_val: true`. |
-| `model` | str | all | ZOO key (e.g. `yolov5s_sactr`). |
-| `dataset` | path | all | YOLO dataset root containing `data.yaml`. |
-| `output_dir` | path | all | Where artifacts land. |
-| `epochs` | int | train | Training epochs. |
-| `batch_size` | int | all | Per-GPU batch size. |
-| `lr` | float | train | Learning rate. YOLO=0.01, torchvision=0.0001. |
-| `input_size` | int | all | Model input size (640 default; 300 for SSD300, 320 for SSDlite320). |
-| `device` | str | all | `cuda` or `cpu`. |
-| `seed` | int | all | Reproducibility seed. |
-| `num_workers` | int | all | Dataloader workers. |
-| `pretrained` | bool | train | Load official COCO weights via `from_pretrained` (`strict=False`). |
-| `cross_val` | bool | train | Run N-fold CV instead of a single train/val split. |
-| `n_folds` | int | train (CV) | Number of CV folds. |
-| `val_fraction` | float | train (CV) | Fraction of per-fold training pool carved out as val. Default 0.1. |
-| `no_amp` | bool | train | Disable mixed-precision training. |
-| `weights` | path | test | Path to `best.pt` for testing. |
-| `split` | str | test | Dataset split to evaluate (`test` default). |
-| `env` | dict | all | Per-experiment env overrides (e.g. `{CUDA_VISIBLE_DEVICES: "0"}`). |
-
-## Behavior
-
-- **Subprocess isolation**: each experiment runs in a fresh `subprocess.Popen` so a crash is contained. Stdout/stderr captured to `<output-dir>/scheduler/<exp_name>.log`.
-- **Error capture**: on any exception (or non-zero exit), append to `<output-dir>/scheduler/errors.jsonl` with `{exp_name, type, config, exit_code, log_path, traceback, timestamp}`. Continue to the next experiment — never abort the batch.
-- **Success capture**: append to `<output-dir>/scheduler/results.jsonl` with `{exp_name, status, exit_code, output_dir, elapsed_sec, timestamp}`.
-- **Parallel execution**: `max_parallel > 1` uses a `ThreadPoolExecutor` to spawn up to N subprocesses concurrently. Each subprocess is a real OS process (the GIL is released while we wait on it), so true parallelism is achieved. GPU pinning is via per-experiment `env: {CUDA_VISIBLE_DEVICES: "N"}` in the YAML. Single-GPU machines should keep `max_parallel: 1` — multiple experiments sharing one GPU OOMs more often than it speeds up the batch.
-
-## Retry mode
-
-Failed experiments can be retried without re-running the whole batch:
-
-```bash
-python -m scripts.schedule_experiments \
-    --retry-failed output/all_models_direct/scheduler/errors.jsonl \
-    --output-dir output/all_models_direct_retry
+```yaml
+name: yolov5s
+type: train
+model: yolov5s
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/yolov5s
+epochs: 100
+batch_size: 32
+lr: 0.001
+seed: 42
+pretrained: true
+device: cuda
 ```
 
-The scheduler:
-1. Reads `errors.jsonl`.
-2. Generates `retry_from_errors.yaml` with only the failed experiments.
-3. Backs up the original `errors.jsonl` to `errors.bak.jsonl`.
-4. Reruns the failed experiments.
+Supported fields: `name`, `type` (`train`|`test`), `model`, `dataset`, `output_dir`, `epochs`,
+`batch_size`, `lr`, `device`, `seed`, `num_workers`, `pretrained`, `weights` (test only),
+`optimizer`, `cosine_lr`, `use_ema`, `early_stopping_patience`, `clip_grad_norm`, and `env`
+(per-experiment environment dict, e.g. `{CUDA_VISIBLE_DEVICES: "0"}`).
 
-The iterative workflow: launch a large batch, inspect `errors.jsonl`, fix the bad configs (or library issues), retry-failed, repeat until `errors.jsonl` is empty.
+## `$include` resolution (`_load_config`)
+
+`_load_config` resolves `$include` recursively. Included paths are relative to the YAML file
+that declares them. Three cases govern contribution:
+
+1. **`$include` present** -- each listed path is loaded recursively; experiments accumulate from
+   all children. The parent's `scheduler` block is discarded.
+2. **Explicit `experiments` list** -- entries are appended directly. No further interpretation.
+3. **Neither `$include` nor `experiments`, but meaningful keys present** -- the file itself is
+   treated as a single experiment dict. A `_source` key is injected, recording the file path for
+   downstream command construction.
+
+Case (3) is the canonical form for individual model YAMLs under `experiments/models/`.
+
+## Command construction (`_build_cmd`)
+
+`_build_cmd` translates an experiment dict into a `cy` CLI invocation via two strategies:
+
+- **Source-bearing train experiments** (`_source` key + `type: train`). Emits `` cy run -c <_source> ``,
+  forwarding `output_dir` and `device` as overrides. `cy run` handles training followed by
+  automatic testing on the best checkpoint.
+
+- **All other experiments.** Emits `` cy <type> `` with flags derived from the dict. Eight key
+  fields map to `--model`, `--dataset`, `--output-dir`, `--weights`, `--epochs`, `--batch-size`,
+  `--lr`, `--device`, `--seed`, `--num-workers`, `--optimizer`. Boolean flags: `--pretrained`,
+  `--no-cosine-lr`, `--no-ema`. Scalar flags (`--patience`, `--clip-grad-norm`) emit only when
+  the corresponding key is present.
+
+## Execution and log/error tracking
+
+`run_compose` creates `<output_dir>/scheduler/` and iterates over the resolved experiment list.
+For each experiment:
+
+1. A log file is opened at `<output_dir>/scheduler/<name>.log`.
+2. Per-experiment `env` overrides are merged into a copy of `os.environ`.
+3. `subprocess.run` executes the command; stdout and stderr are captured to the log file.
+4. On exit code 0, `_record_success` appends to `<output_dir>/scheduler/results.jsonl`:
+   `{exp_name, status, log_path, output_dir, timestamp}`.
+5. On non-zero exit or exception, `_record_error` appends to `<output_dir>/scheduler/errors.jsonl`:
+   `{exp_name, exit_code, log_path, timestamp, [traceback]}`.
+
+The scheduler never aborts on failure -- it continues to the next experiment and reports a
+summary of `n_ok` / `n_failed` at completion.
 
 ## CLI
-
 ```bash
-# Run a fresh batch.
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_direct.yaml \
-    --output-dir output/all_models_direct
+# Serial execution.
+cy compose -c experiments/compose_all.yaml -o output/compose_all
 
-# 5-fold CV sweep.
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_cv5.yaml \
-    --output-dir output/all_models_cv5
-
-# Retry failed experiments.
-python -m scripts.schedule_experiments \
-    --retry-failed output/all_models_direct/scheduler/errors.jsonl \
-    --output-dir output/all_models_direct_retry
+# Parallel execution (pin GPUs via per-experiment env in YAML).
+cy compose -c experiments/compose_all.yaml -o output/compose_all -p 4
 ```
+
+`cy compose` is defined in `cracks_yolo/cli.py` and delegates to `compose.run_compose`.

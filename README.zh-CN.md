@@ -2,196 +2,184 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-面向**舌面裂纹检测**的自包含 PyTorch 模型库，包含 SAC（Switchable Atrous Convolution）和 TR（Transformer）增强的 YOLOv5 / v7 / v8 / v9 / v10 变体，以及 torchvision RetinaNet、Faster R-CNN、Mask R-CNN、FCOS、SSD300 和 SSDlite320 基线模型，用于跨范式比较。每个模型都是一个独立的 `nn.Module` 类，拥有自己的层、损失函数、优化器构建器和预训练权重加载器。无需运行时 YAML 解析，无外部框架耦合。
-
-## 模型（26 个 ZOO 条目）
-
-### YOLO 系列（anchor-based）
-
-| 键 | 类 | 说明 |
-| --- | --- | --- |
-| `yolov5s` | `YOLOv5s` | 基线 |
-| `yolov5s_sac` | `YOLOv5sSAC` | backbone 中添加 SAC |
-| `yolov5s_tr` | `YOLOv5sTR` | 添加 TR（Transformer） |
-| `yolov5s_sactr` | `YOLOv5sSACTR` | 同时添加 SAC + TR |
-| `yolov7w` | `YOLOv7w` | OTA 损失、RepConv |
-| `yolov7w_sac` | `YOLOv7wSAC` | 添加 SAC |
-
-### YOLO 系列（anchor-free）
-
-| 键 | 类 | 说明 |
-| --- | --- | --- |
-| `yolov8n` / `yolov8s` / `yolov8m` / `yolov8l` / `yolov8x` | `YOLOv8{n,s,m,l,x}` | n/s/m/l/x 尺寸、DFL、CIoU |
-| `yolov8n_sac` ... `yolov8x_sac` | `YOLOv8{n,s,m,l,x}SAC` | 在 C2f 中添加 SAC |
-| `yolov9c` | `YOLOv9c` | GELAN backbone、SPPELAN neck（无 PGI） |
-| `yolov9c_sac` | `YOLOv9cSAC` | 添加 SAC（C2fSAC 回退） |
-| `yolov10s` | `YOLOv10s` | 无需 NMS，双 one2many/one2one 检测头 |
-| `yolov10s_sac` | `YOLOv10sSAC` | 添加 SAC |
-
-### 跨范式基线（torchvision）
-
-| 键 | 类 | 说明 |
-| --- | --- | --- |
-| `retinanet_r50` | `RetinaNetR50` | 单阶段 anchor-based、FocalLoss |
-| `faster_rcnn_r50` | `FasterRCNNR50` | 两阶段、RPN + ROI |
-| `mask_rcnn_r50` | `MaskRCNNR50` | 两阶段 + mask 头（bbox 填充掩码） |
-| `fcos_r50` | `FCOSR50` | anchor-free、centerness 分支 |
-| `ssd300_vgg16` | `SSD300VGG16` | 单阶段经典模型、300x300 输入 |
-| `ssdlite320_mobilenetv3` | `SSDlite320MobileNetV3` | 轻量级、320x320 输入 |
+面向舌面裂纹检测的自包含 PyTorch 检测模型库。涵盖 YOLOv3/v5/v6/v8/v9/v10/v11/v12/v26、
+RT-DETR 及六种 torchvision 基线（RetinaNet、Faster R-CNN、Mask R-CNN、FCOS、SSD300、
+SSDlite320），共计 45 个模型。每个模型均为显式 `nn.Module` 子类，内聚其层、损失函数、
+优化器构建器与预训练权重加载器。无运行时 YAML 解析，无 ultralytics 猴子补丁，无抽象
+基类钩子系统。
 
 ## 快速开始
 
 ```bash
-uv sync          # 或：pip install -e .
-
-# 如需 CUDA 11.8 支持：
-uv pip install torch==2.5.1 torchvision==0.20.1 \
-    --index-url https://download.pytorch.org/whl/cu118
+pip install -e .
 ```
-
-```python
-import torch
-from cracks_yolo.zoo import ZOO
-
-model = ZOO["yolov5s_sactr"](num_classes=1)
-model.train()
-
-x = torch.randn(2, 3, 640, 640)
-preds = model(x)
-
-targets = torch.tensor(
-    [[0, 0, 0.50, 0.50, 0.20, 0.20],
-     [1, 0, 0.40, 0.40, 0.15, 0.25]],
-    dtype=torch.float32,
-)
-loss, parts = model.compute_loss(preds, targets, imgs=x)
-loss.backward()
-```
-
-加载 COCO 预训练权重（仅基线变体可用 -- SAC/TR 层没有 COCO 权重，因此使用 `strict=False` 部分加载）：
-
-```python
-from cracks_yolo.zoo import YOLOv5s
-model = YOLOv5s.from_pretrained(num_classes=1)  # 下载 + strict=False 加载
-```
-
-### 训练 / 测试 / 交叉验证 / 比较
 
 ```bash
-# 使用 COCO 预训练初始化的单次训练。
-python -m scripts.train --model yolov5s_sactr --pretrained \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --epochs 100 --batch-size 32 --output-dir output/yolov5s_sactr
+# 单实验：训练后自动在最佳检查点上测试。
+cy run -c experiments/models/yolov5s_sactr.yaml
 
-# 5 折交叉验证。将 train+valid+test 合并为一个池，
-# 留出折 = test，剩余数据按 90/10 划分为 train/val。
-python -m scripts.train --model yolov5s_sactr --cross-val --n-folds 5 \
-    --val-fraction 0.1 --pretrained \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --epochs 100 --batch-size 32 --output-dir output/yolov5s_sactr_cv
+# 或使用完整 CLI 标志：
+cy train -m yolov8s -d data/dataset -o output/run1 -e 300 -b 64 --pretrained
+cy test -m yolov8s --weights output/run1/weights/best.pt -d data/dataset -o output/run1/test
 
-# 带配对 t 检验的多模型比较。
-python -m scripts.compare_models \
-    --models yolov5s,yolov5s_sactr,yolov8s,yolov9c,retinanet_r50,faster_rcnn_r50 \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --n-folds 5 --epochs 100 --output-dir output/comparison
-
-# 带子进程隔离 + 错误捕获 + 重试的批量调度。
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_direct.yaml \
-    --output-dir output/all_models_direct
+# 子进程隔离的批量调度。
+cy compose -c experiments/compose_all.yaml -o output/all_models -p 2
 ```
 
-### 完整的 26 模型扫荡
+## CLI
 
-两个即用型配置位于 [`experiments/`](experiments/)：
+| 命令 | 用途 |
+| --- | --- |
+| `cy train` | 训练单个模型，完整超参数控制。 |
+| `cy test` | 在测试集与验证集上评估已训练检查点。 |
+| `cy run` | 从 YAML 配置运行一个实验（训练，随后自动测试）。 |
+| `cy compose` | 从支持 `$include` 的 compose YAML 批量调度实验。 |
 
-- **`experiments/all_models_direct.yaml`** -- 26 个模型 x 2（训练 + 测试）= 52 个实验。在原始划分上直接训练到测试。
-- **`experiments/all_models_cv5.yaml`** -- 26 个模型 x 1 个 CV 实验 = 26 个实验。在合并池上进行 5 折 CV（留出折 = test）。
+`cy train` 关键标志：
 
-完成 `git clone` + `uv sync` + cu118 torch 安装后：
+| 标志 | 默认值 | 说明 |
+| --- | --- | --- |
+| `-m, --model` | （必填） | ZOO 键，如 `yolov8s_sac` |
+| `-d, --dataset` | （必填） | 数据集根目录路径 |
+| `-o, --output-dir` | （必填） | 输出目录 |
+| `-e, --epochs` | 300 | 训练轮数 |
+| `-b, --batch-size` | 64 | 批次大小 |
+| `--lr` | 1e-3 | 学习率 |
+| `--pretrained / --no-pretrained` | `--pretrained` | 加载 COCO 权重 |
+| `--optimizer` | adamw | `adamw` 或 `sgd` |
+| `--cosine-lr / --no-cosine-lr` | `--cosine-lr` | 余弦学习率调度 |
+| `--ema / --no-ema` | `--ema` | 指数移动平均 |
+| `--patience` | 100 | 早停耐心值（轮数） |
+| `--device` | cuda | `cuda` 或 `cpu` |
+| `--seed` | 42 | 随机种子 |
 
-```bash
-# 直接扫荡（52 个实验）。
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_direct.yaml \
-    --output-dir output/all_models_direct
+## 模型库
 
-# 5 折 CV 扫荡（26 个实验）。
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_cv5.yaml \
-    --output-dir output/all_models_cv5
+`cracks_yolo.zoo.ZOO` 中 45 个显式类，每个硬编码其架构配置、预训练资产、
+SAC/TR 注入索引及解码格式。
+
+### YOLO 系列（39 个模型）
+
+| 系列 | 键 | 数量 | SAC 变体 |
+| --- | --- | --- | --- |
+| YOLOv3 | `yolov3` | 1 | -- |
+| YOLOv5 | `yolov5n`, `yolov5s`, `yolov5m`, `yolov5l`, `yolov5x` | 5 | `yolov5s_sac`, `yolov5s_tr`, `yolov5s_sactr` |
+| YOLOv6 | `yolov6n` | 1 | `yolov6n_sac` |
+| YOLOv8 | `yolov8n`, `yolov8s`, `yolov8m`, `yolov8l`, `yolov8x` | 5 | `yolov8n_sac`, `yolov8s_sac` |
+| YOLOv9 | `yolov9t`, `yolov9s`, `yolov9m`, `yolov9c`, `yolov9e` | 5 | `yolov9c_sac` |
+| YOLOv10 | `yolov10n`, `yolov10s`, `yolov10m`, `yolov10b`, `yolov10l`, `yolov10x` | 6 | `yolov10s_sac` |
+| RT-DETR | `rtdetr_r50` | 1 | `rtdetr_r50_sac` |
+| YOLO11 | `yolo11n`, `yolo11s` | 2 | -- |
+| YOLO12 | `yolo12n`, `yolo12s` | 2 | -- |
+| YOLO26 | `yolo26n`, `yolo26s` | 2 | -- |
+
+### 跨范式基线（6 个模型）
+
+| 键 | 架构 | 范式 |
+| --- | --- | --- |
+| `retinanet_r50` | RetinaNet, ResNet-50 FPN | 单阶段、anchor-based、Focal Loss |
+| `faster_rcnn_r50` | Faster R-CNN, ResNet-50 FPN | 两阶段、RPN + RoI |
+| `mask_rcnn_r50` | Mask R-CNN, ResNet-50 FPN | 两阶段 + mask 头 |
+| `fcos_r50` | FCOS, ResNet-50 FPN | Anchor-free、centerness |
+| `ssd300_vgg16` | SSD300, VGG-16 | 单阶段、300x300 |
+| `ssdlite320_mobilenetv3` | SSDlite320, MobileNetV3-Large | 轻量级、320x320 |
+
+## 核心特性
+
+**SAC 与 TR 注入。** 可切换空洞卷积（Switchable Atrous Convolution, SAC）将 backbone
+中选定的 C3/C2f 块替换为空洞变体；C3TR 替换为 Transformer 块。注入点为各类常量——
+无配置文件，无运行时分发。支持 YOLOv5s、YOLOv6n、YOLOv8n/s、YOLOv9c、YOLOv10s
+及 RT-DETR-R50。
+
+**显式模型类。** 每个 ZOO 条目为一具体类（如 `YOLOv8sSAC`），硬编码其 YAML 配置、
+预训练资产、SAC/TR 索引及解码格式。无抽象工厂，无注册表间接层，管道中无
+`isinstance` 分支。
+
+**预训练权重加载。** `from_pretrained()` 经由 ultralytics 下载 COCO 权重，按键与形状
+求交集，以 `strict=False` 加载。SAC/TR 层随机初始化；匹配的 backbone 层获得 COCO
+迁移。
+
+**基于基类的管道契约。** `BaseModel` 定义 `train_model`、`inference`、`save`、`load`、
+`from_pretrained` 与 `analyze`。三态机（`UNINITIALIZED -> PRETRAINED -> TRAINED`）
+在运行时强制生命周期正确性。管道仅依赖此接口。
+
+**`cy compose` 批量调度。** YAML 驱动的实验调度器，支持 `$include` 组合、逐实验环境
+覆盖（`CUDA_VISIBLE_DEVICES`）、子进程隔离及用于重试工作流的 `errors.jsonl`。
+
+**模型分析。** `model.analyze()` 返回 `ModelAnalysisReport`，包含参数量、
+MACs/GFLOPs（经由 thop）、FPS/延迟百分位、峰值显存及三级结构树。可通过
+`cy analyze` 或编程方式调用。
+
+## 输出结构
+
+`cy train` 或 `cy run` 之后：
+
+```
+output_dir/
+  weights/
+    best.pt             # 最佳验证检查点
+    last.pt             # 最终轮次检查点
+  results.csv           # 逐轮指标（loss, mAP50, mAP50-95）
+  metrics.csv           # results.csv 的别名/副本
+  args.yaml             # 生效的训练参数
+  train_logs/           # Ultralytics 训练日志
+  test/                 # 自动测试产物（来自 cy run）
+    per_image/          # 逐图像 COCO 格式预测 JSON
+    predictions/        # 标注预测图像
+    curves/
+      pr.png            # 精确率-召回率曲线
+      roc.png           # ROC 曲线
+      confusion.png     # 混淆矩阵
+    metrics_summary.json
 ```
 
-对于多 GPU 服务器，可增加 `scheduler.max_parallel` 并为每个实验添加 `env: {CUDA_VISIBLE_DEVICES: "N"}`（参见 [`experiments/README.md`](experiments/README.md) 了解批次大小调优）。
-
-## 项目结构
+## 包布局
 
 ```
 cracks_yolo/
-  ops/         # Conv、CSP、transformer、检测头、SAC/TR、YOLOv9 算子。
-  losses/      # ComputeLoss (v5)、ComputeLossOTA (v7)、v8DetectionLoss、E2ELoss (v10)。
-  zoo/         # 26 个模型类。base.py = DetectorModel Protocol + PretrainedSpec。
-  weights/     # load_pretrained：下载、键重映射、strict=False + LoadReport。
-  logging/     # loguru JSONL 输出 + TypedDict 日志记录模式。
-  metrics/     # COCOMetricsCalculator + PR/ROC/confusion + 配对 t 检验/Wilcoxon/bootstrap CI。
-  pipeline/    # TrainPipelineImpl / TestPipelineImpl / crossval / compare。
-  dataset/     # YOLOSource、COCOSource、DetectionDataset、变换、yolo<->coco 转换。
-  viz/         # loss/metric/PR/ROC 曲线、混淆矩阵、Grad-CAM、数据集分布图。
-  analysis/    # DatasetAnalysisReport、ModelAnalysisReport。
-scripts/       # train、test、convert_dataset、heatmap、analyze_dataset、analyze_model、
-               # schedule_experiments、compare_models。
+  ops/                  # SAC、C3TR 及共享算子模块
+  losses/               # 损失函数（v5, v7 OTA, v8 DFL, v10 E2E）
+  zoo/                  # 模型类与 ZOO 注册表
+    ultralytics/        # UltralyticsAdapter + 39 个显式 YOLO/RT-DETR 类
+    torchvision/        # 6 个 torchvision 包装类
+  weights/              # 预训练下载、键重映射、部分加载
+  logging/              # loguru JSONL 输出、类型化日志记录模式
+  metrics/              # COCO mAP、PR/ROC/混淆矩阵、统计检验
+  pipeline/             # 训练、测试、compose（批量调度器）
+  dataset/              # YOLO/COCO 加载器、变换、增强
+  viz/                  # 曲线、混淆矩阵、Grad-CAM、数据集图
+  analysis/             # DatasetAnalysisReport、ModelAnalysisReport
+cli.py                  # Typer CLI（train, test, run, compose）
 ```
-
-## 文档
-
-**英文**：
-
-- [`docs/architecture.md`](docs/architecture.md) -- 设计哲学、包结构、Protocol 契约。
-- [`docs/ops.md`](docs/ops.md) -- 算子数学公式、构造参数、SAC/TR 详解。
-- [`docs/models.md`](docs/models.md) -- 各模型架构、损失公式、SAC/TR 插入点。
-- [`docs/metrics.md`](docs/metrics.md) -- 所有指标（mAP、AR、精确率/召回率、统计检验）。
-- [`docs/pretrained.md`](docs/pretrained.md) -- `from_pretrained` 语义、键重映射、SAC/TR 部分加载。
-- [`docs/logging.md`](docs/logging.md) -- 日志记录模式、JSONL 格式、事后查询。
-- [`docs/usage.md`](docs/usage.md) -- 端到端教程。
-- [`docs/development.md`](docs/development.md) -- 如何添加新模型变体。
-- [`docs/dataset.md`](docs/dataset.md) -- 数据格式、转换、变换、目标张量约定。
-- [`docs/pipeline.md`](docs/pipeline.md) -- TrainPipeline/TestPipeline 用法、5 折 CV、多模型比较。
-- [`docs/scheduler.md`](docs/scheduler.md) -- YAML 格式、重试工作流、并行执行。
-- [`docs/scripts.md`](docs/scripts.md) -- 各脚本的用途、参数、输入/输出。
-- [`docs/heatmap.md`](docs/heatmap.md) -- Grad-CAM 方法、层选择、输出结构。
-- [`docs/cross_validation.md`](docs/cross_validation.md) -- 5 折机制、配对 t 检验、结果解读。
-- [`docs/cuda_setup.md`](docs/cuda_setup.md) -- cu118 安装、显存缩放、AMP、多 GPU。
-- [`experiments/README.md`](experiments/README.md) -- 即用型扫荡配置。
-
-**中文**：
-
-- [`docs/architecture.zh-CN.md`](docs/architecture.zh-CN.md)
-- [`docs/ops.zh-CN.md`](docs/ops.zh-CN.md)
-- [`docs/models.zh-CN.md`](docs/models.zh-CN.md)
-- [`docs/metrics.zh-CN.md`](docs/metrics.zh-CN.md)
-- [`docs/pretrained.zh-CN.md`](docs/pretrained.zh-CN.md)
-- [`docs/logging.zh-CN.md`](docs/logging.zh-CN.md)
-- [`docs/usage.zh-CN.md`](docs/usage.zh-CN.md)
-- [`docs/development.zh-CN.md`](docs/development.zh-CN.md)
-- [`docs/dataset.zh-CN.md`](docs/dataset.zh-CN.md)
-- [`docs/pipeline.zh-CN.md`](docs/pipeline.zh-CN.md)
-- [`docs/scheduler.zh-CN.md`](docs/scheduler.zh-CN.md)
-- [`docs/scripts.zh-CN.md`](docs/scripts.zh-CN.md)
-- [`docs/heatmap.zh-CN.md`](docs/heatmap.zh-CN.md)
-- [`docs/cross_validation.zh-CN.md`](docs/cross_validation.zh-CN.md)
-- [`docs/cuda_setup.zh-CN.md`](docs/cuda_setup.zh-CN.md)
 
 ## 验证
 
 ```bash
-uv run ruff check cracks_yolo tests scripts
-uv run mypy --strict cracks_yolo tests scripts
-uv run pytest -q
+ruff check cracks_yolo tests
+mypy --strict cracks_yolo tests
+pytest -q
 ```
 
-以上三项在合并前必须全部通过。
+三项均须零错误通过方可合并。
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| `docs/models.md` | 逐模型架构、损失公式、SAC/TR 插入点 |
+| `docs/ops.md` | 算子参考（SAC, C3TR, Conv, CSP, 检测头） |
+| `docs/pipeline.md` | TrainPipeline、TestPipeline、compose 调度器 |
+| `docs/dataset.md` | 数据格式、转换、变换、目标约定 |
+| `docs/metrics.md` | COCO mAP、PR/ROC、统计检验（t 检验、Wilcoxon、bootstrap） |
+| `docs/logging.md` | JSONL 日志模式、loguru 配置 |
+| `docs/usage.md` | 端到端教程 |
+| `docs/heatmap.md` | Grad-CAM 方法与输出结构 |
+| `docs/scripts.md` | CLI 参考（全部命令与标志） |
+| `docs/scheduler.md` | Compose YAML 格式、`$include`、重试工作流 |
+| `docs/models.md` | 如何添加新模型变体 |
+
+中文翻译：`docs/*.zh-CN.md`。
 
 ## 许可证
 
-参见 `LICENSE`（或您项目的许可文件）。
+参见 `LICENSE`。

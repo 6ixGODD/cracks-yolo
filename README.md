@@ -1,208 +1,189 @@
 # cracks-yolo
 
-[English](README.md) | [中文](README.zh-CN.md)
-
-Self-contained PyTorch model zoo for **tongue surface crack detection**,
-with SAC (Switchable Atrous Convolution) and TR (Transformer) enhancements
-across YOLOv5 / v7 / v8 / v9 / v10, plus torchvision RetinaNet, Faster R-CNN,
-Mask R-CNN, FCOS, SSD300, and SSDlite320 baselines for cross-paradigm
-comparison. Every model is a single `nn.Module` class that owns its layers,
-loss, optimizer-builder, and pretrained-weight loader. No runtime YAML
-parsing, no external framework coupling.
-
-## Models (26 ZOO entries)
-
-### YOLO family (anchor-based)
-
-| Key | Class | Notes |
-| --- | --- | --- |
-| `yolov5s` | `YOLOv5s` | baseline |
-| `yolov5s_sac` | `YOLOv5sSAC` | + SAC in backbone |
-| `yolov5s_tr` | `YOLOv5sTR` | + TR (Transformer) |
-| `yolov5s_sactr` | `YOLOv5sSACTR` | + SAC + TR |
-| `yolov7w` | `YOLOv7w` | OTA loss, RepConv |
-| `yolov7w_sac` | `YOLOv7wSAC` | + SAC |
-
-### YOLO family (anchor-free)
-
-| Key | Class | Notes |
-| --- | --- | --- |
-| `yolov8n` / `yolov8s` / `yolov8m` / `yolov8l` / `yolov8x` | `YOLOv8{n,s,m,l,x}` | n/s/m/l/x sizes, DFL, CIoU |
-| `yolov8n_sac` ... `yolov8x_sac` | `YOLOv8{n,s,m,l,x}SAC` | + SAC in C2f |
-| `yolov9c` | `YOLOv9c` | GELAN backbone, SPPELAN neck (no PGI) |
-| `yolov9c_sac` | `YOLOv9cSAC` | + SAC (C2fSAC fallback) |
-| `yolov10s` | `YOLOv10s` | NMS-free, dual one2many/one2one head |
-| `yolov10s_sac` | `YOLOv10sSAC` | + SAC |
-
-### Cross-paradigm baselines (torchvision)
-
-| Key | Class | Notes |
-| --- | --- | --- |
-| `retinanet_r50` | `RetinaNetR50` | single-stage anchor-based, FocalLoss |
-| `faster_rcnn_r50` | `FasterRCNNR50` | two-stage, RPN + ROI |
-| `mask_rcnn_r50` | `MaskRCNNR50` | two-stage + mask head (bbox-fill masks) |
-| `fcos_r50` | `FCOSR50` | anchor-free, centerness branch |
-| `ssd300_vgg16` | `SSD300VGG16` | single-stage classic, 300x300 input |
-| `ssdlite320_mobilenetv3` | `SSDlite320MobileNetV3` | lightweight, 320x320 input |
+Self-contained PyTorch detection model zoo for tongue surface crack detection.
+45 models across YOLOv3/v5/v6/v8/v9/v10/v11/v12/v26, RT-DETR, and six torchvision
+baselines (RetinaNet, Faster R-CNN, Mask R-CNN, FCOS, SSD300, SSDlite320). Every
+model is an explicit `nn.Module` subclass that owns its layers, loss, optimizer
+builder, and pretrained-weight loader. No runtime YAML parsing, no ultralytics
+monkey-patching, no abstract-base-class hook system.
 
 ## Quickstart
 
 ```bash
-uv sync          # or: pip install -e .
-
-# For CUDA 11.8 support:
-uv pip install torch==2.5.1 torchvision==0.20.1 \
-    --index-url https://download.pytorch.org/whl/cu118
+pip install -e .
 ```
-
-```python
-import torch
-from cracks_yolo.zoo import ZOO
-
-model = ZOO["yolov5s_sactr"](num_classes=1)
-model.train()
-
-x = torch.randn(2, 3, 640, 640)
-preds = model(x)
-
-targets = torch.tensor(
-    [[0, 0, 0.50, 0.50, 0.20, 0.20],
-     [1, 0, 0.40, 0.40, 0.15, 0.25]],
-    dtype=torch.float32,
-)
-loss, parts = model.compute_loss(preds, targets, imgs=x)
-loss.backward()
-```
-
-Load COCO pretrained weights (baseline variants only -- SAC/TR layers
-have no COCO weights, so partial-load with `strict=False`):
-
-```python
-from cracks_yolo.zoo import YOLOv5s
-model = YOLOv5s.from_pretrained(num_classes=1)  # downloads + strict=False load
-```
-
-### Train / test / cross-val / compare
 
 ```bash
-# Single train with COCO pretrained init.
-python -m scripts.train --model yolov5s_sactr --pretrained \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --epochs 100 --batch-size 32 --output-dir output/yolov5s_sactr
+# Single experiment: train then auto-test on best checkpoint.
+cy run -c experiments/models/yolov5s_sactr.yaml
 
-# 5-fold cross-validation. Merges train+valid+test into one pool,
-# held-out fold = test, remaining 90/10 split for train/val.
-python -m scripts.train --model yolov5s_sactr --cross-val --n-folds 5 \
-    --val-fraction 0.1 --pretrained \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --epochs 100 --batch-size 32 --output-dir output/yolov5s_sactr_cv
+# Or with full CLI flags:
+cy train -m yolov8s -d data/dataset -o output/run1 -e 300 -b 64 --pretrained
+cy test -m yolov8s --weights output/run1/weights/best.pt -d data/dataset -o output/run1/test
 
-# Multi-model comparison with paired t-test.
-python -m scripts.compare_models \
-    --models yolov5s,yolov5s_sactr,yolov8s,yolov9c,retinanet_r50,faster_rcnn_r50 \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --n-folds 5 --epochs 100 --output-dir output/comparison
-
-# Batch scheduling with subprocess isolation + error capture + retry.
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_direct.yaml \
-    --output-dir output/all_models_direct
+# Batch scheduling with subprocess isolation.
+cy compose -c experiments/compose_all.yaml -o output/all_models -p 2
 ```
 
-### Full 26-model sweeps
+## CLI
 
-Two ready-to-run configs in [`experiments/`](experiments/):
+| Command | Purpose |
+| --- | --- |
+| `cy train` | Train a single model with full hyperparameter control. |
+| `cy test` | Evaluate a trained checkpoint on test and validation splits. |
+| `cy run` | Run one experiment from a YAML config (train, then auto-test). |
+| `cy compose` | Batch-schedule experiments from a compose YAML with `$include`. |
 
-- **`experiments/all_models_direct.yaml`** -- 26 models x 2 (train + test) =
-  52 experiments. Direct train to test on original splits.
-- **`experiments/all_models_cv5.yaml`** -- 26 models x 1 CV experiment = 26
-  experiments. 5-fold CV on the merged pool (held-out fold = test).
+Key flags for `cy train`:
 
-After `git clone` + `uv sync` + cu118 torch install:
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-m, --model` | (required) | ZOO key, e.g. `yolov8s_sac` |
+| `-d, --dataset` | (required) | Path to dataset root |
+| `-o, --output-dir` | (required) | Output directory |
+| `-e, --epochs` | 300 | Number of epochs |
+| `-b, --batch-size` | 64 | Batch size |
+| `--lr` | 1e-3 | Learning rate |
+| `--pretrained / --no-pretrained` | `--pretrained` | Load COCO weights |
+| `--optimizer` | adamw | `adamw` or `sgd` |
+| `--cosine-lr / --no-cosine-lr` | `--cosine-lr` | Cosine LR schedule |
+| `--ema / --no-ema` | `--ema` | Exponential moving average |
+| `--patience` | 100 | Early stopping patience (epochs) |
+| `--device` | cuda | `cuda` or `cpu` |
+| `--seed` | 42 | Random seed |
 
-```bash
-# Direct sweep (52 experiments).
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_direct.yaml \
-    --output-dir output/all_models_direct
+## Model zoo
 
-# 5-fold CV sweep (26 experiments).
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_cv5.yaml \
-    --output-dir output/all_models_cv5
+45 explicit classes in `cracks_yolo.zoo.ZOO`, each hardcoding its architecture
+cfg, pretrained asset, SAC/TR injection indices, and decode format.
+
+### YOLO families (39 models)
+
+| Family | Keys | Sizes | SAC variants |
+| --- | --- | --- | --- |
+| YOLOv3 | `yolov3` | 1 | -- |
+| YOLOv5 | `yolov5n`, `yolov5s`, `yolov5m`, `yolov5l`, `yolov5x` | 5 | `yolov5s_sac`, `yolov5s_tr`, `yolov5s_sactr` |
+| YOLOv6 | `yolov6n` | 1 | `yolov6n_sac` |
+| YOLOv8 | `yolov8n`, `yolov8s`, `yolov8m`, `yolov8l`, `yolov8x` | 5 | `yolov8n_sac`, `yolov8s_sac` |
+| YOLOv9 | `yolov9t`, `yolov9s`, `yolov9m`, `yolov9c`, `yolov9e` | 5 | `yolov9c_sac` |
+| YOLOv10 | `yolov10n`, `yolov10s`, `yolov10m`, `yolov10b`, `yolov10l`, `yolov10x` | 6 | `yolov10s_sac` |
+| RT-DETR | `rtdetr_r50` | 1 | `rtdetr_r50_sac` |
+| YOLO11 | `yolo11n`, `yolo11s` | 2 | -- |
+| YOLO12 | `yolo12n`, `yolo12s` | 2 | -- |
+| YOLO26 | `yolo26n`, `yolo26s` | 2 | -- |
+
+### Cross-paradigm baselines (6 models)
+
+| Key | Architecture | Paradigm |
+| --- | --- | --- |
+| `retinanet_r50` | RetinaNet, ResNet-50 FPN | Single-stage, anchor-based, Focal Loss |
+| `faster_rcnn_r50` | Faster R-CNN, ResNet-50 FPN | Two-stage, RPN + RoI |
+| `mask_rcnn_r50` | Mask R-CNN, ResNet-50 FPN | Two-stage + mask head |
+| `fcos_r50` | FCOS, ResNet-50 FPN | Anchor-free, centerness |
+| `ssd300_vgg16` | SSD300, VGG-16 | Single-stage, 300x300 |
+| `ssdlite320_mobilenetv3` | SSDlite320, MobileNetV3-Large | Lightweight, 320x320 |
+
+## Key features
+
+**SAC and TR injection.** Switchable Atrous Convolution (SAC) replaces selected
+C3/C2f blocks in the backbone with atrous variants; C3TR substitutes
+transformer blocks. Injection points are per-class constants -- no config files,
+no runtime dispatch. Supported on YOLOv5s, YOLOv6n, YOLOv8n/s, YOLOv9c,
+YOLOv10s, and RT-DETR-R50.
+
+**Explicit model classes.** Each ZOO entry is a concrete class (e.g.
+`YOLOv8sSAC`) that hardcodes its YAML cfg, pretrained asset, SAC/TR indices,
+and decode format. No abstract factory, no registry indirection, no
+`isinstance` branching in pipelines.
+
+**Pretrained weight loading.** `from_pretrained()` downloads COCO weights via
+ultralytics, intersects the state dict by key and shape, and loads with
+`strict=False`. SAC/TR layers receive random init; matched backbone layers
+get COCO transfer.
+
+**Pipeline contract via base class.** `BaseModel` defines `train_model`,
+`inference`, `save`, `load`, `from_pretrained`, and `analyze`. A 3-state
+machine (`UNINITIALIZED -> PRETRAINED -> TRAINED`) enforces lifecycle
+correctness at runtime. Pipelines depend only on this interface.
+
+**Batch scheduling with `cy compose`.** YAML-driven experiment scheduler with
+`$include` composition, per-experiment env overrides (`CUDA_VISIBLE_DEVICES`),
+subprocess isolation, and `errors.jsonl` for retry workflows.
+
+**Model analysis.** `model.analyze()` returns `ModelAnalysisReport` with
+parameter counts, MACs/GFLOPs (via thop), FPS/latency percentiles, peak VRAM,
+and a 3-level structure tree. Available as `cy analyze` or programmatically.
+
+## Output structure
+
+After `cy train` or `cy run`:
+
+```
+output_dir/
+  weights/
+    best.pt             # Best-validation checkpoint
+    last.pt             # Final-epoch checkpoint
+  results.csv           # Per-epoch metrics (loss, mAP50, mAP50-95)
+  metrics.csv           # Alias / copy of results.csv
+  args.yaml             # Effective training arguments
+  train_logs/           # Ultralytics training logs
+  test/                 # Auto-test artifacts (from cy run)
+    per_image/          # Per-image COCO-format prediction JSONs
+    predictions/        # Annotated prediction images
+    curves/
+      pr.png            # Precision-recall curve
+      roc.png           # ROC curve
+      confusion.png     # Confusion matrix
+    metrics_summary.json
 ```
 
-For multi-GPU servers, bump `scheduler.max_parallel` and add
-`env: {CUDA_VISIBLE_DEVICES: "N"}` per experiment (see
-[`experiments/README.md`](experiments/README.md) for batch-size tuning).
-
-## Layout
+## Package layout
 
 ```
 cracks_yolo/
-  ops/         # Conv, CSP, transformer, detect heads, SAC/TR, YOLOv9 ops.
-  losses/      # ComputeLoss (v5), ComputeLossOTA (v7), v8DetectionLoss, E2ELoss (v10).
-  zoo/         # 26 model classes. base.py = DetectorModel Protocol + PretrainedSpec.
-  weights/     # load_pretrained: download, key-remap, strict=False + LoadReport.
-  logging/     # loguru JSONL sink + TypedDict log record schemas.
-  metrics/     # COCOMetricsCalculator + PR/ROC/confusion + paired t-test/Wilcoxon/bootstrap CI.
-  pipeline/    # TrainPipelineImpl / TestPipelineImpl / crossval / compare.
-  dataset/     # YOLOSource, COCOSource, DetectionDataset, transforms, yolo<->coco convert.
-  viz/         # loss/metric/PR/ROC curves, confusion matrix, Grad-CAM, dataset plots.
-  analysis/    # DatasetAnalysisReport, ModelAnalysisReport.
-scripts/       # train, test, convert_dataset, heatmap, analyze_dataset, analyze_model,
-               # schedule_experiments, compare_models.
+  ops/                  # SAC, C3TR, and shared operator modules
+  losses/               # Loss functions (v5, v7 OTA, v8 DFL, v10 E2E)
+  zoo/                  # Model classes and ZOO registry
+    ultralytics/        # UltralyticsAdapter + 39 explicit YOLO/RT-DETR classes
+    torchvision/        # 6 torchvision wrapper classes
+  weights/              # Pretrained download, key remapping, partial load
+  logging/              # loguru JSONL sink, typed log record schemas
+  metrics/              # COCO mAP, PR/ROC/confusion, statistical tests
+  pipeline/             # train, test, compose (batch scheduler)
+  dataset/              # YOLO/COCO loaders, transforms, augmentations
+  viz/                  # Curves, confusion matrix, Grad-CAM, dataset plots
+  analysis/             # DatasetAnalysisReport, ModelAnalysisReport
+cli.py                  # Typer CLI (train, test, run, compose)
 ```
-
-## Documentation
-
-**English**:
-
-- [`docs/architecture.md`](docs/architecture.md) -- design philosophy, package layout, the Protocol-based contract.
-- [`docs/ops.md`](docs/ops.md) -- every operator (math, constructor, when to use, SAC/TR write-ups).
-- [`docs/models.md`](docs/models.md) -- per-model architecture, loss formula, SAC/TR insertion points.
-- [`docs/metrics.md`](docs/metrics.md) -- every metric (mAP, AR, precision/recall, statistical tests).
-- [`docs/pretrained.md`](docs/pretrained.md) -- `from_pretrained` semantics, key remapping, SAC/TR partial-load.
-- [`docs/logging.md`](docs/logging.md) -- log record schemas, JSONL format, post-hoc queries.
-- [`docs/usage.md`](docs/usage.md) -- end-to-end tutorial.
-- [`docs/development.md`](docs/development.md) -- how to add a new model variant.
-- [`docs/dataset.md`](docs/dataset.md) -- formats, conversion, transforms, target tensor conventions.
-- [`docs/pipeline.md`](docs/pipeline.md) -- TrainPipeline/TestPipeline usage, 5-fold CV, multi-model comparison.
-- [`docs/scheduler.md`](docs/scheduler.md) -- YAML format, retry workflow, parallel execution.
-- [`docs/scripts.md`](docs/scripts.md) -- every script's purpose, args, input/output.
-- [`docs/heatmap.md`](docs/heatmap.md) -- Grad-CAM methodology, layer selection, output structure.
-- [`docs/cross_validation.md`](docs/cross_validation.md) -- 5-fold mechanics, paired t-test, interpretation.
-- [`docs/cuda_setup.md`](docs/cuda_setup.md) -- cu118 install, VRAM scaling, AMP, multi-GPU.
-- [`experiments/README.md`](experiments/README.md) -- ready-to-run sweep configs.
-
-**中文** ([`README.zh-CN.md`](README.zh-CN.md)):
-
-- [`docs/architecture.zh-CN.md`](docs/architecture.zh-CN.md)
-- [`docs/ops.zh-CN.md`](docs/ops.zh-CN.md)
-- [`docs/models.zh-CN.md`](docs/models.zh-CN.md)
-- [`docs/metrics.zh-CN.md`](docs/metrics.zh-CN.md)
-- [`docs/pretrained.zh-CN.md`](docs/pretrained.zh-CN.md)
-- [`docs/logging.zh-CN.md`](docs/logging.zh-CN.md)
-- [`docs/usage.zh-CN.md`](docs/usage.zh-CN.md)
-- [`docs/development.zh-CN.md`](docs/development.zh-CN.md)
-- [`docs/dataset.zh-CN.md`](docs/dataset.zh-CN.md)
-- [`docs/pipeline.zh-CN.md`](docs/pipeline.zh-CN.md)
-- [`docs/scheduler.zh-CN.md`](docs/scheduler.zh-CN.md)
-- [`docs/scripts.zh-CN.md`](docs/scripts.zh-CN.md)
-- [`docs/heatmap.zh-CN.md`](docs/heatmap.zh-CN.md)
-- [`docs/cross_validation.zh-CN.md`](docs/cross_validation.zh-CN.md)
-- [`docs/cuda_setup.zh-CN.md`](docs/cuda_setup.zh-CN.md)
 
 ## Verification
 
 ```bash
-uv run ruff check cracks_yolo tests scripts
-uv run mypy --strict cracks_yolo tests scripts
-uv run pytest -q
+ruff check cracks_yolo tests
+mypy --strict cracks_yolo tests
+pytest -q
 ```
 
-All three are required green before merge.
+All three must pass with zero errors before merge.
+
+## Documentation
+
+| Document | Content |
+| --- | --- |
+| `docs/models.md` | Per-model architecture, loss formulas, SAC/TR insertion points |
+| `docs/ops.md` | Operator reference (SAC, C3TR, Conv, CSP, detect heads) |
+| `docs/pipeline.md` | TrainPipeline, TestPipeline, compose scheduler |
+| `docs/dataset.md` | Data formats, conversion, transforms, target conventions |
+| `docs/metrics.md` | COCO mAP, PR/ROC, statistical tests (t-test, Wilcoxon, bootstrap) |
+| `docs/logging.md` | JSONL log schema, loguru configuration |
+| `docs/usage.md` | End-to-end tutorial |
+| `docs/heatmap.md` | Grad-CAM methodology and output structure |
+| `docs/scripts.md` | CLI reference (all commands, all flags) |
+| `docs/scheduler.md` | Compose YAML format, `$include`, retry workflow |
+| `docs/models.md` | How to add a new model variant |
+
+Chinese translations: `docs/*.zh-CN.md`.
 
 ## License
 
-See `LICENSE` (or your project's license file).
+See `LICENSE`.

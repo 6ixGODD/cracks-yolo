@@ -2,135 +2,144 @@
 
 [English](scripts.md) | [中文](scripts.zh-CN.md)
 
-`scripts/` 包含所有 CLI 入口点。每个脚本是 `cracks_yolo.*` 模块的薄包装。所有脚本均接受 `--config <yaml>` 和单独的 `--flags`，并写入 `--output-dir`。
+## CLI 概览
 
-## train.py
+入口点为注册于 `pyproject.toml` 之 [Typer](https://typer.tiangolo.com/) 应用，具三名：
 
-```bash
-python -m scripts.train \
-    --model yolov5s_sactr \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --epochs 100 --batch-size 32 --input-size 640 \
-    --output-dir output/yolov5s_sactr \
-    --pretrained \
-    --seed 42
+```
+cracks-yolo <command> [options]
+cy <command> [options]
+python -m cracks_yolo <command> [options]
 ```
 
-标志：
-- `--model` — ZOO 键（参见 `cracks_yolo.zoo.ZOO`）。
-- `--dataset` — YOLOv5 格式的数据集根目录（包含 `data.yaml` + `train/`、`valid/`、`test/`）。
-- `--epochs`、`--batch-size`、`--lr`、`--weight-decay`、`--input-size` — 训练超参数。
-- `--amp` / `--no-amp` — 切换 AMP（默认开启）。注意：AMP + `lr=0.01` 在长时间运行时可能发散——请使用 `lr=1e-3` 或 `--no-amp` 以保证稳定性。
-- `--num-workers` — DataLoader 工作进程数（默认 0）。
-- `--device` — `cuda` 或 `cpu`（默认 `cuda`）。
-- `--seed` — 可复现性种子（默认 42）。
-- `--val-interval` — 每 N 个 epoch 验证一次（默认 1）。
-- `--log-every-n-steps` — 训练步骤日志频率（默认 50）。
-- `--pretrained` — 通过 `from_pretrained(strict=False)` 加载官方 COCO 预训练权重（SAC/TR 层保持随机初始化）。
-- `--weights-dir` — 下载的 `.pt` 文件的缓存目录（默认 `weights/`）。
-- `--cross-val` — 切换到 N 折 CV 模式。将 train+valid+test 划分合并为一个池，划分为 N 折。每折：保留折 = 测试，剩余记录划分为训练（90%）+ 验证（10%）。使用 `--n-folds`、`--val-fraction`。
-- `--n-folds` — CV 折数（默认 5）。
-- `--val-fraction` — 每折训练池中划出作为反向传播验证的比例（默认 0.1）。设为 0.0 则禁用验证。
-- `--train-split`、`--val-split` — 单次运行模式下的划分名称（默认 `train`、`valid`）。在 CV 模式下忽略。
+四子命令：`train`、`test`、`run`、`compose`。所有产物写入 `--output-dir`。`--help` 于任一子命令列出完整标志参考。
 
-输出到 `output-dir`：`run.log.jsonl`、`metrics.csv`、`loss_curve.png`、`metric_curve.png`、`config.yaml`、`best.pt`。在 CV 模式下：每折一个 `fold_<i>/` 目录 + `cv_summary.csv` + `cv_report.json`。
+---
 
-## test.py
+## `train`
 
-```bash
-python -m scripts.test \
-    --model yolov5s_sactr \
-    --weights output/yolov5s_sactr/best.pt \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --input-size 640 \
-    --output-dir output/yolov5s_sactr_test
+训练一个 ZOO 模型于 YOLOv5 格式数据集。
+
+```
+cy train -m yolov5s_sac -d data/CrackDetection_Augmentation.v1.yolov5pytorch -o output/yolov5s_sac
 ```
 
-输出：`metrics.csv`、`per_image/<id>.json`、`predictions/<id>.jpg`、`curves/{pr,roc,confusion}.png`、`run.log.jsonl` 中的 `TestLog`。
+| 选项 | 默认值 |
+|---|---|
+| `-m, --model` | *(必填)* ZOO 键 |
+| `-d, --dataset` | *(必填)* 数据集根目录（含 `train/`/`valid/`/`test/`） |
+| `-o, --output-dir` | *(必填)* |
+| `-e, --epochs` | `300` |
+| `-b, --batch-size` | `64` |
+| `--lr` | `1e-3` |
+| `--pretrained`/`--no-pretrained` | `--pretrained` 加载 COCO 权重 |
+| `--device` | `cuda` |
+| `--seed` | `42` |
+| `-w, --num-workers` | `8` |
+| `--optimizer` | `adamw`（`adamw`/`sgd`） |
+| `--cosine-lr`/`--no-cosine-lr` | `--cosine-lr` |
+| `--ema`/`--no-ema` | `--ema` |
+| `--patience` | `100` 早停 epoch 数 |
+| `--clip-grad-norm` | `10.0` |
 
-## convert_dataset.py
+产物：`run.log.jsonl`、`metrics.csv`、`loss_curve.png`、`metric_curve.png`、
+`config.yaml`、`best.pt`、`analysis.json`。
 
-```bash
-python -m scripts.convert_dataset \
-    --input data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --from yolo --to coco \
-    --output data/Crack_coco
+---
+
+## `test`
+
+加载检查点，对 `test` 与 `valid` 划分执行推理，计算 COCO 指标 /
+PR-ROC 曲线 / 混淆矩阵。
+
+```
+cy test -m yolov5s_sac --weights output/yolov5s_sac/best.pt \
+  -d data/CrackDetection_Augmentation.v1.yolov5pytorch -o output/yolov5s_sac_test
 ```
 
-## heatmap.py
+| 选项 | 默认值 |
+|---|---|
+| `-m, --model` | *(必填)* ZOO 键 |
+| `--weights` | *(必填)* 检查点 `.pt` |
+| `-d, --dataset` | *(必填)* 数据集根目录 |
+| `-o, --output-dir` | *(必填)* |
+| `-b, --batch-size` | `32` |
+| `--device` | `cuda` |
+| `--seed` | `42` |
 
-```bash
-python -m scripts.heatmap \
-    --model yolov5s_sactr \
-    --weights output/yolov5s_sactr/best.pt \
-    --input data/CrackDetection_Augmentation.v1.yolov5pytorch/test \
-    --layers backbone.8,backbone.9 \
-    --output-dir output/heatmaps
+产物：`metrics.csv`、`best_predictions_test.json`、`best_predictions_valid.json`。
+
+---
+
+## `run`
+
+执行一个 YAML 文件描述之实验。`type: train` 先训练，再自动对所产生之检查点测试；
+`type: test` 仅运行测试。`--test-only` 跳过训练阶段。
+
+```
+cy run -c experiments/models/yolov5s.yaml -o output/yolov5s
+cy run -c experiments/models/yolov5s.yaml --test-only -w output/yolov5s/best.pt
 ```
 
-为指定的 backbone 层生成 Grad-CAM 热力图。每张图片每层：`heatmaps/<image_id>/<layer>.png` + `feature_maps/<image_id>/<layer>.npy`。
+| 选项 | 默认值 |
+|---|---|
+| `-c, --config` | *(必填)* YAML 实验配置 |
+| `-o, --output-dir` | 覆写 YAML `output_dir` |
+| `--device` | 覆写 YAML `device` |
+| `--test-only` | `False`（需 `--weights`） |
+| `-w, --weights` | `--test-only` 之检查点 |
 
-**层命名**：使用相对于模型顶层属性的点号表示法。YOLOv5s backbone 有 10 个子层（索引 0-9），因此有效层为 `backbone.0` 到 `backbone.9`。无效索引会引发 `IndexError: index N is out of range`——请先检查 `len(model.backbone)`。
+### YAML 实验配置
 
-参见 `docs/heatmap.md` 了解方法说明。
-
-## analyze_dataset.py
-
-```bash
-python -m scripts.analyze_dataset \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --output-dir output/dataset_analysis
+```yaml
+name: yolov5s
+type: train                       # train | test
+model: yolov5s
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/yolov5s
+epochs: 300; batch_size: 64; lr: 0.001
+pretrained: true; device: cuda; seed: 42; num_workers: 8
+optimizer: sgd; cosine_lr: true; use_ema: true
+early_stopping_patience: 100; clip_grad_norm: 10.0
 ```
 
-输出：`class_distribution.png`、`bbox_size_distribution.png`、`bbox_position_heatmap.png`、`image_size_distribution.png`、`diversity_metrics.json`（Shannon 熵、唯一边界框宽高比桶数、空间覆盖度）。
+允许字段：`name`、`type`（`train`/`test`）、`model`、`dataset`、`output_dir`、
+`epochs`、`batch_size`、`lr`、`pretrained`、`device`、`seed`、`num_workers`、
+`optimizer`、`cosine_lr`、`use_ema`、`early_stopping_patience`、`clip_grad_norm`、
+`weights`（`type: test` 时必填）。
 
-## analyze_model.py
+`type: train` 时，命令自动以 `output_dir/weights/best.pt` 执行测试。
 
-```bash
-python -m scripts.analyze_model \
-    --model yolov5s_sactr \
-    --input-size 640 \
-    --output-dir output/model_analysis
+---
+
+## `compose`
+
+加载一个含 `$include` 指令之组合 YAML，以子进程逐个执行实验。
+日志、`results.jsonl`、`errors.jsonl` 落入 `{output_dir}/scheduler/`。
+
+```
+cy compose -c experiments/compose_all.yaml -o output/compose_all -p 2
 ```
 
-输出：`params.csv`、`macs.csv`（通过 `fvcore.nn.FlopCountAnalysis`）、`latency.csv`（100 次运行的 p50/p95，CPU + CUDA）、`vram.csv`（峰值 `torch.cuda.max_memory_allocated`）、`comparison_plot.png`。
+| 选项 | 默认值 |
+|---|---|
+| `-c, --config` | *(必填)* 组合 YAML |
+| `-o, --output-dir` | *(必填)* |
+| `-p, --max-parallel` | `1` 最大并行子进程数 |
 
-使用 `--all` 运行所有 ZOO 条目：
+### 组合 YAML 格式
 
-```bash
-python -m scripts.analyze_model --all --output-dir output/model_analysis_all
+```yaml
+scheduler:
+  max_parallel: 1
+  seed: 42
+$include:
+  - models/yolov5s.yaml
+  - models/yolov5s_sac.yaml
+  - models/yolov8n.yaml
+  - models/retinanet_r50.yaml
 ```
 
-## schedule_experiments.py
-
-YAML 驱动的批量调度器。参见 `docs/scheduler.md` 了解完整的 YAML 格式，以及 `experiments/README.md` 了解开箱即用的扫描配置。
-
-```bash
-# 直接 26 模型扫描（每个模型训练 + 测试）。
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_direct.yaml \
-    --output-dir output/all_models_direct
-
-# 5 折 CV 26 模型扫描。
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_cv5.yaml \
-    --output-dir output/all_models_cv5
-
-# 重试任何失败的实验。
-python -m scripts.schedule_experiments \
-    --retry-failed output/all_models_direct/scheduler/errors.jsonl \
-    --output-dir output/all_models_direct_retry
-```
-
-## compare_models.py
-
-```bash
-python -m scripts.compare_models \
-    --models yolov5s,yolov5s_sactr,yolov8s,yolov10s,yolov9c,retinanet_r50,faster_rcnn_r50 \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --n-folds 5 --epochs 100 \
-    --metric map50 \
-    --output-dir output/comparison
-```
-
-为每个模型运行 5 折 CV，然后在选定指标上进行逐折配对 t 检验。输出 `comparison.csv`、`paired_t_test.csv`、`comparison_plot.png`。
+`$include` 路径基于组合文件所在目录解析；被包含文件自身亦可含有 `$include`。
+既无 `$include` 亦无 `experiments` 之文件视为单个实验。每实验可携带一 `env` 映射
+（例 `CUDA_VISIBLE_DEVICES: "0"`），用于设置子进程环境变量。`run_compose` 返回失败计数。

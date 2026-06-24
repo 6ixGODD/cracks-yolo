@@ -2,240 +2,140 @@
 
 [English](usage.md) | [中文](usage.zh-CN.md)
 
-End-to-end tutorial for training and evaluating tongue surface crack
-detection models with `cracks_yolo`.
+End-to-end guide for training and evaluating tongue surface crack detection models.
 
-## Install
+## Installation
 
 ```bash
 git clone <repo>
 cd cracks-yolo
-uv sync          # or: pip install -e .
+uv sync              # library only
+uv sync --group dev  # library + CLI + test + typing + linters
 ```
 
-Requires Python 3.11 or 3.12, PyTorch >= 2.2. For CUDA 11.8 support:
+Requires Python 3.11--3.13, PyTorch >= 2.2. Configured for CUDA 11.8 via
+`pyproject.toml`. For CPU-only, comment the `[tool.uv.sources]` block. Two
+console scripts are registered: `cracks-yolo` and the shorthand `cy`.
+
+## CLI reference
+
+| Command | Purpose |
+|---------|---------|
+| `cy train` | Direct training (single run, 5-fold CV). |
+| `cy test`  | Standalone evaluation on a trained checkpoint. |
+| `cy run`   | Single experiment from YAML; auto-tests after training. |
+| `cy compose` | Batch scheduler with subprocess isolation and `$include` resolution. |
+
+### `cy train` / `cy test`
 
 ```bash
-uv pip install torch==2.5.1 torchvision==0.20.1 \
-    --index-url https://download.pytorch.org/whl/cu118
+# Train
+cy train -m yolov5s_sactr -d data/CrackDetection_Augmentation.v1.yolov5pytorch \
+    -o output/yolov5s_sactr -e 300 -b 64 --pretrained
+
+# 5-fold CV (merges all splits; held-out fold = test; remaining 90/10 train/val)
+cy train -m yolov5s_sactr -d data/CrackDetection_Augmentation.v1.yolov5pytorch \
+    -o output/yolov5s_sactr_cv -e 300 -b 64 --pretrained \
+    --cross-val --n-folds 5 --val-fraction 0.1
+
+# Test
+cy test -m yolov5s_sactr --weights output/yolov5s_sactr/weights/best.pt \
+    -d data/CrackDetection_Augmentation.v1.yolov5pytorch -o output/yolov5s_sactr/test
 ```
 
-## Quickstart: forward + loss + backward
+`cy train` flags: `-m/--model` (ZOO key), `-d/--dataset`, `-o/--output-dir`,
+`-e/--epochs` (300), `-b/--batch-size` (64), `--lr` (1e-3),
+`--pretrained/--no-pretrained`, `--device` (cuda), `--seed` (42),
+`-w/--num-workers` (8), `--optimizer` (adamw/sgd), `--cosine-lr/--no-cosine-lr`,
+`--ema/--no-ema`, `--patience` (100), `--clip-grad-norm` (10.0), `--cross-val`,
+`--n-folds`, `--val-fraction`.
 
-```python
-import torch
-from cracks_yolo.zoo import ZOO
+`cy test` flags: `-m/--model`, `--weights`, `-d/--dataset`, `-o/--output-dir`,
+`-b/--batch-size` (32), `--device`, `--seed`.
 
-# Instantiate any registered model.
-model = ZOO["yolov5s_sactr"](num_classes=1)
-model.train()
-
-# Forward (training mode returns raw head outputs).
-x = torch.randn(2, 3, 640, 640)
-preds = model(x)
-
-# Build YOLO-format targets: (N, 6) = (img_idx, cls, x, y, w, h) normalized.
-targets = torch.tensor(
-    [
-        [0, 0, 0.50, 0.50, 0.20, 0.20],
-        [0, 0, 0.30, 0.70, 0.10, 0.10],
-        [1, 0, 0.40, 0.40, 0.15, 0.25],
-    ],
-    dtype=torch.float32,
-)
-
-# Compute loss.
-# v7 needs the image batch (OTA assignment uses image dimensions).
-if model.__class__.__name__.startswith("YOLOv7"):
-    loss, parts = model.compute_loss(preds, targets, imgs=x)
-else:
-    loss, parts = model.compute_loss(preds, targets)
-
-loss.backward()
-assert all(p.grad is not None for p in model.parameters() if p.requires_grad)
-```
-
-## Eval-mode forward + decode
-
-```python
-model.eval()
-with torch.no_grad():
-    out = model(x)               # eval forward decodes internally
-    decoded = model.decode(out)  # returns (B, N, nc+5) or (B, 4+nc, N)
-
-print(decoded.shape)
-# v5/v7: torch.Size([2, 25200, 6])  -- (B, anchors, nc+5)
-# v8/v10: torch.Size([2, 5, 8400])  -- (B, 4+nc, grid_cells)
-```
-
-## Load COCO pretrained weights
-
-```python
-from cracks_yolo.zoo import YOLOv5s
-
-# Baseline (has pretrained_spec) -- downloads + loads with strict=False.
-model = YOLOv5s.from_pretrained(num_classes=1)
-
-# SAC/TR variants return random init (pretrained_spec is None).
-from cracks_yolo.zoo import YOLOv5sSACTR
-model = YOLOv5sSACTR(num_classes=1)
-```
-
-To inspect the load report:
-
-```python
-from cracks_yolo.weights.loader import load_pretrained
-from cracks_yolo.zoo import YOLOv5s
-
-model = YOLOv5s(num_classes=1)
-report = load_pretrained(
-    model=model,
-    spec=YOLOv5s.pretrained_spec,
-    weights_dir=None,  # defaults to ./weights
-    strict=False,
-)
-print(f"matched: {len(report.matched)}")
-print(f"missing: {report.missing[:5]} ... ({len(report.missing)} total)")
-print(f"unexpected: {len(report.unexpected)}")
-```
-
-## Build the optimizer
-
-```python
-model = ZOO["yolov8s_sac"](num_classes=1)
-optimizer = model.build_optimizer()
-# torch.optim.AdamW(model.parameters(), lr=1e-3)
-```
-
-## List all available models
-
-```python
-from cracks_yolo.zoo import ZOO
-
-for key, cls in ZOO.items():
-    print(f"{key:18s} -> {cls.__name__}")
-```
-
-Output (26 entries total):
-
-```
-yolov5s            -> YOLOv5s_CIoU_BCEObj_BCECls_AdamW_SILU
-yolov5s_sac        -> YOLOv5sSAC_CIoU_BCEObj_BCECls_AdamW_SILU
-yolov5s_tr         -> YOLOv5sTR_CIoU_BCEObj_BCECls_AdamW_SILU
-yolov5s_sactr      -> YOLOv5sSACTR_CIoU_BCEObj_BCECls_AdamW_SILU
-yolov7w            -> YOLOv7w_CIoU_BCEObj_BCECls_AdamW_SILU
-yolov7w_sac        -> YOLOv7wSAC_CIoU_BCEObj_BCECls_AdamW_SILU
-yolov8s            -> YOLOv8s_CIoU_DFL_AdamW_SILU
-yolov8s_sac        -> YOLOv8sSAC_CIoU_DFL_AdamW_SILU
-yolov10s           -> YOLOv10s_CIoU_DFL_AdamW_SILU
-yolov10s_sac       -> YOLOv10sSAC_CIoU_DFL_AdamW_SILU
-...
-```
-
-## Run training
-
-The train script expects a dataset in YOLOv5 PyTorch format:
+### `cy run` -- single-experiment YAML
 
 ```bash
-python -m scripts.train \
-    --model yolov5s_sactr \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --epochs 100 --batch-size 32 \
-    --output-dir output/yolov5s_sactr \
-    --pretrained
+# Full train + auto-test
+cy run -c experiments/models/yolov5s.yaml -o output/yolov5s
+
+# Skip training, evaluate an existing checkpoint
+cy run -c experiments/models/yolov5s.yaml -o output/yolov5s_test \
+    --test-only --weights output/yolov5s/weights/best.pt
 ```
 
-Training artifacts produced under `output/yolov5s_sactr/`:
+When `--test-only` is set, `--weights` is required. For `type: test` YAMLs, a
+`weights` key must be present. The config format:
 
-- `run.log.jsonl` -- structured JSONL log
-- `metrics.csv` -- per-epoch metrics
-- `loss_curve.png`, `metric_curve.png` -- training curves
-- `config.yaml` -- frozen training config
-- `best.pt` -- best checkpoint
-- `per_image/*.json` -- per-image prediction results
-- `predictions/*.jpg` -- visualization of predictions
-- `curves/{pr,roc,confusion}.png` -- evaluation curves
+```yaml
+name: yolov5s
+type: train
+model: yolov5s
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/yolov5s
+epochs: 300
+batch_size: 64
+lr: 0.001
+pretrained: true
+device: cuda
+seed: 42
+num_workers: 8
+optimizer: sgd
+cosine_lr: true
+use_ema: true
+early_stopping_patience: 100
+clip_grad_norm: 10.0
+```
 
-## Run testing on a trained model
+Supported keys: `name`, `type` (`train`|`test`), `model`, `dataset`,
+`output_dir`, `epochs`, `batch_size`, `lr`, `device`, `seed`, `num_workers`,
+`pretrained`, `weights` (test only), `optimizer`, `cosine_lr`, `use_ema`,
+`early_stopping_patience`, `clip_grad_norm`, `env` (per-experiment env dict,
+e.g. `{CUDA_VISIBLE_DEVICES: "0"}`).
+
+### `cy compose` -- batch scheduling
 
 ```bash
-python -m scripts.test \
-    --model yolov5s_sactr \
-    --weights output/yolov5s_sactr/best.pt \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --output-dir output/yolov5s_sactr/test
+cy compose -c experiments/compose_all.yaml -o output/compose_all        # serial
+cy compose -c experiments/compose_all.yaml -o output/compose_all -p 4   # parallel, 4 workers
 ```
 
-## 5-fold cross-validation
+Compose YAML aggregates experiment YAMLs via `$include`:
 
-Merges train+valid+test into one pool, held-out fold = test, remaining
-90/10 split for train/val:
-
-```bash
-python -m scripts.train \
-    --model yolov5s_sactr \
-    --cross-val --n-folds 5 --val-fraction 0.1 \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --epochs 100 --batch-size 32 \
-    --output-dir output/yolov5s_sactr_cv \
-    --pretrained
+```yaml
+scheduler:
+  max_parallel: 1
+  seed: 42
+$include:
+  - models/yolov5s.yaml
+  - models/yolov5s_sac.yaml
 ```
 
-CV output includes `cv_summary.csv`, `cv_report.json`, and individual
-`fold_*/` directories.
+Each experiment runs in an isolated subprocess. Stdout/stderr captured to
+`<output_dir>/scheduler/<name>.log`. Successes in `scheduler/results.jsonl`;
+failures in `scheduler/errors.jsonl`. Set per-experiment
+`env: {CUDA_VISIBLE_DEVICES: "N"}` for multi-GPU pinning.
 
-## Multi-model comparison with statistical tests
+## Output directory layout
 
-```bash
-python -m scripts.compare_models \
-    --models yolov5s,yolov5s_sactr,yolov8s,yolov9c,retinanet_r50,faster_rcnn_r50 \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --n-folds 5 --epochs 100 \
-    --output-dir output/comparison
+**`cy train` / `cy run` (type: train):**
+
+```
+output/<name>/
+  config.yaml          Frozen training configuration
+  run.log.jsonl        Structured JSONL log
+  metrics.csv          Per-epoch metrics (loss, mAP, precision, recall)
+  loss_curve.png       Training loss
+  metric_curve.png     Validation metrics
+  weights/{best.pt, last.pt}
+  test/                Auto-generated (metrics.csv, per_image/*.json,
+                         predictions/*.jpg, curves/{pr,roc,confusion}.png)
 ```
 
-Produces `comparison*.csv`, `paired_t_test.csv`, plus Wilcoxon and
-bootstrap CI results.
+**`cy test` (standalone):** same as `test/` above, plus `run.log.jsonl`.
 
-## Batch scheduling with subprocess isolation
+**`cy compose`:** `<output_dir>/scheduler/{results.jsonl, errors.jsonl, *.log}`
+plus one subdirectory per experiment.
 
-```bash
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_direct.yaml \
-    --output-dir output/all_models_direct
-```
-
-The scheduler runs each experiment in an isolated subprocess, captures
-errors to `errors.jsonl`, and supports `--retry` mode to re-run only
-failed experiments. Set `max_parallel > 1` and per-experiment
-`env: {CUDA_VISIBLE_DEVICES: "N"}` for multi-GPU servers.
-
-## Structured logging
-
-```python
-from pathlib import Path
-from loguru import logger
-from cracks_yolo.logging.configure import configure_logger
-from cracks_yolo.logging.schema import TrainStepLog
-
-configure_logger(output_dir=Path("output/run1"))
-
-record: TrainStepLog = {
-    "record_type": "train_step",
-    "step": 0, "epoch": 0,
-    "total_loss": 1.23, "box_loss": 0.4, "cls_loss": 0.5,
-    "obj_loss": 0.33, "dfl_loss": None,
-    "lr": 1e-3, "timestamp": "2026-06-18T00:00:00",
-}
-logger.bind(**record).info("step done")
-# Writes one JSON line to output/run1/run.log.jsonl
-```
-
-## Other scripts
-
-| Script | Purpose |
-| --- | --- |
-| `convert_dataset` | Convert between COCO and YOLOv5 formats |
-| `heatmap` | Grad-CAM visualization for a trained model |
-| `analyze_dataset` | Dataset diversity metrics and distribution plots |
-| `analyze_model` | Model params/MACs/latency/VRAM profiling |
+**`cy train --cross-val`:** `<output_dir>/{cv_summary.csv, cv_report.json}`
+plus `fold_0/`, `fold_1/`, ... per fold.

@@ -1,33 +1,39 @@
-# Grad-CAM heatmaps
+# Heatmap generation
 
 [English](heatmap.md) | [中文](heatmap.zh-CN.md)
 
-`cracks_yolo.viz.heatmap.GradCAMExtractor` generates Grad-CAM saliency maps for any `nn.Module` and any target layer. Used by `scripts/heatmap.py` to visualize which backbone regions a trained model attends to per image.
+`cracks_yolo.viz.heatmap.GradCAMExtractor` produces gradient-weighted class activation maps
+(Grad-CAM; Selvaraju et al., 2017) for arbitrary `nn.Module` subgraphs. `scripts/heatmap.py`
+batch-processes images and saves overlays.
 
-## Methodology
+## Method
 
-Grad-CAM (Gradient-weighted Class Activation Mapping, Selvaraju et al. 2017):
+For a target layer output `A ∈ R^{C×H×W}` and a scalar score `y`, a forward hook captures `A`
+and a backward hook captures ∂y/∂A. Channel weights are global-average-pooled gradients:
 
-1. Register a forward hook on the target layer to capture its activation output `A` (a `(C, H, W)` feature map).
-2. Register a backward hook to capture the gradient of the scalar score (max class score over all anchor/grid positions) with respect to `A`.
-3. After one forward + backward pass on an input image:
-   - Compute channel-wise weights `α_k = mean over (H, W) of ∂score/∂A_k` (global average pooling of the gradient).
-   - Compute the heatmap `M = ReLU(Σ_k α_k · A_k)` — shape `(H, W)`.
-4. Upsample `M` to the input image size, normalize to `[0, 1]`, overlay as a jet colormap on the original image.
+```
+α_k = (1 / (H·W)) · Σ_i Σ_j  ∂y / ∂A_{k,i,j}
+```
 
-**Score choice for detection models**: for anchor-free v8/v9/v10, the scalar score is `max over grid cells of max over classes of sigmoid(cls_logits)`. For anchor-based v5/v7, it's `max over anchors of max over classes of sigmoid(obj_logit) * sigmoid(cls_logits)`. For torchvision detectors, the highest-scoring detection's `score` field is used directly.
+The raw heatmap is the ReLU-thresholded weighted sum, upsampled to input size and normalized:
 
-## Layer selection
+```
+M = ReLU( Σ_k α_k · A_k )   ∈ R^{H×W}
+```
 
-Use dot-notation relative to the model's top-level attributes. The YOLO models in `cracks_yolo.zoo` expose `backbone` (an `nn.Sequential`) and `neck` (another `nn.Sequential`). Valid layer specs:
+### Score definition
 
-- `backbone.0` through `backbone.9` (v5s: 10 children, indices 0-9).
-- `backbone.0` through `backbone.9` (v8/v9/v10: same indexing scheme).
-- `neck.0`, `neck.4`, `neck.7`, etc. — any layer index in the neck.
+| Paradigm       | Score `y`                                                              |
+|----------------|------------------------------------------------------------------------|
+| Anchor-free    | max over grid of max over classes of σ(cls_logits)                     |
+| Anchor-based   | max over anchors of max over classes of σ(obj) · σ(cls)                |
+| Torchvision    | highest-scoring detection `score`                                      |
 
-For torchvision detectors, use the ResNet submodules: `_inner.backbone.body.layer1`, `_inner.backbone.body.layer4`, etc.
+## Layer specification
 
-**Common pitfall**: YOLOv5s backbone has 10 children (indices 0-9), so `backbone.10` raises `IndexError`. Always check `len(model.backbone)` before specifying `--layers`.
+Dot-separated paths relative to model root: `backbone.0`..`backbone.9` (YOLOv5/v8/v9/v10),
+`neck.0`, `neck.4`, etc. Torchvision: `_inner.backbone.body.layer1`..`layer4`. Verify depth
+with `len(model.backbone)` before scripting — YOLOv5s backbone has exactly 10 children.
 
 ## CLI
 
@@ -41,28 +47,30 @@ python -m scripts.heatmap \
     --input-size 640
 ```
 
-Output structure:
+Output: `heatmaps/` (jet-overlay PNG per image per layer) and `feature_maps/` (raw `.npy`).
 
-```
-output/heatmaps/
-  heatmaps/
-    000000/
-      backbone.8.png      # jet-overlay on original image
-      backbone.9.png
-    000001/
-      ...
-  feature_maps/
-    000000/
-      backbone.8.npy      # raw (C, H, W) feature map
-      backbone.9.npy
-    000001/
-      ...
+## API
+
+```python
+from cracks_yolo.viz.heatmap import GradCAMExtractor
+
+extractor = GradCAMExtractor(model, target_layers=["backbone.8", "backbone.9"])
+heatmaps = extractor(image_tensor)  # dict[str, np.ndarray]
 ```
 
-## Interpretation for tongue surface crack detection
+## Visualization utilities
 
-Grad-CAM serves two purposes for tongue surface crack detection:
+- `overlay_heatmap(image, heatmap, alpha=0.4, cmap="jet")` — superimpose normalized heatmap on
+  a PIL/numpy image, return RGB array.
+- `save_heatmap_grid(images, heatmaps, ncols=4)` — tiled comparison PNG across samples or layers.
+- `plot_activation_profile(heatmap, axis=0)` — horizontal/vertical mean projection for
+  quantifying spatial concentration along crack traces.
 
-1. **SAC/TR ablation evidence**: compare heatmaps for `YOLOv5s` vs `YOLOv5sSAC` vs `YOLOv5sTR` vs `YOLOv5sSACTR` on the same test images. SACTR tends to produce more focused activation along thin crack lines (less diffuse context bleed) — visually quantifiable as a tighter heatmap envelope around ground-truth crack pixels.
+## Interpretation for crack detection
 
-2. **Cross-paradigm comparison**: YOLO heatmaps localize well to crack pixels because the dense grid predictions are spatially aligned. Faster-RCNN's ROI-based heatmaps look qualitatively different (sharper per-detection, but missing the dense coverage).
+1. **SAC/TR ablation.** Compare heatmaps across YOLOv5s, YOLOv5sSAC, YOLOv5sTR, and
+   YOLOv5sSACTR on identical inputs. SACTR variants exhibit tighter activation envelopes along
+   thin crack traces with reduced diffuse bleed into surrounding tissue.
+2. **Cross-paradigm comparison.** Dense-grid YOLO heatmaps provide spatially continuous coverage
+   aligned to crack topology; ROI-based detectors (Faster-RCNN) produce sharper per-instance
+   maps but lack the same spatial density.

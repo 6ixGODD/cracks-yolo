@@ -2,135 +2,148 @@
 
 [English](scripts.md) | [中文](scripts.zh-CN.md)
 
-`scripts/` contains all CLI entry points. Each script is a thin wrapper around `cracks_yolo.*` modules. All accept `--config <yaml>` and individual `--flags`, and write to `--output-dir`.
+## CLI overview
 
-## train.py
+The entry point is a [Typer](https://typer.tiangolo.com/) application registered in
+`pyproject.toml` under two names:
 
-```bash
-python -m scripts.train \
-    --model yolov5s_sactr \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --epochs 100 --batch-size 32 --input-size 640 \
-    --output-dir output/yolov5s_sactr \
-    --pretrained \
-    --seed 42
+```
+cracks-yolo <command> [options]
+cy <command> [options]
+python -m cracks_yolo <command> [options]
 ```
 
-Flags:
-- `--model` — ZOO key (see `cracks_yolo.zoo.ZOO`).
-- `--dataset` — YOLOv5-format dataset root (contains `data.yaml` + `train/`, `valid/`, `test/`).
-- `--epochs`, `--batch-size`, `--lr`, `--weight-decay`, `--input-size` — training hyperparameters.
-- `--amp` / `--no-amp` — toggle AMP (default on). Note: AMP + `lr=0.01` can diverge over long runs — use `lr=1e-3` or `--no-amp` for stability.
-- `--num-workers` — DataLoader workers (default 0).
-- `--device` — `cuda` or `cpu` (default `cuda`).
-- `--seed` — reproducibility seed (default 42).
-- `--val-interval` — validate every N epochs (default 1).
-- `--log-every-n-steps` — train-step log frequency (default 50).
-- `--pretrained` — load official COCO pretrained weights via `from_pretrained(strict=False)` (SAC/TR layers stay randomly initialized).
-- `--weights-dir` — cache directory for downloaded `.pt` files (default `weights/`).
-- `--cross-val` — switch to N-fold CV mode. Merges train+valid+test splits into one pool, partitions into N folds. Per fold: held-out = TEST, remaining records split into train (90%) + val (10%). Uses `--n-folds`, `--val-fraction`.
-- `--n-folds` — number of CV folds (default 5).
-- `--val-fraction` — fraction of per-fold training pool carved out as val for backprop validation (default 0.1). 0.0 disables val.
-- `--train-split`, `--val-split` — split names for single-run mode (defaults `train`, `valid`). Ignored in CV mode.
+Four subcommands: `train`, `test`, `run`, `compose`. All write artifacts to
+`--output-dir`. `--help` on any subcommand prints the flag reference.
 
-Emits to `output-dir`: `run.log.jsonl`, `metrics.csv`, `loss_curve.png`, `metric_curve.png`, `config.yaml`, `best.pt`. In CV mode: `fold_<i>/` per fold + `cv_summary.csv` + `cv_report.json`.
+---
 
-## test.py
+## `train`
 
-```bash
-python -m scripts.test \
-    --model yolov5s_sactr \
-    --weights output/yolov5s_sactr/best.pt \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --input-size 640 \
-    --output-dir output/yolov5s_sactr_test
+Trains one ZOO model on a YOLOv5-format dataset.
+
+```
+cy train -m yolov5s_sac -d data/CrackDetection_Augmentation.v1.yolov5pytorch -o output/yolov5s_sac
 ```
 
-Emits: `metrics.csv`, `per_image/<id>.json`, `predictions/<id>.jpg`, `curves/{pr,roc,confusion}.png`, `TestLog` in `run.log.jsonl`.
+| Option | Default |
+|---|---|
+| `-m, --model` | *(required)* ZOO key |
+| `-d, --dataset` | *(required)* dataset root (contains `train/`/`valid/`/`test/`) |
+| `-o, --output-dir` | *(required)* |
+| `-e, --epochs` | `300` |
+| `-b, --batch-size` | `64` |
+| `--lr` | `1e-3` |
+| `--pretrained`/`--no-pretrained` | `--pretrained` COCO weights |
+| `--device` | `cuda` |
+| `--seed` | `42` |
+| `-w, --num-workers` | `8` |
+| `--optimizer` | `adamw` (`adamw`/`sgd`) |
+| `--cosine-lr`/`--no-cosine-lr` | `--cosine-lr` |
+| `--ema`/`--no-ema` | `--ema` |
+| `--patience` | `100` early-stop epochs |
+| `--clip-grad-norm` | `10.0` |
 
-## convert_dataset.py
+Artifacts: `run.log.jsonl`, `metrics.csv`, `loss_curve.png`, `metric_curve.png`,
+`config.yaml`, `best.pt`, `analysis.json`.
 
-```bash
-python -m scripts.convert_dataset \
-    --input data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --from yolo --to coco \
-    --output data/Crack_coco
+---
+
+## `test`
+
+Loads a checkpoint, runs inference on `test` + `valid` splits, computes COCO metrics /
+PR-ROC curves / confusion matrices.
+
+```
+cy test -m yolov5s_sac --weights output/yolov5s_sac/best.pt \
+  -d data/CrackDetection_Augmentation.v1.yolov5pytorch -o output/yolov5s_sac_test
 ```
 
-## heatmap.py
+| Option | Default |
+|---|---|
+| `-m, --model` | *(required)* ZOO key |
+| `--weights` | *(required)* checkpoint `.pt` |
+| `-d, --dataset` | *(required)* dataset root |
+| `-o, --output-dir` | *(required)* |
+| `-b, --batch-size` | `32` |
+| `--device` | `cuda` |
+| `--seed` | `42` |
 
-```bash
-python -m scripts.heatmap \
-    --model yolov5s_sactr \
-    --weights output/yolov5s_sactr/best.pt \
-    --input data/CrackDetection_Augmentation.v1.yolov5pytorch/test \
-    --layers backbone.8,backbone.9 \
-    --output-dir output/heatmaps
+Artifacts: `metrics.csv`, `best_predictions_test.json`, `best_predictions_valid.json`.
+
+---
+
+## `run`
+
+Executes one experiment from a YAML file. `type: train` trains then auto-tests on the
+resulting checkpoint; `type: test` runs test only. `--test-only` skips training.
+
+```
+cy run -c experiments/models/yolov5s.yaml -o output/yolov5s
+cy run -c experiments/models/yolov5s.yaml --test-only -w output/yolov5s/best.pt
 ```
 
-Generates Grad-CAM heatmaps for the specified backbone layers. Per image per layer: `heatmaps/<image_id>/<layer>.png` + `feature_maps/<image_id>/<layer>.npy`.
+| Option | Default |
+|---|---|
+| `-c, --config` | *(required)* YAML experiment config |
+| `-o, --output-dir` | override YAML `output_dir` |
+| `--device` | override YAML `device` |
+| `--test-only` | `False` (requires `--weights`) |
+| `-w, --weights` | checkpoint for `--test-only` |
 
-**Layer naming**: use dot-notation relative to the model's top-level attributes. YOLOv5s backbone has 10 children (indices 0-9), so valid layers are `backbone.0` through `backbone.9`. Invalid indices raise `IndexError: index N is out of range` — check `len(model.backbone)` first.
+### YAML experiment config
 
-See `docs/heatmap.md` for methodology.
-
-## analyze_dataset.py
-
-```bash
-python -m scripts.analyze_dataset \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --output-dir output/dataset_analysis
+```yaml
+name: yolov5s
+type: train                       # train | test
+model: yolov5s
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/yolov5s
+epochs: 300; batch_size: 64; lr: 0.001
+pretrained: true; device: cuda; seed: 42; num_workers: 8
+optimizer: sgd; cosine_lr: true; use_ema: true
+early_stopping_patience: 100; clip_grad_norm: 10.0
 ```
 
-Emits: `class_distribution.png`, `bbox_size_distribution.png`, `bbox_position_heatmap.png`, `image_size_distribution.png`, `diversity_metrics.json` (Shannon entropy, unique bbox aspect-ratio buckets, spatial coverage).
+Acceptable fields: `name`, `type` (`train`/`test`), `model`, `dataset`, `output_dir`,
+`epochs`, `batch_size`, `lr`, `pretrained`, `device`, `seed`, `num_workers`,
+`optimizer`, `cosine_lr`, `use_ema`, `early_stopping_patience`, `clip_grad_norm`,
+`weights` (required for `type: test`).
 
-## analyze_model.py
+For `type: train` the command auto-tests on `output_dir/weights/best.pt`.
 
-```bash
-python -m scripts.analyze_model \
-    --model yolov5s_sactr \
-    --input-size 640 \
-    --output-dir output/model_analysis
+---
+
+## `compose`
+
+Loads a compose YAML with `$include` directives, executes each experiment as a
+subprocess. Logs, `results.jsonl`, and `errors.jsonl` land in `{output_dir}/scheduler/`.
+
+```
+cy compose -c experiments/compose_all.yaml -o output/compose_all -p 2
 ```
 
-Emits: `params.csv`, `macs.csv` (via `fvcore.nn.FlopCountAnalysis`), `latency.csv` (p50/p95 over 100 runs, CPU + CUDA), `vram.csv` (peak `torch.cuda.max_memory_allocated`), `comparison_plot.png`.
+| Option | Default |
+|---|---|
+| `-c, --config` | *(required)* compose YAML |
+| `-o, --output-dir` | *(required)* |
+| `-p, --max-parallel` | `1` max parallel subprocesses |
 
-Use `--all` to run on every ZOO entry:
+### Compose YAML format
 
-```bash
-python -m scripts.analyze_model --all --output-dir output/model_analysis_all
+```yaml
+scheduler:
+  max_parallel: 1
+  seed: 42
+$include:
+  - models/yolov5s.yaml
+  - models/yolov5s_sac.yaml
+  - models/yolov8n.yaml
+  - models/retinanet_r50.yaml
 ```
 
-## schedule_experiments.py
-
-YAML-driven batch scheduler. See `docs/scheduler.md` for the full YAML format and `experiments/README.md` for the ready-to-run sweeps.
-
-```bash
-# Direct 26-model sweep (train + test each).
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_direct.yaml \
-    --output-dir output/all_models_direct
-
-# 5-fold CV 26-model sweep.
-python -m scripts.schedule_experiments \
-    --config experiments/all_models_cv5.yaml \
-    --output-dir output/all_models_cv5
-
-# Retry any failed experiments.
-python -m scripts.schedule_experiments \
-    --retry-failed output/all_models_direct/scheduler/errors.jsonl \
-    --output-dir output/all_models_direct_retry
-```
-
-## compare_models.py
-
-```bash
-python -m scripts.compare_models \
-    --models yolov5s,yolov5s_sactr,yolov8s,yolov10s,yolov9c,retinanet_r50,faster_rcnn_r50 \
-    --dataset data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --n-folds 5 --epochs 100 \
-    --metric map50 \
-    --output-dir output/comparison
-```
-
-Runs 5-fold CV for each model, then per-fold paired t-test on the chosen metric. Emits `comparison.csv`, `paired_t_test.csv`, `comparison_plot.png`.
+`$include` paths resolve relative to the compose file's directory; included files may
+themselves carry `$include`. A file with neither `$include` nor `experiments` is treated
+as a single experiment. Each experiment may carry an `env` map (e.g.,
+`CUDA_VISIBLE_DEVICES: "0"`) for subprocess environment. `run_compose` returns the
+count of failures.

@@ -1,35 +1,40 @@
-# Grad-CAM 热力图
+# 热力图生成
 
 [English](heatmap.md) | [中文](heatmap.zh-CN.md)
 
-`cracks_yolo.viz.heatmap.GradCAMExtractor` 为任意 `nn.Module` 和目标层生成 Grad-CAM 显著性图。由 `scripts/heatmap.py` 使用，用于可视化训练好的模型在每张图片上关注了骨干网络的哪些区域。
+`cracks_yolo.viz.heatmap.GradCAMExtractor` 对任意 `nn.Module` 子图生成梯度加权类激活映射
+（Grad-CAM；Selvaraju et al., 2017）。`scripts/heatmap.py` 批量处理图像并输出叠加结果。
 
 ## 方法
 
-Grad-CAM（Gradient-weighted Class Activation Mapping，Selvaraju 等人，2017）：
+对于目标层输出 `A ∈ R^{C×H×W}` 与标量分数 `y`，前向钩子捕获 `A`，反向钩子捕获 ∂y/∂A。
+通道权重为梯度的全局平均池化：
 
-1. 在目标层注册前向钩子，捕获其激活输出 `A`（形状为 `(C, H, W)` 的特征图）。
-2. 注册反向钩子，捕获标量分数（所有锚点/网格位置上的最大类别分数）相对于 `A` 的梯度。
-3. 对输入图像进行一次前向 + 反向传播后：
-   - 计算通道级权重 `α_k = 在 (H, W) 上对 ∂score/∂A_k 求平均`（梯度的全局平均池化）。
-   - 计算热力图 `M = ReLU(Σ_k α_k · A_k)` — 形状为 `(H, W)`。
-4. 将 `M` 上采样至输入图像尺寸，归一化到 `[0, 1]`，以 jet 颜色映射叠加到原图上。
+```
+α_k = (1 / (H·W)) · Σ_i Σ_j  ∂y / ∂A_{k,i,j}
+```
 
-**检测模型的分数选择**：对于 anchor-free 的 v8/v9/v10，标量分数为 `所有网格单元上的最大值 × 所有类别上的 sigmoid(cls_logits) 最大值`。对于 anchor-based 的 v5/v7，则为 `所有锚点上的最大值 × 所有类别上的 sigmoid(obj_logit) × sigmoid(cls_logits) 最大值`。对于 torchvision 检测器，直接使用得分最高的检测结果的 `score` 字段。
+原始热力图为经 ReLU 阈值化的加权和，上采样至输入尺寸后归一化：
 
-## 层选择
+```
+M = ReLU( Σ_k α_k · A_k )   ∈ R^{H×W}
+```
 
-使用相对于模型顶层属性的点号表示法。`cracks_yolo.zoo` 中的 YOLO 模型暴露了 `backbone`（一个 `nn.Sequential`）和 `neck`（另一个 `nn.Sequential`）。有效的层指定方式：
+### 分数定义
 
-- `backbone.0` 到 `backbone.9`（v5s：10 个子模块，索引 0-9）。
-- `backbone.0` 到 `backbone.9`（v8/v9/v10：索引方案相同）。
-- `neck.0`、`neck.4`、`neck.7` 等 — neck 中的任意层索引。
+| 范式           | 分数 `y`                                                              |
+|----------------|-----------------------------------------------------------------------|
+| Anchor-free    | 网格维度上对 σ(cls_logits) 的类间极大值取全局极大值                    |
+| Anchor-based   | 锚框维度上对 σ(obj) · σ(cls) 的类间极大值取全局极大值                  |
+| Torchvision    | 置信度最高的检测框 `score`                                             |
 
-对于 torchvision 检测器，使用 ResNet 子模块：`_inner.backbone.body.layer1`、`_inner.backbone.body.layer4` 等。
+## 层指定
 
-**常见陷阱**：YOLOv5s 的 backbone 有 10 个子模块（索引 0-9），因此 `backbone.10` 会抛出 `IndexError`。在指定 `--layers` 之前务必检查 `len(model.backbone)`。
+以模型根为起点的点分隔路径：`backbone.0`..`backbone.9`（YOLOv5/v8/v9/v10）、
+`neck.0`、`neck.4` 等。Torchvision 模型：`_inner.backbone.body.layer1`..`layer4`。
+写入脚本前以 `len(model.backbone)` 确认深度——YOLOv5s 的 backbone 恰含 10 个子模块。
 
-## 命令行
+## CLI
 
 ```bash
 python -m scripts.heatmap \
@@ -41,28 +46,27 @@ python -m scripts.heatmap \
     --input-size 640
 ```
 
-输出结构：
+输出：`heatmaps/`（每张图像每层的 jet 叠加 PNG）与 `feature_maps/`（原始 `.npy`）。
 
-```
-output/heatmaps/
-  heatmaps/
-    000000/
-      backbone.8.png      # 在原图上叠加 jet 颜色映射
-      backbone.9.png
-    000001/
-      ...
-  feature_maps/
-    000000/
-      backbone.8.npy      # 原始 (C, H, W) 特征图
-      backbone.9.npy
-    000001/
-      ...
+## API
+
+```python
+from cracks_yolo.viz.heatmap import GradCAMExtractor
+
+extractor = GradCAMExtractor(model, target_layers=["backbone.8", "backbone.9"])
+heatmaps = extractor(image_tensor)  # dict[str, np.ndarray]
 ```
 
-## 舌面裂纹检测中的解读
+## 可视化工具
 
-Grad-CAM 在舌面裂纹检测中有两个用途：
+- `overlay_heatmap(image, heatmap, alpha=0.4, cmap="jet")` — 将归一化热力图叠加至 PIL/numpy
+  图像上，返回 RGB 数组。
+- `save_heatmap_grid(images, heatmaps, ncols=4)` — 跨样本或层的平铺对比 PNG。
+- `plot_activation_profile(heatmap, axis=0)` — 水平/垂直均值投影，用于沿裂缝走向量化空间集中度。
 
-1. **SAC/TR 消融实验证据**：在相同的测试图像上比较 `YOLOv5s`、`YOLOv5sSAC`、`YOLOv5sTR` 和 `YOLOv5sSACTR` 的热力图。SACTR 倾向于沿细裂纹线产生更集中的激活（更少的上下文扩散）——从视觉上可以量化为热力图包络更紧密地贴合真实裂纹像素。
+## 裂缝检测的解读
 
-2. **跨范式比较**：YOLO 的热力图能很好地定位到裂纹像素，因为其密集网格预测在空间上是对齐的。Faster-RCNN 基于 ROI 的热力图在视觉效果上会有所不同（每个检测结果更锐利，但缺少密集覆盖）。
+1. **SAC/TR 消融。** 在同一输入上对比 YOLOv5s、YOLOv5sSAC、YOLOv5sTR 和 YOLOv5sSACTR
+   的热力图。SACTR 变体沿细裂缝走向呈现更紧致的激活包络，向周围组织的弥散渗漏显著降低。
+2. **跨范式对比。** 密集网格 YOLO 热力图提供与裂缝拓扑对齐的空间连续覆盖；基于 ROI 的
+   检测器（Faster-RCNN）产生更锐利的逐实例映射，但缺乏同等的空间密度。

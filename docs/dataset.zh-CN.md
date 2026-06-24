@@ -1,106 +1,109 @@
 # 数据集
 
-[English](dataset.md) | [中文](dataset.zh-CN.md)
+`cracks_yolo.dataset` 模块提供 YOLOv5-PyTorch 与 COCO 检测数据集的格式无关摄入。所有数据源统一产出
+`RawDetection` 记录——一种共享的中间表示，由单一的 `DetectionDataset` 包装器消费，后者为训练与推理
+产出 `(image_tensor, targets)` 批次。
 
-`cracks_yolo.dataset` 提供格式无关的数据集加载、YOLOv5-PyTorch 与 COCO 格式之间的转换、一个 torchvision 兼容的 `DetectionDataset`，以及一套保守的变换流水线。默认数据集（`data/CrackDetection_Augmentation.v1.yolov5pytorch`）是舌面裂纹图像集合，单类别（`crack`），采用 YOLOv5 PyTorch 格式。
+## YOLO 磁盘格式
 
-## 支持的格式
+模块预期采用 Roboflow 导出布局：
 
-| 格式 | 布局 | 加载器 |
-| --- | --- | --- |
-| YOLOv5 PyTorch | `data.yaml` + `train/`, `valid/`, `test/` 目录含 `images/` + `labels/*.txt` | `cracks_yolo.dataset.yolo.YOLOSource` |
-| COCO | `instances_{train,val}.json` + `train2017/`, `val2017/`（图片目录） | `cracks_yolo.dataset.coco.COCOSource` |
-
-两种数据源均暴露统一的 `load_split(split: str) -> list[RawDetection]` API。`RawDetection` 是格式无关的记录类型：
-
-```python
-@dataclass
-class RawDetection:
-    image_id: int
-    image_path: Path
-    boxes_norm: np.ndarray   # (N, 4) xyxy 归一化到 [0, 1]
-    labels: np.ndarray       # (N,) int64
+```
+<root>/
+  data.yaml            # nc、names、train/val/test 路径提示
+  train/{images,labels}/
+  valid/{images,labels}/
+  test/{images,labels}/
 ```
 
-## DetectionDataset (torch.utils.data.Dataset)
+`data.yaml` 声明 `nc`（整数）、`names`（类别标签字符串）以及 `train`/`val`/`test` 路径提示。路径提示
+**不被采用**；模块按惯例解析各划分（`<root>/<split>/images/`），从而对 Roboflow 导出中的绝对路径
+污染具有鲁棒性。
 
-`DetectionDataset` 包装一组 `RawDetection` 列表 + 一个 `DetectionTransform`，每次返回 `DetectionSample(image, boxes, labels, image_id)`。通过类方法构造：
+每个标签文件（`<split>/labels/<stem>.txt`）每行编码一个标注：
 
-```python
-from cracks_yolo.dataset import DetectionDataset
-
-# 从 YOLOv5 格式的根目录创建。
-ds = DetectionDataset.from_yolo(
-    root="data/CrackDetection_Augmentation.v1.yolov5pytorch",
-    split="train",
-    input_size=640,
-    train=True,
-)
-
-# 从 COCO 格式的根目录创建。
-ds = DetectionDataset.from_coco(
-    root="data/coco",
-    split="train",
-    input_size=640,
-    train=True,
-)
-
-# 从预构建的记录创建（用于 5 折交叉验证划分）。
-ds = DetectionDataset.from_records(records=subset, input_size=640, train=True)
+```
+<cls> <xc> <yc> <w> <h>
 ```
 
-## DataLoader
+所有字段均为浮点数。`cls` 从零开始索引；`xc`、`yc`、`w`、`h` 为中心归一化值，范围 `[0, 1]`。读取器
+内部将坐标转换为 `xyxy` 归一化框。接受的图像格式：`.jpg`、`.jpeg`、`.png`。
 
-`build_dataloader` 返回一个 `torch.utils.data.DataLoader`，使用自定义的 `detection_collate` 处理每张图片中数量不等的边界框：
+## YOLOSource
 
-```python
-from cracks_yolo.dataset import build_dataloader
+`YOLOSource(root)` 解析 `data.yaml`。两个方法：
 
-loader = build_dataloader(ds, batch_size=32, num_workers=4, shuffle=True, pin_memory=True)
-for images, targets in loader:
-    # images: (B, 3, H, W) float 类型，范围 [0, 1]
-    # targets: list[dict]，包含 {"boxes": (N,4) xyxy 绝对坐标, "labels": (N,), "image_id": Tensor}
-    ...
-```
+- `list_splits()` 返回 `("train", "valid", "test")` 中存在 `<split>/images/` 目录的子集。`"val"` 被
+  规范化为 `"valid"`。
+- `load_split(split)` 读取标签目录和 JPEG 头部（仅 PIL 解码；像素由 `DetectionDataset` 后续加载）。
+  返回 `list[RawDetection]`，其中 `boxes_norm` 为 `xyxy` 格式且归一化至 `[0, 1]`，`image_id` 设为
+  文件枚举索引。
 
-## 变换
+`YOLODataset` 是向后兼容的别名。
 
-`DetectionTransform` 是一个小型可调用类（非 torchvision v2）。默认的训练流水线有意保持保守——仅使用水平翻转——以避免数据增强过强干扰基准对比。
+## COCOSource
 
-- **Resize**：双线性插值至 `input_size x input_size`。
-- **Normalize**：像素缩放到 `[0, 1]`（不进行均值/标准差减法——YOLO 惯例）。
-- **训练增强**：随机水平翻转（p=0.5）。边界框相应翻转。
-- **评估**：仅 resize + normalize。
+`COCOSource(root, image_dir=None)` 读取标准 COCO `instances_*.json` 布局。`image_dir` 参数覆写
+默认推断（`<root>/<split>/` 或 `<root>/images/`），以适配具有非标准图像嵌套的 Roboflow COCO
+导出。`list_splits` 扫描 `instances_{split}.json`、`{split}.json` 或 `instances_{split}2017.json`。
+`load_split` 返回 `RawDetection` 记录，其中 COCO 的 `xywh` 绝对像素框被转换为归一化 `xyxy`。
+`COCODataset` 是别名。
 
-`build_transforms(input_size, train, augment)` 是 `DetectionDataset.from_*` 使用的工厂函数。
+## RawDetection
 
-## 格式转换
+冻结数据类（`cracks_yolo.dataset.types`）：
 
-`cracks_yolo.dataset.convert` 提供：
+| 字段         | 类型                                       | 描述                             |
+|-------------|-------------------------------------------|---------------------------------|
+| `image_path` | `Path`                                    | 图像文件路径                        |
+| `image_id`   | `int`                                     | 划分内唯一标识符                      |
+| `width`      | `int`                                     | 原始像素宽度（来自 JPEG 头部）           |
+| `height`     | `int`                                     | 原始像素高度                        |
+| `boxes_norm` | `list[tuple[float, float, float, float]]` | `xyxy` 框，归一化至 `[0, 1]`         |
+| `labels`     | `list[int]`                               | 类别索引，从零开始                     |
 
-- `yolo_to_coco(yolo_root, out_json)` — 为每个 split 生成一个 COCO `instances.json`。
-- `coco_to_yolo(coco_json, image_dir, out_labels_dir)` — 为每张图片生成一个 `.txt` 文件。
+此举将标注解析与像素加载解耦：数据源仅读取图像头部，将完整解码推迟至 `DetectionDataset.__getitem__`。
 
-使用 `scripts/convert_dataset.py` 通过命令行调用：
+## DetectionDataset
 
-```bash
-python -m scripts.convert_dataset \
-    --input data/CrackDetection_Augmentation.v1.yolov5pytorch \
-    --from yolo --to coco \
-    --output data/Crack_coco
-```
+`DetectionDataset(records, transform)` 是 `torch.utils.data.Dataset[DetectionSample]` 的子类。
+`__getitem__` 打开 JPEG、转换为 RGB、应用变换，并返回
+`DetectionSample(image: Tensor (3,H,W), boxes: Tensor (N,4) xyxy abs, labels: Tensor (N,),
+image_id: int)`。
 
-## 目标张量约定
+三个类方法：
 
-流水线中的 `targets_to_yolo` 辅助函数将 dataloader 的 `list[dict]` 格式转换为所有 YOLO 损失函数使用的 `(N, 6)` YOLO 目标张量：
+| 类方法          | 签名                                                        | 用途                     |
+|---------------|-------------------------------------------------------------|-------------------------|
+| `from_yolo`    | `(root, split, input_size, train, augment)`                | 单个 YOLO 划分             |
+| `from_coco`    | `(root, split, input_size, train, augment, image_dir)`     | 单个 COCO 划分             |
+| `from_records` | `(records, input_size, train, augment)`                    | 任意记录（如交叉验证折）         |
 
-| 列 | 含义 |
-| --- | --- |
-| 0 | 图片索引（0 起始，batch 内） |
-| 1 | 类别 ID（0 起始） |
-| 2 | x_center（归一化） |
-| 3 | y_center（归一化） |
-| 4 | 宽度（归一化） |
-| 5 | 高度（归一化） |
+三者内部均通过 `build_transforms` 构建 `DetectionTransform`。
 
-torchvision 检测器包装器（`cracks_yolo/zoo/torchvision_detectors.py`）将此 `(N, 6)` 格式转换回 torchvision 的 `list[dict]` 格式，使用 xyxy 绝对像素坐标和 1 起始标签（背景 = 0）。
+## build_transforms
+
+`build_transforms(input_size, train=False, augment=True) -> DetectionTransform` 返回一个可调用对象，
+该对象 (a) 双线性缩放至 `(input_size, input_size)`；(b) 转换为 `Tensor` 并归一化至 `[0, 1]`；
+(c) 当 `train` 且 `augment` 时，施加随机水平翻转（p = 0.5）。不做均值/标准差减法——YOLO 惯例。
+
+`DetectionTransform.__call__` 签名：
+`(image: PIL.Image, boxes_norm, labels) -> (tensor (3,H,W), boxes_xyxy_abs (N,4), labels (N,))`。
+
+## build_dataloader
+
+`build_dataloader(dataset, batch_size, num_workers=0, shuffle=False, pin_memory=False) -> DataLoader`
+以 `detection_collate` 作为 `collate_fn` 将数据集包装为 `torch.utils.data.DataLoader`。该整理函数将图像
+堆叠为 `(B, 3, H, W)`，并将目标返回为 `list[dict]`，格式为
+`{"boxes": (N,4), "labels": (N,), "image_id": int}`，避免了跨可变 `N` 框的有损填充。
+
+## COCO 转换工具
+
+`cracks_yolo.dataset.convert` 中两个独立函数：
+
+| 函数           | 签名                                              | 描述                                 |
+|---------------|---------------------------------------------------|-------------------------------------|
+| `yolo_to_coco` | `(yolo_root, out_dir) -> dict[str, Path]`         | 按 YOLO 划分写出 `instances_<split>.json` |
+| `coco_to_yolo` | `(coco_json, image_dir, out_labels_dir) -> int`   | 按图像写出 YOLO `.txt`                   |
+
+两个方向均**不复制**图像；仅重新生成标注。`coco_to_yolo` 为负样本写出空 `.txt` 文件（YOLO 惯例）。
