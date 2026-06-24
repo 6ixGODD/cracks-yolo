@@ -273,27 +273,34 @@ def _compute_metrics(
                 scores_list.append(score)
                 labels_list.append(0)
 
-    if scores_list:
-        scores_arr = np.array(scores_list)
-        labels_arr = np.array(labels_list)
-        precision, recall, _ = precision_recall_curve(labels_arr, scores_arr)
-        fpr, tpr, _ = roc_curve(labels_arr, scores_arr)
-        m["auc_pr"] = float(auc(recall, precision))
-        m["auc_roc"] = float(auc(fpr, tpr))
-        f1s = 2 * precision * recall / (precision + recall + 1e-12)
-        bi = int(np.argmax(f1s))
-        m["precision"] = float(precision[bi])
-        m["recall"] = float(recall[bi])
-        m["f1"] = float(f1s[bi])
-        m["sensitivity"] = m["recall"]
-        m["ppv"] = m["precision"]
-        tp = int(np.sum(labels_arr))
-        fp = int(np.sum(1 - labels_arr))
-        fn = max(0, total_gt - tp)
-        tn = len(records) - fp
-        m["specificity"] = tn / (tn + fp) if (tn + fp) > 0 else 1.0
-        m["npv"] = tn / (tn + fn) if (tn + fn) > 0 else 1.0
-    else:
+    try:
+        if scores_list:
+            scores_arr = np.array(scores_list)
+            labels_arr = np.array(labels_list)
+            precision, recall, _ = precision_recall_curve(labels_arr, scores_arr)
+            fpr, tpr, _ = roc_curve(labels_arr, scores_arr)
+            m["auc_pr"] = float(auc(recall, precision))
+            m["auc_roc"] = float(auc(fpr, tpr))
+            f1s = 2 * precision * recall / (precision + recall + 1e-12)
+            bi = int(np.argmax(f1s))
+            m["precision"] = float(precision[bi])
+            m["recall"] = float(recall[bi])
+            m["f1"] = float(f1s[bi])
+            m["sensitivity"] = m["recall"]
+            m["ppv"] = m["precision"]
+            tp = int(np.sum(labels_arr))
+            fp = int(np.sum(1 - labels_arr))
+            fn = max(0, total_gt - tp)
+            tn = len(records) - fp
+            m["specificity"] = tn / (tn + fp) if (tn + fp) > 0 else 1.0
+            m["npv"] = tn / (tn + fn) if (tn + fn) > 0 else 1.0
+        else:
+            m["auc_pr"] = 0.0
+            m["auc_roc"] = 0.5
+            m["precision"] = 0.0
+            m["recall"] = 0.0
+            m["f1"] = 0.0
+    except Exception:
         m["auc_pr"] = 0.0
         m["auc_roc"] = 0.5
         m["precision"] = 0.0

@@ -270,9 +270,13 @@ class UltralyticsAdapter(BaseModel):
 
     def load(self, path: Path) -> None:
         ckpt = torch.load(path, map_location="cpu", weights_only=False)
-        sd = ckpt.get("model_state_dict", ckpt)
-        if isinstance(sd, dict) and "model_state_dict" in sd:
-            sd = sd["model_state_dict"]
+        # ultralytics format: ckpt["model"] is a DetectionModel instance
+        if isinstance(ckpt, dict) and "model" in ckpt and hasattr(ckpt["model"], "state_dict"):
+            sd = ckpt["model"].state_dict()
+        else:
+            sd = ckpt.get("model_state_dict", ckpt)
+            if isinstance(sd, dict) and "model_state_dict" in sd:
+                sd = sd["model_state_dict"]
         self._inner.load_state_dict(sd, strict=False)
         self._set_state(ModelState.TRAINED)
 
