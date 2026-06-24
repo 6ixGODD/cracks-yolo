@@ -1,9 +1,17 @@
-"""UltralyticsAdapter — wraps ultralytics YOLO/RTDETR for all YOLO families.
+"""UltralyticsAdapter and explicit model classes for each YOLO variant.
 
-Training: delegates to YOLO().train() / RTDETR().train().
-Inference: eval forward → decode to InferenceResult.
-Pretrained: YOLO(asset.pt) → intersect state_dict.
-SAC/TR: apply_sac_tr() at construction time.
+Every model gets its own class that inherits from ``UltralyticsAdapter``.
+Each class hardcodes its own: cfg yaml, pretrained asset, SAC/TR indices,
+decode format, and whether to use RTDETR.
+
+Training: creates ``DetectionTrainer`` directly, sets ``trainer.model = self._inner``
+so ultralytics' ``setup_model()`` sees an ``nn.Module`` and returns early —
+preserving our SAC/TR injection.
+
+Inference: eval forward → decode to ``InferenceResult``.
+Pretrained: load COCO .pt → intersect state_dict.
+SAC/TR: ``apply_sac_tr()`` operates on ``_inner.model`` (the ``nn.Sequential``
+returned by ``parse_model``), replacing C3/C2f blocks by index.
 """
 
 from __future__ import annotations
@@ -19,33 +27,34 @@ from cracks_yolo.zoo.base import InferenceResult
 from cracks_yolo.zoo.base import ModelState
 from cracks_yolo.zoo.base import TrainConfig
 from cracks_yolo.zoo.base import TrainReport
-from cracks_yolo.zoo.ultralytics.configs import MODEL_LOOKUP
-from cracks_yolo.zoo.ultralytics.configs import ULTRALYTICS_MODELS as _MODELS
 from cracks_yolo.zoo.ultralytics.sac_injection import apply_sac_tr
 
 
 class UltralyticsAdapter(BaseModel):
-    """Wraps an ultralytics DetectionModel for any YOLO family."""
+    """Wraps an ultralytics ``DetectionModel`` for any YOLO family.
+
+    Subclasses override constructor arguments to pin a specific architecture.
+    """
 
     def __init__(
         self,
-        model_name: str = "",
+        *,
+        cfg: str,
+        asset: str = "",
+        sac_indices: tuple[int, ...] = (),
+        tr_indices: tuple[int, ...] = (),
+        decode_format: str = "anchor_free",
+        use_rtdetr: bool = False,
         num_classes: int = 1,
         input_size: int = 640,
         logger: Any = None,
-        **_extra_kwargs: Any,
     ) -> None:
         super().__init__(num_classes=num_classes, input_size=input_size, logger=logger)
-        self.model_name = model_name
-        if model_name not in MODEL_LOOKUP:
-            raise ValueError(f"unknown model: {model_name}")
-
-        _, cfg, asset, sac_idx, tr_idx, decode_fmt, use_rtdetr = MODEL_LOOKUP[model_name]
         self._cfg = cfg
         self._asset = asset
-        self._sac_indices = sac_idx
-        self._tr_indices = tr_idx
-        self._decode_format = decode_fmt
+        self._sac_indices = sac_indices
+        self._tr_indices = tr_indices
+        self._decode_format = decode_format
         self._use_rtdetr = use_rtdetr
 
         from ultralytics.nn.tasks import DetectionModel
@@ -53,25 +62,45 @@ class UltralyticsAdapter(BaseModel):
 
         self._inner: nn.Module = DetectionModel(cfg, ch=3, nc=num_classes, verbose=False)
         self._inner.args = DEFAULT_CFG
-        if sac_idx or tr_idx:
-            apply_sac_tr(self._inner, sac_indices=sac_idx, tr_indices=tr_idx)
+        if sac_indices or tr_indices:
+            apply_sac_tr(self._inner, sac_indices=sac_indices, tr_indices=tr_indices)
+
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
 
     @property
     def stride(self) -> torch.Tensor:
         return self._inner.stride
 
+    # ------------------------------------------------------------------
+    # Forward
+    # ------------------------------------------------------------------
+
     def forward(self, x: torch.Tensor) -> Any:
         return self._inner(x)
 
-    def train_model(self, config: TrainConfig) -> TrainReport:
-        from ultralytics import RTDETR
-        from ultralytics import YOLO
-        from ultralytics.models.yolo.detect import DetectionTrainer
+    # ------------------------------------------------------------------
+    # Training
+    # ------------------------------------------------------------------
 
-        cls = RTDETR if self._use_rtdetr else YOLO
-        trainer = cls(self._cfg, verbose=False)  # suppress: throwaway instance, real training below
-        trainer.model = self._inner
-        trainer.model.args = trainer.model.args or {}
+    def train_model(self, config: TrainConfig) -> TrainReport:
+        """Run training via ultralytics' ``DetectionTrainer`` directly.
+
+        Does NOT go through ``YOLO().train()`` because that internally
+        creates a fresh ``DetectionTrainer`` whose ``setup_model()`` calls
+        ``get_model()`` — which builds a vanilla ``DetectionModel`` from
+        yaml, undoing our SAC/TR injection.
+
+        Instead we create the trainer ourselves, then set
+        ``trainer.model = self._inner`` (our SAC-injected nn.Module).
+        ``setup_model()`` checks ``isinstance(self.model, nn.Module)`` and
+        returns early — training proceeds with the injected architecture.
+        """
+        if self._use_rtdetr:
+            from ultralytics.models.rtdetr.train import RTDETRTrainer as Trainer
+        else:
+            from ultralytics.models.yolo.detect import DetectionTrainer as Trainer
 
         if config.pretrained and self._asset:
             self._load_pretrained_weights()
@@ -85,56 +114,48 @@ class UltralyticsAdapter(BaseModel):
                 encoding="utf-8",
             )
 
-        # Build a custom trainer class that preserves SAC/TR injection.
-        # Ultralytics' YOLO.train() internally creates a fresh DetectionTrainer whose
-        # BaseTrainer.__init__ sets self.model to the yaml path string (line 184).
-        # Then _setup_train() → setup_model() sees a string (not nn.Module) and calls
-        # get_model() which creates a vanilla DetectionModel — undoing our SAC/TR.
-        #
-        # Fix: override __init__ to replace self.model with our SAC-injected nn.Module
-        # so setup_model()'s isinstance(model, nn.Module) check passes and it returns
-        # early. The get_model() override is a safety net.
-        sac_model = self._inner
-        sac_indices = self._sac_indices
-        tr_indices = self._tr_indices
-        _apply_sac_tr = apply_sac_tr
+        # Only keys that exist in ultralytics DEFAULT_CFG_DICT.
+        overrides: dict[str, Any] = {
+            "model": self._cfg,
+            "data": data_yaml,
+            "epochs": config.epochs,
+            "batch": config.batch_size,
+            "imgsz": self.input_size,
+            "device": config.device,
+            "workers": config.num_workers,
+            "project": str(config.output_dir.parent),
+            "name": config.output_dir.name,
+            "exist_ok": True,
+            "optimizer": config.optimizer,
+            "lr0": config.lr,
+            "lrf": config.cosine_lrf,
+            "cos_lr": config.cosine_lr,
+            "patience": config.early_stopping_patience or 100,
+            "single_cls": self.num_classes == 1,
+            "pretrained": False,
+            "verbose": True,
+            "seed": config.seed,
+            "amp": config.amp,
+            "momentum": config.momentum,
+        }
+        if config.clip_grad_norm is not None:
+            overrides["clip_grad_norm"] = config.clip_grad_norm
+        if config.warmup_epochs:
+            overrides["warmup_epochs"] = config.warmup_epochs
 
-        class SACDetectionTrainer(DetectionTrainer):
-            def __init__(self, overrides=None, _callbacks=None):
-                super().__init__(overrides, _callbacks)
-                self.model = sac_model  # Replace yaml path string with SAC-injected nn.Module
-
-            def get_model(self, cfg=None, weights=None, verbose=True):
-                model = super().get_model(cfg, weights, verbose)
-                if sac_indices or tr_indices:
-                    _apply_sac_tr(model, sac_indices=sac_indices, tr_indices=tr_indices)
-                return model
-
-        trainer.train(
-            data=data_yaml,
-            epochs=config.epochs,
-            batch=config.batch_size,
-            imgsz=self.input_size,
-            device=config.device,
-            workers=config.num_workers,
-            project=str(config.output_dir.parent),
-            name=config.output_dir.name,
-            exist_ok=True,
-            optimizer=config.optimizer,
-            lr0=config.lr,
-            lrf=config.cosine_lrf,
-            cos_lr=config.cosine_lr,
-            patience=config.early_stopping_patience or 100,
-            single_cls=self.num_classes == 1,
-            pretrained=False,
-            verbose=True,
-            trainer=SACDetectionTrainer,
-            **config.extra_kwargs,
-        )
+        trainer = Trainer(overrides=overrides)
+        # Replace yaml-path-string model with our SAC-injected nn.Module.
+        # setup_model() will see nn.Module and skip the get_model() rebuild.
+        trainer.model = self._inner
+        trainer.train()
 
         self._inner = trainer.model
         self._set_state(ModelState.TRAINED)
         return self._build_train_report(config)
+
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
 
     def inference(self, images: torch.Tensor) -> list[InferenceResult]:
         self._assert_state(ModelState.TRAINED, "inference")
@@ -188,6 +209,10 @@ class UltralyticsAdapter(BaseModel):
                 )
         return results
 
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
     def save(self, path: Path, torchscript: bool = False, onnx: bool = False) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save({"model_state_dict": self._inner.state_dict()}, path)
@@ -196,12 +221,12 @@ class UltralyticsAdapter(BaseModel):
             from ultralytics import YOLO
 
             cls = RTDETR if self._use_rtdetr else YOLO
-            trainer = cls(self._cfg)
-            trainer.model = self._inner
+            exporter = cls(self._cfg, verbose=False)
+            exporter.model = self._inner
             if torchscript:
-                trainer.export(format="torchscript")
+                exporter.export(format="torchscript")
             if onnx:
-                trainer.export(format="onnx")
+                exporter.export(format="onnx")
 
     def load(self, path: Path) -> None:
         ckpt = torch.load(path, map_location="cpu", weights_only=False)
@@ -211,14 +236,17 @@ class UltralyticsAdapter(BaseModel):
         self._inner.load_state_dict(sd, strict=False)
         self._set_state(ModelState.TRAINED)
 
+    # ------------------------------------------------------------------
+    # Pretrained
+    # ------------------------------------------------------------------
+
     @classmethod
     def from_pretrained(
         cls,
-        model_name: str = "",
         num_classes: int = 1,
         **kwargs: Any,
     ) -> UltralyticsAdapter:
-        model = cls(model_name=model_name, num_classes=num_classes, **kwargs)
+        model = cls(num_classes=num_classes, **kwargs)
         model._load_pretrained_weights()
         return model
 
@@ -228,7 +256,7 @@ class UltralyticsAdapter(BaseModel):
 
         cls = RTDETR if self._use_rtdetr else YOLO
         try:
-            src = cls(f"{self._asset}.pt").model.state_dict()
+            src = cls(f"{self._asset}.pt", verbose=False).model.state_dict()
         except Exception as e:
             if self._logger:
                 self._logger.warning(f"pretrained load failed for {self._asset}: {e}")
@@ -244,6 +272,10 @@ class UltralyticsAdapter(BaseModel):
         if self._logger:
             self._logger.info(f"pretrained {self._asset}: matched {matched}/{len(msd)} keys")
         self._set_state(ModelState.PRETRAINED)
+
+    # ------------------------------------------------------------------
+    # Report
+    # ------------------------------------------------------------------
 
     def _build_train_report(self, config: TrainConfig) -> TrainReport:
         import csv
@@ -288,9 +320,562 @@ class UltralyticsAdapter(BaseModel):
         )
 
 
-# Factory: build a class for each model name
-def _make_class(name: str) -> type[UltralyticsAdapter]:
-    return type(name.replace("-", "_").title().replace("_", ""), (UltralyticsAdapter,), {})
+# ======================================================================
+# Explicit model classes — each hardcodes its architecture
+# ======================================================================
 
 
-ZOO: dict[str, type[UltralyticsAdapter]] = {name: _make_class(name) for name, *_ in _MODELS}
+class YOLOv3(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov3.yaml",
+            asset="yolov3u",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5n(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov5n.yaml",
+            asset="yolov5nu",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5s(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov5s.yaml",
+            asset="yolov5su",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5sSAC(UltralyticsAdapter):
+    _CN = "YOLOv5s + SAC at backbone indices (2, 4, 6)"
+
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov5s.yaml",
+            asset="yolov5su",
+            sac_indices=(2, 4, 6),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5sTR(UltralyticsAdapter):
+    _CN = "YOLOv5s + C3TR at backbone index (8,)"
+
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov5s.yaml",
+            asset="yolov5su",
+            tr_indices=(8,),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5sSACTR(UltralyticsAdapter):
+    _CN = "YOLOv5s + SAC (2,4,6) + C3TR (8,)"
+
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov5s.yaml",
+            asset="yolov5su",
+            sac_indices=(2, 4, 6),
+            tr_indices=(8,),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5m(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov5m.yaml",
+            asset="yolov5mu",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5l(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov5l.yaml",
+            asset="yolov5lu",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5x(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov5x.yaml",
+            asset="yolov5xu",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv6n(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov6.yaml",
+            asset="yolov6n",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv6nSAC(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov6.yaml",
+            asset="yolov6n",
+            sac_indices=(2, 4, 6, 8),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+# --- v8 ---------------------------------------------------------------
+
+
+class YOLOv8n(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov8n.yaml",
+            asset="yolov8n",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv8nSAC(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov8n.yaml",
+            asset="yolov8n",
+            sac_indices=(2, 4, 6, 8),
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv8s(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov8s.yaml",
+            asset="yolov8s",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv8sSAC(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov8s.yaml",
+            asset="yolov8s",
+            sac_indices=(2, 4, 6, 8),
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv8m(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov8m.yaml",
+            asset="yolov8m",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv8l(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov8l.yaml",
+            asset="yolov8l",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv8x(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov8x.yaml",
+            asset="yolov8x",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+# --- v9 ---------------------------------------------------------------
+
+
+class YOLOv9t(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov9t.yaml",
+            asset="yolov9t",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv9s(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov9s.yaml",
+            asset="yolov9s",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv9m(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov9m.yaml",
+            asset="yolov9m",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv9c(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov9c.yaml",
+            asset="yolov9c",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv9cSAC(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov9c.yaml",
+            asset="yolov9c",
+            sac_indices=(2, 4, 6, 8),
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv9e(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov9e.yaml",
+            asset="yolov9e",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+# --- v10 --------------------------------------------------------------
+
+
+class YOLOv10n(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov10n.yaml",
+            asset="yolov10n",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv10s(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov10s.yaml",
+            asset="yolov10s",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv10sSAC(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov10s.yaml",
+            asset="yolov10s",
+            sac_indices=(2, 4, 6, 8),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv10m(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov10m.yaml",
+            asset="yolov10m",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv10b(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov10b.yaml",
+            asset="yolov10b",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv10l(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov10l.yaml",
+            asset="yolov10l",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv10x(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolov10x.yaml",
+            asset="yolov10x",
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+# --- RT-DETR ----------------------------------------------------------
+
+
+class RTDETRr50(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="rtdetr-resnet50.yaml",
+            asset="rtdetr-resnet50",
+            decode_format="anchor_free",
+            use_rtdetr=True,
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class RTDETRr50SAC(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="rtdetr-resnet50.yaml",
+            asset="rtdetr-resnet50",
+            sac_indices=(2, 4, 6, 8),
+            decode_format="anchor_free",
+            use_rtdetr=True,
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+# --- YOLO11 / YOLO12 / YOLO26 (baseline only) -------------------------
+
+
+class YOLO11n(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolo11n.yaml",
+            asset="yolo11n",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLO11s(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolo11s.yaml",
+            asset="yolo11s",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLO12n(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolo12n.yaml",
+            asset="yolo12n",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLO12s(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolo12s.yaml",
+            asset="yolo12s",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLO26n(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolo26n.yaml",
+            asset="yolo26n",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLO26s(UltralyticsAdapter):
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        super().__init__(
+            cfg="yolo26s.yaml",
+            asset="yolo26s",
+            decode_format="anchor_free",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+# ======================================================================
+# ZOO registry — maps short names to explicit classes
+# ======================================================================
+
+ZOO: dict[str, type[UltralyticsAdapter]] = {
+    # v3
+    "yolov3": YOLOv3,
+    # v5
+    "yolov5n": YOLOv5n,
+    "yolov5s": YOLOv5s,
+    "yolov5s_sac": YOLOv5sSAC,
+    "yolov5s_tr": YOLOv5sTR,
+    "yolov5s_sactr": YOLOv5sSACTR,
+    "yolov5m": YOLOv5m,
+    "yolov5l": YOLOv5l,
+    "yolov5x": YOLOv5x,
+    # v6
+    "yolov6n": YOLOv6n,
+    "yolov6n_sac": YOLOv6nSAC,
+    # v8
+    "yolov8n": YOLOv8n,
+    "yolov8n_sac": YOLOv8nSAC,
+    "yolov8s": YOLOv8s,
+    "yolov8s_sac": YOLOv8sSAC,
+    "yolov8m": YOLOv8m,
+    "yolov8l": YOLOv8l,
+    "yolov8x": YOLOv8x,
+    # v9
+    "yolov9t": YOLOv9t,
+    "yolov9s": YOLOv9s,
+    "yolov9m": YOLOv9m,
+    "yolov9c": YOLOv9c,
+    "yolov9c_sac": YOLOv9cSAC,
+    "yolov9e": YOLOv9e,
+    # v10
+    "yolov10n": YOLOv10n,
+    "yolov10s": YOLOv10s,
+    "yolov10s_sac": YOLOv10sSAC,
+    "yolov10m": YOLOv10m,
+    "yolov10b": YOLOv10b,
+    "yolov10l": YOLOv10l,
+    "yolov10x": YOLOv10x,
+    # RT-DETR
+    "rtdetr_r50": RTDETRr50,
+    "rtdetr_r50_sac": RTDETRr50SAC,
+    # YOLO11 / 12 / 26
+    "yolo11n": YOLO11n,
+    "yolo11s": YOLO11s,
+    "yolo12n": YOLO12n,
+    "yolo12s": YOLO12s,
+    "yolo26n": YOLO26n,
+    "yolo26s": YOLO26s,
+}
