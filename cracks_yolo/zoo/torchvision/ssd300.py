@@ -24,6 +24,7 @@ class SSD300Model(TorchvisionBase):
         from torchvision.models import VGG16_Weights
         from torchvision.models.detection import SSD300_VGG16_Weights
         from torchvision.models.detection import ssd300_vgg16
+        from torchvision.models.detection._utils import retrieve_out_channels
         from torchvision.models.detection.ssd import SSD
         from torchvision.models.detection.ssd import SSDHead
 
@@ -32,7 +33,9 @@ class SSD300Model(TorchvisionBase):
             weights_backbone=VGG16_Weights.IMAGENET1K_FEATURES,
             num_classes=91,
         )
-        in_channels_list = list(self._inner.backbone.out_channels)
+        in_channels_list = retrieve_out_channels(
+            self._inner.backbone, (self.input_size, self.input_size)
+        )
         num_anchors = self._inner.anchor_generator.num_anchors_per_location()
         self._inner.head = SSDHead(
             in_channels=in_channels_list,
