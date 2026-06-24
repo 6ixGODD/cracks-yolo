@@ -102,6 +102,7 @@ def _load_config(config_path: Path) -> dict[str, Any]:
     if "experiments" in cfg:
         experiments.extend(cfg.pop("experiments", []))
     elif not includes and any(k not in ("scheduler",) for k in cfg):
+        cfg["_source"] = str(config_path)
         experiments.append(cfg)
 
     cfg["experiments"] = experiments
@@ -109,8 +110,20 @@ def _load_config(config_path: Path) -> dict[str, Any]:
 
 
 def _build_cmd(exp: dict[str, Any]) -> list[str]:
-    """Build a ``cy train/test`` or ``cy run`` command."""
+    """Build a ``cy run -c`` (train → auto-test) or ``cy test`` command."""
     exp_type = exp.get("type", "train")
+    source = exp.get("_source", "") or exp.get("_config_path", "")
+
+    if source and exp_type == "train":
+        # Use cy run with the original config — it handles train + auto-test
+        cmd = ["cy", "run", "-c", source]
+        # Allow overrides via output_dir / device
+        if exp.get("output_dir"):
+            cmd.extend(["-o", str(exp["output_dir"])])
+        if exp.get("device"):
+            cmd.extend(["--device", str(exp["device"])])
+        return cmd
+
     cmd = ["cy", exp_type]
 
     flag_map = {
