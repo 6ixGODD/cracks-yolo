@@ -30,6 +30,32 @@ from cracks_yolo.zoo.base import TrainReport
 from cracks_yolo.zoo.ultralytics.sac_injection import apply_sac_tr
 
 
+def _print_model_summary(
+    model: nn.Module,
+    sac_indices: tuple[int, ...],
+    tr_indices: tuple[int, ...],
+) -> None:
+    """Print model backbone layers, marking SAC/TR injections."""
+    seq = model.model  # nn.Sequential
+    print(f"\n{'':>3} {'from':>4} {'n':>4}  {'params':>12}  {'module':<45}  {'arguments':<30}")
+    print("-" * 110)
+    for i, m in enumerate(seq):
+        n_params = sum(p.numel() for p in m.parameters())
+        mod_name = type(m).__module__ + "." + type(m).__name__
+        # Get routing attrs
+        f_val = getattr(m, "f", -1)
+        n_val = getattr(m, "n", 1) if hasattr(m, "n") else 1
+        tag = ""
+        if i in sac_indices:
+            tag = "  ← SAC"
+        elif i in tr_indices:
+            tag = "  ← C3TR"
+        print(
+            f"{i:>3} {f_val!s:>4} {n_val!s:>4}  {n_params:>12,}  {mod_name:<45}  {'...':<30}{tag}"
+        )
+    print()
+
+
 class UltralyticsAdapter(BaseModel):
     """Wraps an ultralytics ``DetectionModel`` for any YOLO family.
 
@@ -64,6 +90,11 @@ class UltralyticsAdapter(BaseModel):
         self._inner.args = DEFAULT_CFG
         if sac_indices or tr_indices:
             apply_sac_tr(self._inner, sac_indices=sac_indices, tr_indices=tr_indices)
+
+        # Print model summary so user can verify SAC/TR injection visually.
+        # setup_model() is skipped (we inject trainer.model = self._inner),
+        # so ultralytics never prints its own summary.
+        _print_model_summary(self._inner, sac_indices, tr_indices)
 
     # ------------------------------------------------------------------
     # Properties
