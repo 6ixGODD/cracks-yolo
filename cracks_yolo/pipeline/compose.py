@@ -134,7 +134,12 @@ def _build_cmd(exp: dict[str, Any]) -> list[str]:
 
 
 def _record_error(
-    path: Path, name: str, _exp: dict, exit_code: int, log_path: Path, traceback: str | None = None
+    path: Path,
+    name: str,
+    _exp: dict,
+    exit_code: int,
+    log_path: Path,
+    traceback: str | None = None,
 ) -> None:
     import datetime
 
