@@ -253,15 +253,20 @@ class UltralyticsAdapter(BaseModel):
         with torch.no_grad():
             raw = self._inner(images)
 
-            # RT-DETR already outputs decoded detections: (B, 300, 6) norm → pixel
+            # RT-DETR: (B, 300, 6) = (cx, cy, w, h, conf, cls) normalized → pixel xyxy
             if self._use_rtdetr:
                 if isinstance(raw, (list, tuple)):
                     raw = raw[0]
                 for b in range(images.shape[0]):
-                    det = raw[b]  # (300, 6) = (x1,y1,x2,y2,conf,cls) normalized
+                    det = raw[b]  # (300, 6)
                     mask = det[:, 4] > 0.001
-                    boxes_norm = det[mask, :4]
-                    boxes_px = (boxes_norm * self.input_size).clamp(0, self.input_size)
+                    cx, cy, w, h = det[mask, 0], det[mask, 1], det[mask, 2], det[mask, 3]
+                    size = self.input_size
+                    x1 = (cx - w / 2) * size
+                    y1 = (cy - h / 2) * size
+                    x2 = (cx + w / 2) * size
+                    y2 = (cy + h / 2) * size
+                    boxes_px = torch.stack([x1, y1, x2, y2], dim=1).clamp(0, size)
                     results.append(
                         InferenceResult(
                             boxes=boxes_px.cpu(),
