@@ -66,9 +66,10 @@ class UltralyticsAdapter(BaseModel):
     def train_model(self, config: TrainConfig) -> TrainReport:
         from ultralytics import RTDETR
         from ultralytics import YOLO
+        from ultralytics.models.yolo.detect import DetectionTrainer
 
         cls = RTDETR if self._use_rtdetr else YOLO
-        trainer = cls(self._cfg)
+        trainer = cls(self._cfg, verbose=False)  # suppress: throwaway instance, real training below
         trainer.model = self._inner
         trainer.model.args = trainer.model.args or {}
 
@@ -83,6 +84,31 @@ class UltralyticsAdapter(BaseModel):
                 f"test: test/images\n\nnc: {self.num_classes}\nnames: {{0: 'cracks'}}\n",
                 encoding="utf-8",
             )
+
+        # Build a custom trainer class that preserves SAC/TR injection.
+        # Ultralytics' YOLO.train() internally creates a fresh DetectionTrainer whose
+        # BaseTrainer.__init__ sets self.model to the yaml path string (line 184).
+        # Then _setup_train() → setup_model() sees a string (not nn.Module) and calls
+        # get_model() which creates a vanilla DetectionModel — undoing our SAC/TR.
+        #
+        # Fix: override __init__ to replace self.model with our SAC-injected nn.Module
+        # so setup_model()'s isinstance(model, nn.Module) check passes and it returns
+        # early. The get_model() override is a safety net.
+        sac_model = self._inner
+        sac_indices = self._sac_indices
+        tr_indices = self._tr_indices
+        _apply_sac_tr = apply_sac_tr
+
+        class SACDetectionTrainer(DetectionTrainer):
+            def __init__(self, overrides=None, _callbacks=None):
+                super().__init__(overrides, _callbacks)
+                self.model = sac_model  # Replace yaml path string with SAC-injected nn.Module
+
+            def get_model(self, cfg=None, weights=None, verbose=True):
+                model = super().get_model(cfg, weights, verbose)
+                if sac_indices or tr_indices:
+                    _apply_sac_tr(model, sac_indices=sac_indices, tr_indices=tr_indices)
+                return model
 
         trainer.train(
             data=data_yaml,
@@ -102,6 +128,7 @@ class UltralyticsAdapter(BaseModel):
             single_cls=self.num_classes == 1,
             pretrained=False,
             verbose=True,
+            trainer=SACDetectionTrainer,
             **config.extra_kwargs,
         )
 
@@ -186,7 +213,10 @@ class UltralyticsAdapter(BaseModel):
 
     @classmethod
     def from_pretrained(
-        cls, model_name: str = "", num_classes: int = 1, **kwargs: Any
+        cls,
+        model_name: str = "",
+        num_classes: int = 1,
+        **kwargs: Any,
     ) -> UltralyticsAdapter:
         model = cls(model_name=model_name, num_classes=num_classes, **kwargs)
         model._load_pretrained_weights()
