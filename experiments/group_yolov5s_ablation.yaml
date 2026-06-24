@@ -1,0 +1,7 @@
+scheduler:
+  max_parallel: 3
+  seed: 42
+$include:
+  - models/yolov5s.yaml
+  - models/yolov5s_sac.yaml
+  - models/yolov5s_sactr.yaml
