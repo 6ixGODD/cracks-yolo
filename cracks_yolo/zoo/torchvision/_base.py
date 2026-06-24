@@ -226,7 +226,7 @@ class TorchvisionBase(BaseModel):
                 config.batch_size,
                 config.num_workers,
                 shuffle=True,
-                pin_memory=device.type == "cuda",
+                pin_memory=False,
             )
         if val_loader is None:
             val_ds = DetectionDataset.from_yolo(
@@ -237,7 +237,7 @@ class TorchvisionBase(BaseModel):
                 config.batch_size,
                 config.num_workers,
                 shuffle=False,
-                pin_memory=device.type == "cuda",
+                pin_memory=False,
             )
 
         optimizer = self._build_optimizer(
