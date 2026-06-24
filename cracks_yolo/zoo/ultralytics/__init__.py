@@ -108,7 +108,12 @@ class UltralyticsAdapter(BaseModel):
         from ultralytics.nn.tasks import DetectionModel
         from ultralytics.utils import DEFAULT_CFG
 
-        self._inner: nn.Module = DetectionModel(cfg, ch=3, nc=num_classes, verbose=False)
+        if use_rtdetr:
+            from ultralytics.models.rtdetr.model import RTDETRDetectionModel
+
+            self._inner: nn.Module = RTDETRDetectionModel(cfg, ch=3, nc=num_classes, verbose=False)
+        else:
+            self._inner: nn.Module = DetectionModel(cfg, ch=3, nc=num_classes, verbose=False)
         self._inner.args = DEFAULT_CFG
         if sac_indices or tr_indices:
             apply_sac_tr(self._inner, sac_indices=sac_indices, tr_indices=tr_indices)
