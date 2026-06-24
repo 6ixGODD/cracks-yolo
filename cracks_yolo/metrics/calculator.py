@@ -14,6 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import field
 from typing import Any
+from typing import Protocol
+from typing import runtime_checkable
 
 import numpy as np
 
@@ -22,9 +24,26 @@ from cracks_yolo.metrics.curves import compute_auc
 from cracks_yolo.metrics.curves import compute_auc_roc
 from cracks_yolo.metrics.curves import compute_pr_curve
 from cracks_yolo.metrics.curves import compute_roc_curve
-from cracks_yolo.metrics.protocol import MetricsCalculator
 from cracks_yolo.metrics.schemas import MetricReport
 from cracks_yolo.metrics.schemas import PerImageDetection
+
+
+@runtime_checkable
+class MetricsCalculator(Protocol):
+    """Compute detection metrics from a list of per-image detections.
+
+    Train-side usage (light metrics): the calculator is fed incrementally
+    per-batch and emits a small summary at epoch end. Test-side usage (full
+    metrics): all per-image detections are collected, then ``run`` produces
+    the full :class:`MetricReport` (mAP, AR, per-class AP, performance,
+    statistical tests).
+    """
+
+    def update(self, batch: list[PerImageDetection]) -> None:
+        """Accumulate one batch of per-image detections."""
+
+    def run(self) -> MetricReport:
+        """Compute and return the full metric report."""
 
 
 @dataclass
@@ -160,7 +179,8 @@ def _run_coco_eval(
 
 
 def _compute_pr_curve_from_accumulator(
-    acc: _Accumulator, iou_thr: float = 0.5
+    acc: _Accumulator,
+    iou_thr: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute a global PR curve (all classes pooled) via IoU matching."""
     det_arr = list(
@@ -171,13 +191,62 @@ def _compute_pr_curve_from_accumulator(
 
 
 def _compute_roc_curve_from_accumulator(
-    acc: _Accumulator, iou_thr: float = 0.5
+    acc: _Accumulator,
+    iou_thr: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     det_arr = list(
         zip(acc.det_image_ids, acc.det_class_ids, acc.det_scores, acc.det_boxes, strict=True)
     )
     gt_arr = list(zip(acc.gt_image_ids, acc.gt_class_ids, acc.gt_boxes, strict=True))
     return compute_roc_curve(det_arr, gt_arr, iou_thr=iou_thr)
+
+
+def _compute_classification_metrics_at_threshold(
+    acc: _Accumulator,
+    iou_thr: float,
+    conf_thr: float,
+    fallback_recall: float,
+) -> tuple[float, float, float]:
+    """Compute sensitivity, specificity, NPV at a given confidence threshold.
+
+    Uses per-detection IoU matching (same logic as the PR/ROC curves).
+    Sensitivity = TP/(TP+FN), Specificity = TN/(TN+FP), NPV = TN/(TN+FN).
+
+    In object detection, TN is not naturally defined (there are infinitely
+    many possible non-object locations). We define TN pragmatically as the
+    number of detections *below* the confidence threshold that would have
+    been false positives if they were above it — i.e., correctly suppressed
+    spurious detections.
+
+    Returns:
+        (sensitivity, specificity, npv) tuple.
+    """
+    from cracks_yolo.metrics.curves import _match_detections
+
+    if not acc.image_ids:
+        return fallback_recall, 0.0, 0.0
+
+    detections = list(
+        zip(acc.det_image_ids, acc.det_class_ids, acc.det_scores, acc.det_boxes, strict=True)
+    )
+    ground_truths = list(zip(acc.gt_image_ids, acc.gt_class_ids, acc.gt_boxes, strict=True))
+    matched = _match_detections(detections, ground_truths, iou_thr=iou_thr)
+    if not matched:
+        return fallback_recall, 0.0, 0.0
+
+    # Count TP/FP at the chosen threshold.
+    tp = sum(1 for s, is_tp in matched if s >= conf_thr and is_tp == 1)
+    fp = sum(1 for s, is_tp in matched if s >= conf_thr and is_tp == 0)
+    # TN: detections below threshold that would have been FP if kept.
+    tn = sum(1 for s, is_tp in matched if s < conf_thr and is_tp == 0)
+    # Total FN: all GTs not detected above threshold.
+    total_fn = max(len(ground_truths) - tp, 0)
+
+    sensitivity = tp / max(tp + total_fn, 1)
+    specificity = tn / max(tn + fp, 1)
+    npv = tn / max(tn + total_fn, 1)
+
+    return sensitivity, specificity, npv
 
 
 class COCOMetricsCalculator(MetricsCalculator):
@@ -225,22 +294,25 @@ class COCOMetricsCalculator(MetricsCalculator):
             auc_pr = 0.0
 
         # ROC curve + AUC.
-        fpr, tpr, roc_thr = _compute_roc_curve_from_accumulator(
-            self._acc, iou_thr=self.iou_threshold
+        fpr, tpr, _roc_thr = _compute_roc_curve_from_accumulator(
+            self._acc,
+            iou_thr=self.iou_threshold,
         )
         auc_roc = float(compute_auc_roc(fpr, tpr)) if len(fpr) > 0 else 0.0
 
-        # Specificity = 1 - FPR at the chosen confidence threshold.
-        if len(fpr) > 0 and len(roc_thr) > 0:
-            # Pick the FPR/TPR at the threshold closest to best_thr.
-            idx = int(np.argmin(np.abs(roc_thr - best_thr)))
-            specificity = float(1.0 - fpr[idx])
-            sensitivity = float(tpr[idx])
-        else:
-            specificity = 0.0
-            sensitivity = best_r
+        # Sensitivity, specificity, PPV, NPV — computed directly from
+        # matched detections at the F1-optimal confidence threshold.
+        # This avoids the ROC FPR normalization issue and the confusion
+        # matrix TN ambiguity (TN is not well-defined in detection).
+        ppv = best_p
+        sensitivity, specificity, npv = _compute_classification_metrics_at_threshold(
+            self._acc,
+            self.iou_threshold,
+            best_thr,
+            best_r,
+        )
 
-        # PPV = precision, NPV = TN / (TN + FN) — needs confusion counts.
+        # Confusion matrix for inspection (not used for metric formulas).
         cm = compute_confusion_matrix(
             detections=list(
                 zip(
@@ -264,13 +336,6 @@ class COCOMetricsCalculator(MetricsCalculator):
             conf_thr=best_thr,
         )
         cm_list = [list(row) for row in cm]
-        # For binary case: derive NPV from the 2x2 + background.
-        ppv = best_p
-        npv = 0.0
-        if self.num_classes == 1 and len(cm_list) >= 2 and len(cm_list[0]) >= 2:
-            tn = cm_list[0][0]
-            fn = cm_list[1][0] if len(cm_list) > 1 else 0
-            npv = float(tn / (tn + fn + 1e-12))
 
         return MetricReport(
             map50=coco_stats["ap50"],

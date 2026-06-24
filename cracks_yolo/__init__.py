@@ -1,16 +1,5 @@
-"""Cracks-YOLO: self-contained PyTorch YOLO model zoo for cracks detection."""
+"""cracks_yolo — tongue surface crack detection model zoo."""
 
-from __future__ import annotations
+from cracks_yolo.zoo import ZOO as ZOO
 
-from cracks_yolo.zoo import ZOO
-from cracks_yolo.zoo.base import DetectorModel
-from cracks_yolo.zoo.base import PretrainedSpec
-
-__version__ = "0.1.0"
-
-__all__ = [
-    "ZOO",
-    "DetectorModel",
-    "PretrainedSpec",
-    "__version__",
-]
+__version__ = "0.2.0"

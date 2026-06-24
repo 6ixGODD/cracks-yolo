@@ -1,0 +1,17 @@
+name: rtdetr_r50
+type: train
+model: rtdetr_r50
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/rtdetr_r50
+epochs: 300
+batch_size: 16
+lr: 0.001
+pretrained: true
+device: cuda
+seed: 42
+num_workers: 8
+optimizer: sgd
+cosine_lr: true
+use_ema: true
+early_stopping_patience: 100
+clip_grad_norm: 10.0

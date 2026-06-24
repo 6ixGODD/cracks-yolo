@@ -8,7 +8,6 @@ from cracks_yolo.metrics.curves import compute_auc
 from cracks_yolo.metrics.curves import compute_auc_roc
 from cracks_yolo.metrics.curves import compute_pr_curve
 from cracks_yolo.metrics.curves import compute_roc_curve
-from cracks_yolo.metrics.protocol import MetricsCalculator
 from cracks_yolo.metrics.schemas import DetectionMetric
 from cracks_yolo.metrics.schemas import MetricReport
 from cracks_yolo.metrics.schemas import PerformanceMetric
@@ -23,7 +22,6 @@ __all__ = [
     "COCOMetricsCalculator",
     "DetectionMetric",
     "MetricReport",
-    "MetricsCalculator",
     "PerImageDetection",
     "PerformanceMetric",
     "StatisticalTest",

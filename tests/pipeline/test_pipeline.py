@@ -8,10 +8,8 @@ import pytest
 
 from cracks_yolo.metrics.schemas import MetricReport
 from cracks_yolo.pipeline import TestConfig
-from cracks_yolo.pipeline import TestPipeline
 from cracks_yolo.pipeline import TestReport
 from cracks_yolo.pipeline import TrainConfig
-from cracks_yolo.pipeline import TrainPipeline
 from cracks_yolo.pipeline import TrainReport
 from cracks_yolo.zoo import ZOO
 
@@ -66,51 +64,6 @@ def test_test_report_accepts_metric_report() -> None:
         elapsed_sec=10.0,
     )
     assert r.metrics.map50 == 0.6
-
-
-def test_train_pipeline_protocol_is_runtime_checkable() -> None:
-    """TrainPipeline is @runtime_checkable — a stub class satisfies it."""
-
-    class _Stub:
-        def run(
-            self,
-            model: object,  # noqa: ARG002
-            train_loader: object,  # noqa: ARG002
-            val_loader: object | None,  # noqa: ARG002
-            cfg: TrainConfig,
-        ) -> TrainReport:
-            return TrainReport(
-                output_dir=cfg.output_dir,
-                best_epoch=0,
-                best_map50=0.0,
-                final_train_loss=0.0,
-                final_val_map50=0.0,
-                final_val_map5095=0.0,
-                total_steps=0,
-                total_epochs=0,
-                elapsed_sec=0.0,
-            )
-
-    assert isinstance(_Stub(), TrainPipeline)
-
-
-def test_test_pipeline_protocol_is_runtime_checkable() -> None:
-    """TestPipeline is @runtime_checkable — a stub class satisfies it."""
-
-    class _Stub:
-        def run(
-            self,
-            model: object,  # noqa: ARG002
-            test_loader: object,  # noqa: ARG002
-            cfg: TestConfig,
-        ) -> TestReport:
-            return TestReport(
-                output_dir=cfg.output_dir,
-                metrics=MetricReport(map50=0.0, map5095=0.0),
-                elapsed_sec=0.0,
-            )
-
-    assert isinstance(_Stub(), TestPipeline)
 
 
 def test_pipeline_protocol_is_satisfied_by_zoo_models() -> None:

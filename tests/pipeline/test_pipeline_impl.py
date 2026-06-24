@@ -16,16 +16,16 @@ from cracks_yolo.dataset.torchadapter import detection_collate
 from cracks_yolo.dataset.types import RawDetection
 from cracks_yolo.pipeline import TestConfig
 from cracks_yolo.pipeline import TrainConfig
-from cracks_yolo.pipeline import TrainPipelineImpl
-from cracks_yolo.pipeline._utils import detections_to_per_image
-from cracks_yolo.pipeline._utils import is_anchor_free_model
-from cracks_yolo.pipeline._utils import is_v7_model
-from cracks_yolo.pipeline._utils import pick_device
-from cracks_yolo.pipeline._utils import set_seed
-from cracks_yolo.pipeline._utils import targets_to_yolo
+from cracks_yolo.pipeline import TrainPipeline
+from cracks_yolo.pipeline._helpers import detections_to_per_image
+from cracks_yolo.pipeline._helpers import is_anchor_free_model
+from cracks_yolo.pipeline._helpers import is_v7_model
+from cracks_yolo.pipeline._helpers import pick_device
+from cracks_yolo.pipeline._helpers import set_seed
+from cracks_yolo.pipeline._helpers import targets_to_yolo
 from cracks_yolo.pipeline.compare import compare_models_cross_val
 from cracks_yolo.pipeline.crossval import run_cross_validation
-from cracks_yolo.pipeline.test import TestPipelineImpl
+from cracks_yolo.pipeline.test import TestPipeline
 from cracks_yolo.zoo import ZOO
 
 
@@ -156,7 +156,7 @@ def test_train_pipeline_smoke(tmp_path: Path) -> None:
         val_interval=1,
         device="cpu",
     )
-    report = TrainPipelineImpl().run(model, train_loader, val_loader, cfg)
+    report = TrainPipeline().run(model, train_loader, val_loader, cfg)
     assert report.total_epochs == 1
     assert report.total_steps >= 1
     assert (cfg.output_dir / "best.pt").exists()
@@ -176,7 +176,7 @@ def test_test_pipeline_smoke(tmp_path: Path) -> None:
         device="cpu",
         conf_thr=0.001,
     )
-    report = TestPipelineImpl().run(model, test_loader, cfg)
+    report = TestPipeline().run(model, test_loader, cfg)
     assert (cfg.output_dir / "metrics.csv").exists()
     assert (cfg.output_dir / "model_analysis.json").exists()
     assert (cfg.output_dir / "per_image").is_dir()
@@ -210,7 +210,7 @@ def test_test_pipeline_efficiency_disabled(tmp_path: Path) -> None:
         conf_thr=0.001,
         measure_efficiency=False,
     )
-    report = TestPipelineImpl().run(model, test_loader, cfg)
+    report = TestPipeline().run(model, test_loader, cfg)
     assert report.efficiency is None
     assert not (cfg.output_dir / "model_analysis.json").exists()
     metrics_text = (cfg.output_dir / "metrics.csv").read_text(encoding="utf-8")

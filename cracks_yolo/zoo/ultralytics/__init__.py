@@ -1,92 +1,60 @@
-"""Ultralytics-backed DetectorModel adapters for all YOLO families (v3/v5/v8/
-v9/v10). SAC/TR variants are produced by runtime module replacement
-(:func:`cracks_yolo.zoo.ultralytics_sac.apply_sac_tr`) — no per-architecture
-reimplementation.
+"""UltralyticsAdapter — wraps ultralytics YOLO/RTDETR for all YOLO families.
 
-All models register under clean names (no _official suffix):
-yolov5s, yolov5s_sactr, yolov8s, yolov8s_sac, yolov9c, yolov10s, yolov3_tiny, ...
-
-Pretrained COCO weights load via ``YOLO(asset).model`` intersect + strict=False;
-SAC/TR layers (SAConv2d switches, Transformer blocks) have no COCO counterpart
-and stay randomly initialized.
+Training: delegates to YOLO().train() / RTDETR().train().
+Inference: eval forward → decode to InferenceResult.
+Pretrained: YOLO(asset.pt) → intersect state_dict.
+SAC/TR: apply_sac_tr() at construction time.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import torch
 import torch.nn as nn
 
-from cracks_yolo.zoo.base import PretrainedSpec
-from cracks_yolo.zoo.ultralytics.sac import apply_sac_tr
-
-# Ultralytics asset name for each cfg (so we can fetch COCO pretrained).
-_CFG_ASSET = {
-    "yolov3": "yolov3u",
-    "yolov3-tiny": "yolov3-tinyu",
-    "yolov3-spp": "yolov3-sppu",
-    "yolov5n": "yolov5nu",
-    "yolov5s": "yolov5su",
-    "yolov5m": "yolov5mu",
-    "yolov5l": "yolov5lu",
-    "yolov5x": "yolov5xu",
-    "yolov8n": "yolov8n",
-    "yolov8s": "yolov8s",
-    "yolov8m": "yolov8m",
-    "yolov8l": "yolov8l",
-    "yolov8x": "yolov8x",
-    "yolov9t": "yolov9t",
-    "yolov9s": "yolov9s",
-    "yolov9m": "yolov9m",
-    "yolov9c": "yolov9c",
-    "yolov9e": "yolov9e",
-    "yolov10n": "yolov10n",
-    "yolov10s": "yolov10s",
-    "yolov10m": "yolov10m",
-    "yolov10b": "yolov10b",
-    "yolov10l": "yolov10l",
-    "yolov10x": "yolov10x",
-}
-
-# SAC/TR insertion indices per family (into model.model Sequential).
-# v5: backbone C3 at 2,4,6 (P2/P3/P4); TR at 8 (P5). v8: C2f at 2,4,6,8.
-_SAC_TR = {
-    "v5": {"sac": (2, 4, 6), "tr": (8,)},
-    "v8": {"sac": (2, 4, 6, 8), "tr": ()},
-    "v9": {"sac": (2, 4, 6, 8), "tr": ()},
-    "v10": {"sac": (2, 4, 6, 8), "tr": ()},
-    "v3": {"sac": (), "tr": ()},  # v3 uses BottleneckCSP, not C3/C2f — no SAC/TR.
-}
+from cracks_yolo.zoo.base import BaseModel
+from cracks_yolo.zoo.base import InferenceResult
+from cracks_yolo.zoo.base import ModelState
+from cracks_yolo.zoo.base import TrainConfig
+from cracks_yolo.zoo.base import TrainReport
+from cracks_yolo.zoo.ultralytics.configs import MODEL_LOOKUP
+from cracks_yolo.zoo.ultralytics.configs import ULTRALYTICS_MODELS as _MODELS
+from cracks_yolo.zoo.ultralytics.sac_injection import apply_sac_tr
 
 
-def _family_for_cfg(cfg: str) -> str:
-    for fam in ("yolov5", "yolov8", "yolov9", "yolov10", "yolov3"):
-        if cfg.startswith(fam):
-            return fam.replace("yolov", "v")
-    return ""
+class UltralyticsAdapter(BaseModel):
+    """Wraps an ultralytics DetectionModel for any YOLO family."""
 
+    def __init__(
+        self,
+        model_name: str = "",
+        num_classes: int = 1,
+        input_size: int = 640,
+        logger: Any = None,
+        **_extra_kwargs: Any,
+    ) -> None:
+        super().__init__(num_classes=num_classes, input_size=input_size, logger=logger)
+        self.model_name = model_name
+        if model_name not in MODEL_LOOKUP:
+            raise ValueError(f"unknown model: {model_name}")
 
-class _UltralyticsDetector(nn.Module):
-    cfg = ""
-    sac_indices: tuple[int, ...] = ()
-    tr_indices: tuple[int, ...] = ()
-    pretrained_spec: PretrainedSpec | None = None
-    loss_parts_schema = ("box", "cls", "dfl")
-    decode_format = "anchor_free"
+        _, cfg, asset, sac_idx, tr_idx, decode_fmt, use_rtdetr = MODEL_LOOKUP[model_name]
+        self._cfg = cfg
+        self._asset = asset
+        self._sac_indices = sac_idx
+        self._tr_indices = tr_idx
+        self._decode_format = decode_fmt
+        self._use_rtdetr = use_rtdetr
 
-    def __init__(self, num_classes: int = 80, input_size: int = 640) -> None:
-        super().__init__()
         from ultralytics.nn.tasks import DetectionModel
         from ultralytics.utils import DEFAULT_CFG
 
-        self.num_classes = num_classes
-        self.input_size = input_size
-        self.class_names = [f"class_{i}" for i in range(num_classes)]
-        self._inner = DetectionModel(self.cfg, ch=3, nc=num_classes, verbose=False)
+        self._inner: nn.Module = DetectionModel(cfg, ch=3, nc=num_classes, verbose=False)
         self._inner.args = DEFAULT_CFG
-        if self.sac_indices or self.tr_indices:
-            apply_sac_tr(self._inner, sac_indices=self.sac_indices, tr_indices=self.tr_indices)
+        if sac_idx or tr_idx:
+            apply_sac_tr(self._inner, sac_indices=sac_idx, tr_indices=tr_idx)
 
     @property
     def stride(self) -> torch.Tensor:
@@ -95,131 +63,204 @@ class _UltralyticsDetector(nn.Module):
     def forward(self, x: torch.Tensor) -> Any:
         return self._inner(x)
 
-    def compute_loss(self, preds, targets, imgs=None):  # noqa: ARG002
-        batch = {
-            "batch_idx": targets[:, 0].long(),
-            "cls": targets[:, 1:2],
-            "bboxes": targets[:, 2:6],
-        }
-        loss, parts = self._inner.loss(batch, preds)
-        return loss.sum(), parts
+    def train_model(self, config: TrainConfig) -> TrainReport:
+        from ultralytics import RTDETR
+        from ultralytics import YOLO
 
-    def decode(self, preds):
-        decoded = preds if isinstance(preds, torch.Tensor) else None
-        if isinstance(preds, (tuple, list)) and preds and isinstance(preds[0], torch.Tensor):
-            decoded = preds[0]
-        if decoded is not None:
-            if decoded.ndim == 3 and decoded.shape[-1] == 6:
-                boxes = decoded[..., :4]
-                out = decoded.new_zeros((*decoded.shape[:2], 5 + self.num_classes))
-                out[..., 0] = (boxes[..., 0] + boxes[..., 2]) / 2
-                out[..., 1] = (boxes[..., 1] + boxes[..., 3]) / 2
-                out[..., 2] = boxes[..., 2] - boxes[..., 0]
-                out[..., 3] = boxes[..., 3] - boxes[..., 1]
-                out[..., 4] = 1
-                labels = decoded[..., 5].long().clamp(0, self.num_classes - 1)
-                out.scatter_(2, (labels + 5).unsqueeze(-1), decoded[..., 4:5])
-                return out
-            return decoded
-        if isinstance(preds, dict):
-            for key in ("one2one", "one2many"):
-                v = preds.get(key)
-                if isinstance(v, torch.Tensor):
-                    return v
-        raise TypeError(f"Unsupported Ultralytics prediction type: {type(preds)}")
+        cls = RTDETR if self._use_rtdetr else YOLO
+        trainer = cls(self._cfg)
+        trainer.model = self._inner
+        trainer.model.args = trainer.model.args or {}
 
-    def build_optimizer(self):
-        return torch.optim.AdamW(self.parameters(), lr=1e-3)
+        if config.pretrained and self._asset:
+            self._load_pretrained_weights()
 
-    @classmethod
-    def from_pretrained(cls, num_classes, weights_dir=None, strict=False):  # noqa: ARG003
-        m = cls(num_classes=num_classes)
-        cfg_key = cls.cfg.replace(".yaml", "")
-        asset = _CFG_ASSET.get(cfg_key, cfg_key)
-        # Load COCO weights via ultralytics' YOLO() (handles v5/v8/v9/v10 formats).
-        try:
+        data_yaml = config.data_yaml or str(config.output_dir / "data.yaml")
+        if not config.data_yaml:
+            config.output_dir.mkdir(parents=True, exist_ok=True)
+            Path(data_yaml).write_text(
+                f"path: {config.dataset}\ntrain: train/images\nval: valid/images\n"
+                f"test: test/images\n\nnc: {self.num_classes}\nnames: {{0: 'cracks'}}\n",
+                encoding="utf-8",
+            )
+
+        trainer.train(
+            data=data_yaml,
+            epochs=config.epochs,
+            batch=config.batch_size,
+            imgsz=self.input_size,
+            device=config.device,
+            workers=config.num_workers,
+            project=str(config.output_dir.parent),
+            name=config.output_dir.name,
+            exist_ok=True,
+            optimizer=config.optimizer,
+            lr0=config.lr,
+            lrf=config.cosine_lrf,
+            cos_lr=config.cosine_lr,
+            patience=config.early_stopping_patience or 100,
+            single_cls=self.num_classes == 1,
+            pretrained=False,
+            verbose=True,
+            **config.extra_kwargs,
+        )
+
+        self._inner = trainer.model
+        self._set_state(ModelState.TRAINED)
+        return self._build_train_report(config)
+
+    def inference(self, images: torch.Tensor) -> list[InferenceResult]:
+        self._assert_state(ModelState.TRAINED, "inference")
+        self._inner.eval()
+        results: list[InferenceResult] = []
+        with torch.no_grad():
+            outs = self._inner(images)
+            if isinstance(outs, (list, tuple)) and len(outs) > 0:
+                pred = outs[0]
+            elif isinstance(outs, torch.Tensor):
+                pred = outs
+            elif isinstance(outs, dict):
+                pred = outs.get("one2one", outs.get("one2many", None))
+                if pred is None:
+                    return []
+            else:
+                return []
+
+            if not isinstance(pred, torch.Tensor):
+                return []
+
+            bsz = pred.shape[0]
+            for b in range(bsz):
+                if self._decode_format == "anchor_free":
+                    d = (
+                        pred[b].permute(1, 0)
+                        if pred.ndim == 3 and pred.shape[1] < pred.shape[2]
+                        else pred[b]
+                    )
+                    boxes = d[:, :4]
+                    cls_data = d[:, 4 : 4 + self.num_classes]
+                    scores = cls_data.max(dim=1).values
+                    labels = cls_data.argmax(dim=1)
+                else:
+                    d = pred[b]
+                    boxes = d[:, :4]
+                    scores = d[:, 4]
+                    labels = (
+                        d[:, 5].long()
+                        if d.shape[-1] > 5
+                        else torch.zeros(d.shape[0], dtype=torch.long)
+                    )
+
+                mask = scores > 0.001
+                results.append(
+                    InferenceResult(
+                        boxes=boxes[mask].cpu(),
+                        scores=scores[mask].cpu(),
+                        labels=labels[mask].cpu(),
+                    )
+                )
+        return results
+
+    def save(self, path: Path, torchscript: bool = False, onnx: bool = False) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save({"model_state_dict": self._inner.state_dict()}, path)
+        if torchscript or onnx:
+            from ultralytics import RTDETR
             from ultralytics import YOLO
 
-            src_sd = YOLO(f"{asset}.pt").model.state_dict()
-            msd = m.state_dict()
-            matched = 0
-            for k in list(src_sd.keys()):
-                # src keys are "model.<i>...."; our wrapper prefixes "_inner.".
-                tgt = f"_inner.{k}" if not k.startswith("_inner.") else k
-                if tgt in msd and src_sd[k].shape == msd[tgt].shape:
-                    msd[tgt] = src_sd[k]
-                    matched += 1
-            m.load_state_dict(msd, strict=False)
-            print(f"pretrained {asset}: matched {matched}/{len(msd)} keys")
+            cls = RTDETR if self._use_rtdetr else YOLO
+            trainer = cls(self._cfg)
+            trainer.model = self._inner
+            if torchscript:
+                trainer.export(format="torchscript")
+            if onnx:
+                trainer.export(format="onnx")
+
+    def load(self, path: Path) -> None:
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        sd = ckpt.get("model_state_dict", ckpt)
+        if isinstance(sd, dict) and "model_state_dict" in sd:
+            sd = sd["model_state_dict"]
+        self._inner.load_state_dict(sd, strict=False)
+        self._set_state(ModelState.TRAINED)
+
+    @classmethod
+    def from_pretrained(
+        cls, model_name: str = "", num_classes: int = 1, **kwargs: Any
+    ) -> UltralyticsAdapter:
+        model = cls(model_name=model_name, num_classes=num_classes, **kwargs)
+        model._load_pretrained_weights()
+        return model
+
+    def _load_pretrained_weights(self) -> None:
+        from ultralytics import RTDETR
+        from ultralytics import YOLO
+
+        cls = RTDETR if self._use_rtdetr else YOLO
+        try:
+            src = cls(f"{self._asset}.pt").model.state_dict()
         except Exception as e:
-            print(f"WARNING: pretrained load failed for {asset}: {e}")
-        return m
+            if self._logger:
+                self._logger.warning(f"pretrained load failed for {self._asset}: {e}")
+            return
+
+        msd = self._inner.state_dict()
+        matched = 0
+        for k in list(src.keys()):
+            if k in msd and src[k].shape == msd[k].shape:
+                msd[k] = src[k]
+                matched += 1
+        self._inner.load_state_dict(msd, strict=False)
+        if self._logger:
+            self._logger.info(f"pretrained {self._asset}: matched {matched}/{len(msd)} keys")
+        self._set_state(ModelState.PRETRAINED)
+
+    def _build_train_report(self, config: TrainConfig) -> TrainReport:
+        import csv
+
+        results_csv = config.output_dir / "results.csv"
+        best_map50 = 0.0
+        best_epoch = 0
+        final_loss = 0.0
+        final_map50 = 0.0
+        final_map5095 = 0.0
+        total_epochs = 0
+
+        if results_csv.exists():
+            rows = list(csv.DictReader(results_csv.open()))
+            if rows:
+                last = {k.strip(): v for k, v in rows[-1].items()}
+                final_loss = float(last.get("train/box_loss", 0) or 0)
+                final_map50 = float(
+                    last.get("metrics/mAP50(B)", last.get("metrics/mAP_0.5", 0)) or 0
+                )
+                final_map5095 = float(
+                    last.get("metrics/mAP50-95(B)", last.get("metrics/mAP_0.5:0.95", 0)) or 0
+                )
+                total_epochs = len(rows)
+                for row in rows:
+                    d = {k.strip(): v for k, v in row.items()}
+                    m = float(d.get("metrics/mAP50(B)", d.get("metrics/mAP_0.5", 0)) or 0)
+                    if m > best_map50:
+                        best_map50 = m
+                        best_epoch = int(d.get("epoch", 0))
+
+        return TrainReport(
+            output_dir=config.output_dir,
+            best_epoch=best_epoch,
+            best_map50=best_map50,
+            final_train_loss=final_loss,
+            final_val_map50=final_map50,
+            final_val_map5095=final_map5095,
+            total_epochs=total_epochs,
+            elapsed_sec=0.0,
+            checkpoint_path=config.output_dir / "weights" / "best.pt",
+        )
 
 
-def _make_class(name, cfg, sac=None, tr=None, decode_format="anchor_free"):
-    fam = _family_for_cfg(cfg)
-    spec = _SAC_TR.get(fam, {"sac": (), "tr": ()})
-    # sac/tr=None → use family default; sac/tr=() → explicitly none (baseline).
-    sac_idx = spec.get("sac", ()) if sac is None else tuple(sac)
-    tr_idx = spec.get("tr", ()) if tr is None else tuple(tr)
-    return type(
-        name,
-        (_UltralyticsDetector,),
-        {
-            "cfg": cfg,
-            "sac_indices": sac_idx,
-            "tr_indices": tr_idx,
-            "decode_format": decode_format,
-            "pretrained_spec": PretrainedSpec(
-                key=_CFG_ASSET.get(cfg, cfg),
-                url="",
-                state_dict_key_map={},
-            ),
-        },
-    )
+# Factory: build a class for each model name
+def _make_class(name: str) -> type[UltralyticsAdapter]:
+    return type(name.replace("-", "_").title().replace("_", ""), (UltralyticsAdapter,), {})
 
 
-ULTRALYTICS_ZOO: dict[str, type[_UltralyticsDetector]] = {}
-
-# v3 family (BottleneckCSP — no SAC/TR insertion defined).
-ULTRALYTICS_ZOO["yolov3"] = _make_class("YOLOv3", "yolov3.yaml", sac=(), tr=())
-ULTRALYTICS_ZOO["yolov3_tiny"] = _make_class("YOLOv3Tiny", "yolov3-tiny.yaml", sac=(), tr=())
-ULTRALYTICS_ZOO["yolov3_spp"] = _make_class("YOLOv3SPP", "yolov3-spp.yaml", sac=(), tr=())
-
-# v5 family: n/s/m/l/x baseline; s gets sac/tr/sactr variants.
-for _sz in ("n", "s", "m", "l", "x"):
-    ULTRALYTICS_ZOO[f"yolov5{_sz}"] = _make_class(
-        f"YOLOv5{_sz.upper()}", f"yolov5{_sz}.yaml", sac=(), tr=()
-    )
-ULTRALYTICS_ZOO["yolov5s_sac"] = _make_class("YOLOv5sSAC", "yolov5s.yaml", sac=(2, 4, 6), tr=())
-ULTRALYTICS_ZOO["yolov5s_tr"] = _make_class("YOLOv5sTR", "yolov5s.yaml", sac=(), tr=(8,))
-ULTRALYTICS_ZOO["yolov5s_sactr"] = _make_class(
-    "YOLOv5sSACTR", "yolov5s.yaml", sac=(2, 4, 6), tr=(8,)
-)
-
-# v8 family: n/s/m/l/x baseline; n/s get sac.
-for _sz in ("n", "s", "m", "l", "x"):
-    ULTRALYTICS_ZOO[f"yolov8{_sz}"] = _make_class(
-        f"YOLOv8{_sz.upper()}", f"yolov8{_sz}.yaml", sac=(), tr=()
-    )
-ULTRALYTICS_ZOO["yolov8n_sac"] = _make_class("YOLOv8nSAC", "yolov8n.yaml", sac=(2, 4, 6, 8), tr=())
-ULTRALYTICS_ZOO["yolov8s_sac"] = _make_class("YOLOv8sSAC", "yolov8s.yaml", sac=(2, 4, 6, 8), tr=())
-
-# v9 family
-for _sz in ("t", "s", "m", "c", "e"):
-    ULTRALYTICS_ZOO[f"yolov9{_sz}"] = _make_class(
-        f"YOLOv9{_sz.upper()}", f"yolov9{_sz}.yaml", sac=(), tr=()
-    )
-ULTRALYTICS_ZOO["yolov9c_sac"] = _make_class("YOLOv9cSAC", "yolov9c.yaml", sac=(2, 4, 6, 8), tr=())
-
-# v10 family (anchor_based decode)
-for _sz in ("n", "s", "m", "b", "l", "x"):
-    ULTRALYTICS_ZOO[f"yolov10{_sz}"] = _make_class(
-        f"YOLOv10{_sz.upper()}", f"yolov10{_sz}.yaml", sac=(), tr=(), decode_format="anchor_based"
-    )
-ULTRALYTICS_ZOO["yolov10s_sac"] = _make_class(
-    "YOLOv10sSAC", "yolov10s.yaml", sac=(2, 4, 6, 8), tr=(), decode_format="anchor_based"
-)
-
-
-__all__ = ["ULTRALYTICS_ZOO", "_UltralyticsDetector"]
+ZOO: dict[str, type[UltralyticsAdapter]] = {name: _make_class(name) for name, *_ in _MODELS}

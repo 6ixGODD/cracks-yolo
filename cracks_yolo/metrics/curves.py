@@ -122,19 +122,18 @@ def compute_roc_curve(
     order = np.argsort(-scores)
     scores = scores[order]
     is_tp = is_tp[order]
-    # TP rate = TP / (TP + FN); FN = total GTs - TP cumulative at this threshold.
-    # FP rate = FP / (FP + TN); TN = all non-GT detections - FP.
+    # TPR = TP / (TP + FN) = TP / total_GT (well-defined in detection).
+    # FPR = FP / (FP + TN). TN is not well-defined in object detection
+    # (there are infinitely many possible non-object locations). We
+    # normalize by the total number of FPs at the lowest confidence, which
+    # makes the curve span [0, 1] for visualization and yields a meaningful
+    # AUC-ROC as a ranking-quality metric. IMPORTANT: this FPR should NOT
+    # be used to derive specificity (1-FPR). Use the direct matched-
+    # detection counts in calculator.py instead.
     tp_cum = np.cumsum(is_tp).astype(np.float32)
     fp_cum = np.cumsum(1 - is_tp).astype(np.float32)
     total_gt = max(len(ground_truths), 1)
     tpr = tp_cum / total_gt
-    # Approximate FP rate: FP / (FP + TN). TN is hard to define for detection;
-    # use (num_detections - tp_cum) as a proxy for the "negative" pool, but
-    # that's incorrect for detection. Use sklearn's ROC definition:
-    # Treat each detection as a binary sample (TP=1, FP=0) with score=conf.
-    # ROC = TPR vs FPR where TPR = TP/(TP+FN) and FPR = FP/(FP+TN).
-    # In detection, all unmatched detections are FP, so we use:
-    # FPR = FP / max(FP_total, 1) — normalized to all FP detections.
     fpr = fp_cum / max(float(fp_cum[-1]), 1.0)
     return fpr, tpr, scores
 

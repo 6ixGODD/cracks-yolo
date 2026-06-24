@@ -1,414 +1,328 @@
-"""TestPipelineImpl — real evaluation loop.
-
-Forwards each batch through ``model.forward`` → ``model.decode`` → NMS,
-accumulates :class:`PerImageDetection` records, then runs the
-:class:`COCOMetricsCalculator` to produce a full :class:`MetricReport`.
-
-Artifacts written to ``cfg.output_dir``:
-- ``metrics.csv`` — flat scalar metrics (one row): detection accuracy +
-  efficiency (FPS, latency, params, GFLOPs, peak VRAM).
-- ``model_analysis.json`` — full :func:`analyze_model` report (params,
-  MACs, GFLOPs, single-image latency, peak VRAM).
-- ``per_image/<image_id>.json`` — detections + ground truths per image.
-- ``predictions/<image_id>.jpg`` — input image with predicted boxes drawn.
-- ``curves/{pr,roc,confusion}.png`` — curve plots (best-effort, skipped if
-  the viz module is unavailable).
-- ``run.log.jsonl`` — TestLog record.
-"""
+"""Test pipeline: run inference on test + val splits, compute all metrics."""
 
 from __future__ import annotations
 
 import csv
 import json
 from pathlib import Path
-import statistics
-import time
 from typing import Any
-from typing import cast
 
-from loguru import logger
 import torch
-import torch.nn as nn
 
-from cracks_yolo.analysis.model import analyze_model
-from cracks_yolo.analysis.model import save_model_analysis
-from cracks_yolo.logging.configure import configure_logger
-from cracks_yolo.logging.schema import TestLog
-from cracks_yolo.metrics.calculator import COCOMetricsCalculator
-from cracks_yolo.metrics.schemas import MetricReport
-from cracks_yolo.metrics.schemas import PerImageDetection
-from cracks_yolo.pipeline._utils import detections_to_per_image
-from cracks_yolo.pipeline._utils import pick_device
-from cracks_yolo.pipeline.protocol import EfficiencyReport
-from cracks_yolo.pipeline.protocol import TestConfig
-from cracks_yolo.pipeline.protocol import TestReport
-from cracks_yolo.zoo.base import DetectorModel
+from cracks_yolo.dataset.torchadapter import DetectionDataset
+from cracks_yolo.dataset.torchadapter import detection_collate
+from cracks_yolo.dataset.transforms import build_transforms
+from cracks_yolo.dataset.yolo import YOLOSource
+from cracks_yolo.pipeline._helpers import set_seed
+from cracks_yolo.zoo import ZOO
+from cracks_yolo.zoo.base import BaseModel
 
 
-class TestPipelineImpl:
-    """Real test pipeline. Satisfies the ``TestPipeline`` Protocol."""
+def run_test(
+    model_name: str,
+    weights: Path,
+    dataset: str,
+    output_dir: Path,
+    batch_size: int = 32,
+    device: str = "cuda",
+    seed: int = 42,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    """Load a trained model, run inference on test + val, compute metrics.
 
-    def run(
-        self,
-        model: DetectorModel,
-        test_loader: Any,
-        cfg: TestConfig,
-    ) -> TestReport:
-        """Evaluate ``model`` on ``test_loader`` and emit all artifacts."""
-        cfg.output_dir.mkdir(parents=True, exist_ok=True)
-        configure_logger(cfg.output_dir, level="INFO", stderr=True)
+    Returns a dict with test_metrics + val_metrics.
+    """
+    set_seed(seed)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-        device = pick_device(cfg.device)
-        model = model.to(device)
-        model.eval()
+    if model_name not in ZOO:
+        raise ValueError(f"unknown model: {model_name}")
 
-        per_image_dir = cfg.output_dir / "per_image"
-        predictions_dir = cfg.output_dir / "predictions"
-        curves_dir = cfg.output_dir / "curves"
-        per_image_dir.mkdir(parents=True, exist_ok=True)
-        predictions_dir.mkdir(parents=True, exist_ok=True)
-        curves_dir.mkdir(parents=True, exist_ok=True)
+    cls = ZOO[model_name]
+    import inspect
 
-        decode_format: str = getattr(model, "decode_format", "anchor_based")
-        anchor_free = decode_format == "anchor_free"
-        num_classes = int(getattr(model, "num_classes", 1))
-        calc = COCOMetricsCalculator(
-            num_classes=num_classes,
-            iou_threshold=0.5,
-            conf_threshold=cfg.conf_thr,
+    sig = inspect.signature(cls.__init__)
+    if "model_name" in sig.parameters:
+        model: BaseModel = cls(model_name=model_name, num_classes=1)
+    else:
+        model = cls(num_classes=1)
+
+    model.load(weights)
+
+    src = YOLOSource(dataset)
+    isize = model.input_size
+
+    results: dict[str, Any] = {"model": model_name}
+
+    for split_name in ("test", "valid"):
+        records = src.load_split(split_name)
+        if not records:
+            continue
+        ds = DetectionDataset(
+            records,
+            transform=build_transforms(isize, train=False, augment=False),
+        )
+        from torch.utils.data import DataLoader
+
+        loader = DataLoader(
+            ds,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+            collate_fn=detection_collate,
         )
 
-        all_per_image: list[PerImageDetection] = []
-        start_time = time.time()
-        image_index = 0
-
-        # Efficiency timing: measure real end-to-end inference time
-        # (forward + decode + NMS) per batch. File I/O and image drawing are
-        # excluded so FPS reflects inference throughput, not artifact writing.
-        is_cuda = device.type == "cuda"
-        batch_times_ms: list[float] = []
-        batch_image_counts: list[int] = []
-        if is_cuda:
-            torch.cuda.reset_peak_memory_stats(device)
-
+        # Run inference
+        all_preds: list[dict] = []
+        model._inner.eval() if hasattr(model, "_inner") else model.eval()
         with torch.no_grad():
-            for images, targets in test_loader:
-                images = images.to(device, non_blocking=True)
-                if is_cuda:
-                    torch.cuda.synchronize(device)
-                t0 = time.perf_counter()
-                preds = model(images)
-                decoded = model.decode(preds)
-                if not isinstance(decoded, torch.Tensor):
-                    continue  # type: ignore[unreachable]
-                per_image = detections_to_per_image(
-                    decoded,
-                    targets,
-                    model.input_size,
-                    conf_thr=cfg.conf_thr,
-                    iou_thr=cfg.iou_thr,
-                    is_anchor_free=anchor_free,
-                )
-                if is_cuda:
-                    torch.cuda.synchronize(device)
-                t1 = time.perf_counter()
-                batch_times_ms.append((t1 - t0) * 1000.0)
-                batch_image_counts.append(int(images.shape[0]))
-                calc.update(per_image)
-                for rec in per_image:
-                    self._write_per_image(rec, per_image_dir, image_index)
-                    try:
-                        self._write_prediction_image(images, rec, predictions_dir, image_index)
-                    except Exception as e:
-                        logger.warning(f"prediction drawing failed for {image_index}: {e}")
-                    image_index += 1
-                all_per_image.extend(per_image)
+            for imgs, targets in loader:
+                imgs = imgs.to(device)
+                results_list = model.inference(imgs)
+                for b, res in enumerate(results_list):
+                    img_id = (
+                        targets[b].get("image_id", torch.tensor(b)).item()
+                        if isinstance(targets, list)
+                        else b
+                    )
+                    for j in range(len(res.boxes)):
+                        bx = res.boxes[j].tolist()
+                        all_preds.append({
+                            "image_id": img_id,
+                            "category_id": int(res.labels[j]) + 1,
+                            "bbox": [bx[0], bx[1], bx[2] - bx[0], bx[3] - bx[1]],
+                            "score": float(res.scores[j]),
+                        })
 
-        report = calc.run()
-        efficiency = self._measure_efficiency(
-            model, cfg, device, batch_times_ms, batch_image_counts
-        )
-        self._write_metrics_csv(report, cfg.output_dir / "metrics.csv", efficiency)
-        self._write_curves(all_per_image, curves_dir, num_classes, cfg)
+        # Compute metrics via pycocotools
+        metrics = _compute_metrics(records, all_preds, isize, dataset)
+        results[f"{split_name}_metrics"] = metrics
+        results[f"{split_name}_predictions"] = all_preds
 
-        elapsed = time.time() - start_time
-        record: TestLog = {
-            "record_type": "test",
-            "map50": report.map50,
-            "map5095": report.map5095,
-            "per_class_ap": [v for _, v in sorted(report.per_class_ap.items())],
-            "precision": report.precision,
-            "recall": report.recall,
-            "f1": report.f1,
-            "elapsed_sec": elapsed,
-            "n_images": efficiency.n_images if efficiency else 0,
-            "fps_mean": efficiency.fps_mean if efficiency else 0.0,
-            "latency_mean_ms": efficiency.latency_mean_ms if efficiency else 0.0,
-            "gflops": efficiency.gflops if efficiency else 0.0,
-            "n_parameters": efficiency.n_parameters if efficiency else 0,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        # Save predictions
+        pred_file = output_dir / f"best_predictions_{split_name}.json"
+        pred_file.write_text(json.dumps(all_preds))
+
+    # Save metrics CSV
+    _save_metrics_csv(results, output_dir / "metrics.csv")
+
+    # Efficiency
+    try:
+        analysis = model.analyze(device=device)
+        results["efficiency"] = {
+            "n_parameters": analysis.n_parameters,
+            "gflops": analysis.gflops,
+            "fps_mean": analysis.fps_mean,
+            "latency_mean_ms": analysis.latency_mean_ms,
+            "peak_vram_bytes": analysis.peak_vram_bytes,
         }
-        logger.bind(**record).info("test")
+    except Exception:
+        pass
 
-        return TestReport(
-            output_dir=cfg.output_dir,
-            metrics=report,
-            elapsed_sec=elapsed,
-            efficiency=efficiency,
-        )
-
-    def _measure_efficiency(
-        self,
-        model: DetectorModel,
-        cfg: TestConfig,
-        device: torch.device,
-        batch_times_ms: list[float],
-        batch_image_counts: list[int],
-    ) -> EfficiencyReport | None:
-        """Build the EfficiencyReport from real loop timings + analyze_model.
-
-        Returns None when ``cfg.measure_efficiency`` is False.
-        """
-        if not cfg.measure_efficiency:
-            return None
-
-        input_size = int(getattr(model, "input_size", 640))
-        total_images = sum(batch_image_counts)
-        per_image_latencies = [
-            bt / max(n, 1) for bt, n in zip(batch_times_ms, batch_image_counts, strict=True)
-        ]
-        total_inference_sec = sum(batch_times_ms) / 1000.0
-        fps_mean = total_images / total_inference_sec if total_inference_sec > 0 else 0.0
-        latency_mean_ms = statistics.fmean(per_image_latencies) if per_image_latencies else 0.0
-        latency_p50_ms = _percentile(per_image_latencies, 50.0)
-        latency_p95_ms = _percentile(per_image_latencies, 95.0)
-        fps_p50 = 1000.0 / latency_p50_ms if latency_p50_ms > 0 else 0.0
-        fps_p95 = 1000.0 / latency_p95_ms if latency_p95_ms > 0 else 0.0
-
-        # Real peak VRAM over the inference loop (test batch size); falls back
-        # to the synthetic single-image value from analyze_model on CPU.
-        real_peak_vram = (
-            int(torch.cuda.max_memory_allocated(device)) if device.type == "cuda" else 0
-        )
-
-        # Structural metrics (params, MACs, GFLOPs) via a single-image dummy
-        # forward. Modest n_runs keeps the extra cost low; MACs are
-        # input-size dependent, not batch-size, so batch=1 is correct here.
-        try:
-            analysis = analyze_model(
-                cast(nn.Module, model),
-                input_size=input_size,
-                device=str(device),
-                n_warmup=1,
-                n_runs=5,
-            )
-            save_model_analysis(analysis, cfg.output_dir)
-            n_params = analysis.n_parameters
-            n_trainable = analysis.n_trainable_parameters
-            macs = analysis.macs
-            gflops = analysis.flops
-            synthetic_vram = analysis.peak_vram_bytes
-        except Exception as e:
-            logger.warning(f"analyze_model failed; efficiency structural metrics set to 0: {e}")
-            n_params = 0
-            n_trainable = 0
-            macs = 0.0
-            gflops = 0.0
-            synthetic_vram = 0
-
-        return EfficiencyReport(
-            n_images=total_images,
-            fps_mean=fps_mean,
-            fps_p50=fps_p50,
-            fps_p95=fps_p95,
-            latency_mean_ms=latency_mean_ms,
-            latency_p50_ms=latency_p50_ms,
-            latency_p95_ms=latency_p95_ms,
-            n_parameters=n_params,
-            n_trainable_parameters=n_trainable,
-            macs=macs,
-            gflops=gflops,
-            peak_vram_bytes=real_peak_vram if real_peak_vram > 0 else synthetic_vram,
-            input_size=input_size,
-            device=str(device),
-            batch_size=cfg.batch_size,
-        )
-
-    def _write_per_image(
-        self,
-        rec: PerImageDetection,
-        out_dir: Path,
-        idx: int,
-    ) -> None:
-        path = out_dir / f"{idx:06d}.json"
-        path.write_text(json.dumps(rec, indent=2, default=_json_default), encoding="utf-8")
-
-    def _write_prediction_image(
-        self,
-        images: torch.Tensor,
-        rec: PerImageDetection,
-        out_dir: Path,
-        idx: int,
-    ) -> None:
-        try:
-            import cv2
-            import numpy as np
-        except ImportError:
-            return
-        b = idx % images.shape[0]
-        img = images[b].detach().cpu().float().numpy()
-        img = (img * 255.0).clip(0, 255).astype("uint8")
-        img = np.transpose(img, (1, 2, 0))
-        img = np.ascontiguousarray(img[:, :, ::-1].copy())  # RGB -> BGR for cv2
-        for d in rec["detections"]:
-            x1, y1, x2, y2 = (int(v) for v in d["bbox_xyxy"])
-            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(
-                img,
-                f"{d['score']:.2f}",
-                (x1, max(0, y1 - 5)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 255, 0),
-                1,
-            )
-        for g in rec["ground_truths"]:
-            x1, y1, x2, y2 = (int(v) for v in g["bbox_xyxy"])
-            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 1)
-        cv2.imwrite(str(out_dir / f"{idx:06d}.jpg"), img)
-
-    def _write_metrics_csv(
-        self,
-        report: MetricReport,
-        path: Path,
-        efficiency: EfficiencyReport | None,
-    ) -> None:
-        accuracy_fields = [
-            "map50",
-            "map5095",
-            "ap50",
-            "ap75",
-            "precision",
-            "recall",
-            "f1",
-            "ar1",
-            "ar10",
-            "ar100",
-            "ar300",
-            "ar1000",
-            "ar_small",
-            "ar_medium",
-            "ar_large",
-            "auc_pr",
-            "auc_roc",
-            "sensitivity",
-            "specificity",
-            "ppv",
-            "npv",
-            "iou_threshold",
-            "conf_threshold",
-        ]
-        efficiency_fields = [
-            "n_images",
-            "fps_mean",
-            "fps_p50",
-            "fps_p95",
-            "latency_mean_ms",
-            "latency_p50_ms",
-            "latency_p95_ms",
-            "n_parameters",
-            "n_trainable_parameters",
-            "macs",
-            "gflops",
-            "peak_vram_bytes",
-            "input_size",
-            "device",
-            "batch_size",
-        ]
-        fields = accuracy_fields + efficiency_fields
-        row: dict[str, object] = {k: getattr(report, k) for k in accuracy_fields}
-        if efficiency is not None:
-            row.update({k: getattr(efficiency, k) for k in efficiency_fields})
-        else:
-            row.update(dict.fromkeys(efficiency_fields, 0))
-        with path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fields)
-            writer.writeheader()
-            writer.writerow(row)
-
-    def _write_curves(
-        self,
-        per_image: list[PerImageDetection],
-        curves_dir: Path,
-        num_classes: int,
-        cfg: TestConfig,
-    ) -> None:
-        try:
-            from cracks_yolo.metrics.curves import compute_pr_curve
-            from cracks_yolo.metrics.curves import compute_roc_curve
-        except ImportError:
-            return
-        det_arr = [
-            (d["image_id"], d["class_id"], d["score"], d["bbox_xyxy"])
-            for img in per_image
-            for d in img["detections"]
-        ]
-        gt_arr = [
-            (g["image_id"], g["class_id"], g["bbox_xyxy"])
-            for img in per_image
-            for g in img["ground_truths"]
-        ]
-        try:
-            p, r, _ = compute_pr_curve(det_arr, gt_arr, iou_thr=0.5)
-            fpr, tpr, _ = compute_roc_curve(det_arr, gt_arr, iou_thr=0.5)
-        except Exception as e:
-            logger.warning(f"curve computation failed: {e}")
-            return
-        try:
-            from cracks_yolo.viz.curves import plot_pr_curve
-            from cracks_yolo.viz.curves import plot_roc_curve
-
-            plot_pr_curve(p, r, curves_dir / "pr.png")
-            plot_roc_curve(fpr, tpr, curves_dir / "roc.png")
-        except Exception as e:
-            logger.warning(f"curve plotting failed: {e}")
-        try:
-            from cracks_yolo.metrics.confusion import compute_confusion_matrix
-            from cracks_yolo.viz.confusion import plot_confusion_matrix
-
-            cm = compute_confusion_matrix(
-                detections=det_arr,
-                ground_truths=gt_arr,
-                iou_thr=cfg.iou_thr,
-                num_classes=num_classes,
-                conf_thr=cfg.conf_thr,
-            )
-            plot_confusion_matrix(
-                cm, [f"cls_{i}" for i in range(num_classes)], curves_dir / "confusion.png"
-            )
-        except Exception as e:
-            logger.warning(f"confusion matrix plotting failed: {e}")
+    print(f"Test complete: {model_name}")
+    if "test_metrics" in results:
+        m = results["test_metrics"]
+        print(f"  test: mAP@0.5={m.get('map50', 0):.4f} mAP@0.5:0.95={m.get('map5095', 0):.4f}")
+    if "valid_metrics" in results:
+        m = results["valid_metrics"]
+        print(f"  val:  mAP@0.5={m.get('map50', 0):.4f} mAP@0.5:0.95={m.get('map5095', 0):.4f}")
+    print(f"  output: {output_dir}")
+    return results
 
 
-def _json_default(obj: Any) -> Any:
-    if isinstance(obj, torch.Tensor):
-        return obj.detach().cpu().tolist()
-    if isinstance(obj, tuple):
-        return list(obj)
-    raise TypeError(f"not JSON serializable: {type(obj)!r}")
+def _compute_metrics(
+    records: list, preds: list[dict], _isize: int, _dataset: str
+) -> dict[str, float]:
+    """Compute COCO metrics from predictions + GT."""
+    from collections import defaultdict
+    import tempfile
+
+    import numpy as np
+    from PIL import Image
+    from pycocotools.coco import COCO
+    from pycocotools.cocoeval import COCOeval
+    from sklearn.metrics import auc
+    from sklearn.metrics import precision_recall_curve
+    from sklearn.metrics import roc_curve
+
+    # Build COCO GT
+    images = []
+    annotations = []
+    ann_id = 1
+    fname_to_id: dict[str, int] = {}
+    for img_id, rec in enumerate(records, 1):
+        fname = Path(rec.image_path).name
+        stem = Path(rec.image_path).stem
+        fname_to_id[fname] = img_id
+        fname_to_id[stem] = img_id
+        with Image.open(rec.image_path) as im:
+            w, h = im.size
+        images.append({"id": img_id, "file_name": fname, "width": w, "height": h})
+        for _i, (box, _label) in enumerate(zip(rec.boxes_norm, rec.labels, strict=False)):
+            x1, y1, x2, y2 = box
+            annotations.append({
+                "id": ann_id,
+                "image_id": img_id,
+                "category_id": 1,
+                "bbox": [
+                    round(x1 * w, 2),
+                    round(y1 * h, 2),
+                    round((x2 - x1) * w, 2),
+                    round((y2 - y1) * h, 2),
+                ],
+                "area": round((x2 - x1) * w * (y2 - y1) * h, 2),
+                "iscrowd": 0,
+            })
+            ann_id += 1
+    coco_gt = {
+        "images": images,
+        "annotations": annotations,
+        "categories": [{"id": 1, "name": "cracks"}],
+    }
+
+    # Convert predictions
+    coco_dt = []
+    for p in preds:
+        iid = p["image_id"]
+        if isinstance(iid, str):
+            iid = fname_to_id.get(iid, fname_to_id.get(iid + ".jpg", 0))
+        coco_dt.append({"image_id": iid, "category_id": 1, "bbox": p["bbox"], "score": p["score"]})
+
+    if not coco_dt:
+        return {"map50": 0.0, "map5095": 0.0}
+
+    # Run COCO eval
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as gtf:
+        json.dump(coco_gt, gtf)
+        gt_name = gtf.name
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as dtf:
+        json.dump(coco_dt, dtf)
+        dt_name = dtf.name
+
+    try:
+        cgt = COCO(gt_name)
+        cdt = cgt.loadRes(dt_name)
+        ev50 = COCOeval(cgt, cdt, "bbox")
+        ev50.params.iouThrs = np.array([0.5])
+        ev50.evaluate()
+        ev50.accumulate()
+        ev50.summarize()
+        ev = COCOeval(cgt, cdt, "bbox")
+        ev.evaluate()
+        ev.accumulate()
+        ev.summarize()
+        m = {
+            "map50": float(ev50.stats[1]),
+            "map5095": float(ev.stats[0]),
+            "ap75": float(ev.stats[2]),
+            "ar1": float(ev.stats[6]),
+            "ar10": float(ev.stats[7]),
+            "ar100": float(ev.stats[8]),
+        }
+    except Exception:
+        m = {"map50": 0.0, "map5095": 0.0}
+    finally:
+        Path(gt_name).unlink(missing_ok=True)
+        Path(dt_name).unlink(missing_ok=True)
+
+    # PR/ROC
+    gt_by_img = defaultdict(list)
+    for a in annotations:
+        gt_by_img[a["image_id"]].append(a["bbox"])
+    dt_by_img = defaultdict(list)
+    for d in coco_dt:
+        dt_by_img[d["image_id"]].append((d["bbox"], d["score"]))
+
+    scores_list = []
+    labels_list = []
+    total_gt = sum(len(v) for v in gt_by_img.values())
+
+    def iou_xywh(b1, b2):
+        x1, y1, w1, h1 = b1
+        x2, y2, w2, h2 = b2
+        xi1, yi1 = max(x1, x2), max(y1, y2)
+        xi2, yi2 = min(x1 + w1, x2 + w2), min(y1 + h1, y2 + h2)
+        inter = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+        union = w1 * h1 + w2 * h2 - inter
+        return inter / union if union > 0 else 0
+
+    for img_id, gts in gt_by_img.items():
+        dts = sorted(dt_by_img.get(img_id, []), key=lambda x: -x[1])
+        matched = [False] * len(gts)
+        for bbox, score in dts:
+            best_iou = 0
+            best_idx = -1
+            for i, gb in enumerate(gts):
+                if matched[i]:
+                    continue
+                iou = iou_xywh(bbox, gb)
+                if iou > best_iou:
+                    best_iou = iou
+                    best_idx = i
+            if best_iou >= 0.5 and best_idx >= 0:
+                matched[best_idx] = True
+                scores_list.append(score)
+                labels_list.append(1)
+            else:
+                scores_list.append(score)
+                labels_list.append(0)
+
+    if scores_list:
+        scores_arr = np.array(scores_list)
+        labels_arr = np.array(labels_list)
+        precision, recall, _ = precision_recall_curve(labels_arr, scores_arr)
+        fpr, tpr, _ = roc_curve(labels_arr, scores_arr)
+        m["auc_pr"] = float(auc(recall, precision))
+        m["auc_roc"] = float(auc(fpr, tpr))
+        f1s = 2 * precision * recall / (precision + recall + 1e-12)
+        bi = int(np.argmax(f1s))
+        m["precision"] = float(precision[bi])
+        m["recall"] = float(recall[bi])
+        m["f1"] = float(f1s[bi])
+        m["sensitivity"] = m["recall"]
+        m["ppv"] = m["precision"]
+        tp = int(np.sum(labels_arr))
+        fp = int(np.sum(1 - labels_arr))
+        fn = max(0, total_gt - tp)
+        tn = len(records) - fp
+        m["specificity"] = tn / (tn + fp) if (tn + fp) > 0 else 1.0
+        m["npv"] = tn / (tn + fn) if (tn + fn) > 0 else 1.0
+    else:
+        m["auc_pr"] = 0.0
+        m["auc_roc"] = 0.5
+        m["precision"] = 0.0
+        m["recall"] = 0.0
+        m["f1"] = 0.0
+
+    return m
 
 
-def _percentile(values: list[float], p: float) -> float:
-    """Linear-interpolated percentile of ``values`` (no sort mutation)."""
-    if not values:
-        return 0.0
-    xs = sorted(values)
-    k = (len(xs) - 1) * (p / 100.0)
-    f = int(k)
-    c = min(f + 1, len(xs) - 1)
-    if f == c:
-        return xs[f]
-    return xs[f] + (xs[c] - xs[f]) * (k - f)
-
-
-__all__ = ["TestPipelineImpl"]
+def _save_metrics_csv(results: dict, path: Path) -> None:
+    """Save metrics to CSV."""
+    fields = [
+        "model",
+        "map50",
+        "map5095",
+        "ap75",
+        "precision",
+        "recall",
+        "f1",
+        "ar1",
+        "ar10",
+        "ar100",
+        "auc_pr",
+        "auc_roc",
+        "sensitivity",
+        "specificity",
+        "ppv",
+        "npv",
+    ]
+    with path.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for split in ("test", "valid"):
+            key = f"{split}_metrics" if split != "valid" else "valid_metrics"
+            if key in results:
+                row = {"model": f"{results['model']}_{split}"}
+                row.update(results[key])
+                w.writerow({k: row.get(k, "") for k in fields})

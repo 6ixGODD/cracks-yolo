@@ -1,0 +1,17 @@
+name: yolo26n
+type: train
+model: yolo26n
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/yolo26n
+epochs: 300
+batch_size: 128
+lr: 0.001
+pretrained: true
+device: cuda
+seed: 42
+num_workers: 8
+optimizer: sgd
+cosine_lr: true
+use_ema: true
+early_stopping_patience: 100
+clip_grad_norm: 10.0

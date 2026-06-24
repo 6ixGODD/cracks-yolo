@@ -100,7 +100,7 @@ AGENTS.md
 TODO.md
 
 # Cracks-YOLO artifacts
-output/
+/output/
 *.zip
 weights/
 !/tests/weights/
@@ -108,3 +108,6 @@ weights/
 runs/
 *.pt
 *.pth
+/_*.py
+/output*
+/*.bak

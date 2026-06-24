@@ -8,19 +8,25 @@ Usage:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import json
 from pathlib import Path
 import sys
+from typing import TYPE_CHECKING
 from typing import Any
 
 from loguru import logger
 
+if TYPE_CHECKING:
+    from loguru import Logger
+    from loguru import Message
 
-def _make_jsonl_sink(path: Path) -> Any:
+
+def _make_jsonl_sink(path: Path) -> Callable[[Message], None]:
     """Return a sink callable that writes one JSON line per record to ``path``."""
     file = path.open("a", encoding="utf-8")
 
-    def sink(message: Any) -> None:
+    def sink(message: Message) -> None:
         record = message.record
         payload: dict[str, Any] = {
             "level": record["level"].name,
@@ -40,7 +46,7 @@ def configure_logger(
     level: str = "INFO",
     *,
     stderr: bool = True,
-) -> Any:
+) -> Logger:
     """Configure loguru with a JSONL file sink and (optional) stderr sink.
 
     Args:

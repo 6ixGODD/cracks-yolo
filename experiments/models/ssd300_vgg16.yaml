@@ -1,0 +1,14 @@
+name: ssd300_vgg16
+type: train
+model: ssd300_vgg16
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/ssd300_vgg16
+epochs: 150
+batch_size: 32
+lr: 0.0001
+pretrained: true
+device: cuda
+seed: 42
+num_workers: 8
+extra_kwargs:
+  imgsz: 300

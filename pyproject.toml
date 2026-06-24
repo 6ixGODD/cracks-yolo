@@ -30,7 +30,7 @@ dependencies = [
   "pydantic>=2.12,<3",
   "pyyaml>=6.0.3,<7",
   "requests>=2.32,<3",
-  "rich>=15.0.0",
+  "rich>=15",
   "scikit-learn>=1.5,<2",
   "scipy>=1.13,<2",
   "scipy-stubs~=1.17.1",
@@ -56,6 +56,11 @@ dev = [
   "ruff>=0.15.13",
   "thop>=0.1,<0.2",
   "torchsummary>=1.5.1",
+]
+typing = [
+  "mypy>=2.1",
+  "pandas-stubs>=3.0.3.260530",
+  "scipy-stubs>=1.17.1.5",
 ]
 
 [tool.setuptools.packages.find]

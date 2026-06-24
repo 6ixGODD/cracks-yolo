@@ -1,0 +1,17 @@
+name: yolov9e
+type: train
+model: yolov9e
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/yolov9e
+epochs: 300
+batch_size: 16
+lr: 0.001
+pretrained: true
+device: cuda
+seed: 42
+num_workers: 8
+optimizer: sgd
+cosine_lr: true
+use_ema: true
+early_stopping_patience: 100
+clip_grad_norm: 10.0

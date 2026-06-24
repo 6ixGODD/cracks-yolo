@@ -1,0 +1,16 @@
+scheduler:
+  max_parallel: 1
+  seed: 42
+$include:
+  - models/faster_rcnn_r50.yaml
+  - models/rtdetr_r50.yaml
+  - models/yolo11n.yaml
+  - models/yolo26n.yaml
+  - models/yolov10m.yaml
+  - models/yolov10x.yaml
+  - models/yolov5n.yaml
+  - models/yolov5s_tr.yaml
+  - models/yolov8l.yaml
+  - models/yolov8s.yaml
+  - models/yolov9c_sac.yaml
+  - models/yolov9t.yaml

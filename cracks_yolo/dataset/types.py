@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from typing import TypeAlias
 
 from typing_extensions import TypedDict
 
@@ -43,5 +44,5 @@ class RawDetection:
     labels: list[int]
 
 
-SplitName = Literal["train", "valid", "test", "val"]
+SplitName: TypeAlias = Literal["train", "valid", "test", "val"]
 """Split name. ``val`` is accepted as alias for ``valid``."""

@@ -49,7 +49,7 @@ def _load_pil(record: RawDetection) -> np.ndarray:
 
 
 def _resize_letterbox(img: np.ndarray, size: int) -> tuple[np.ndarray, float, int, int]:
-    """Resize keeping aspect, pad to size×size. Returns (img_padded, scale, dw, dh)."""  # noqa: RUF002
+    """Resize keeping aspect, pad to size×size. Returns (img_padded, scale, dw, dh)."""
     h, w = img.shape[:2]
     r = size / max(h, w)
     nh, nw = int(round(h * r)), int(round(w * r))  # noqa: RUF046

@@ -1,0 +1,15 @@
+scheduler:
+  max_parallel: 1
+  seed: 42
+$include:
+  - models/mask_rcnn_r50.yaml
+  - models/ssd300_vgg16.yaml
+  - models/yolo12n.yaml
+  - models/yolov10b.yaml
+  - models/yolov10s.yaml
+  - models/yolov5l.yaml
+  - models/yolov5s_sac.yaml
+  - models/yolov6n.yaml
+  - models/yolov8n.yaml
+  - models/yolov8x.yaml
+  - models/yolov9m.yaml

@@ -1,0 +1,15 @@
+scheduler:
+  max_parallel: 1
+  seed: 42
+$include:
+  - models/fcos_r50.yaml
+  - models/rtdetr_r50_sac.yaml
+  - models/yolo11s.yaml
+  - models/yolo26s.yaml
+  - models/yolov10n.yaml
+  - models/yolov3.yaml
+  - models/yolov5s.yaml
+  - models/yolov5x.yaml
+  - models/yolov8m.yaml
+  - models/yolov8s_sac.yaml
+  - models/yolov9e.yaml

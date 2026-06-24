@@ -1,0 +1,15 @@
+scheduler:
+  max_parallel: 1
+  seed: 42
+$include:
+  - models/retinanet_r50.yaml
+  - models/ssdlite320_mobilenetv3.yaml
+  - models/yolo12s.yaml
+  - models/yolov10l.yaml
+  - models/yolov10s_sac.yaml
+  - models/yolov5m.yaml
+  - models/yolov5s_sactr.yaml
+  - models/yolov6n_sac.yaml
+  - models/yolov8n_sac.yaml
+  - models/yolov9c.yaml
+  - models/yolov9s.yaml

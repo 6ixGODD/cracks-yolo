@@ -57,17 +57,29 @@ def _count_macs(model: nn.Module, input_size: int) -> float:
         macs, _ = profile(model, inputs=(x,), verbose=False)
         macs = float(macs)
     except Exception:
+        # thop registers per-submodule forward hooks, which fail on frozen
+        # ScriptModules (``AttributeError: cannot assign buffer before
+        # Module.__init__() call``). Fall back to torch's built-in
+        # FlopCounterMode, which hooks at the ATen-op level and works on
+        # torchscript. It returns FLOPs; convert to MACs (flops = 2*macs).
         try:
-            from fvcore.nn import FlopCountAnalysis
+            from torch.utils.flop_counter import FlopCounterMode
 
-            flops = (
-                FlopCountAnalysis(model, x)
-                .unsupported_ops_warnings(False)
-                .uncalled_modules_warnings(False)
-            )
-            macs = float(flops.total()) / 2.0  # flops = 2 * macs convention
+            with FlopCounterMode(display=False) as fcm:
+                _ = model(x)
+            macs = float(fcm.get_total_flops()) / 2.0
         except Exception:
-            macs = 0.0
+            try:
+                from fvcore.nn import FlopCountAnalysis
+
+                flops = (
+                    FlopCountAnalysis(model, x)
+                    .unsupported_ops_warnings(False)
+                    .uncalled_modules_warnings(False)
+                )
+                macs = float(flops.total()) / 2.0  # flops = 2 * macs convention
+            except Exception:
+                macs = 0.0
     finally:
         if was_training:
             model.train()
