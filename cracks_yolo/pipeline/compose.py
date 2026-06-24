@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 from typing import Any
 
 from loguru import logger
@@ -78,7 +77,13 @@ def run_compose(config: Path, output_dir: Path, max_parallel: int = 1) -> int:
 
 
 def _load_config(config_path: Path) -> dict[str, Any]:
-    """Load YAML, resolve $include recursively."""
+    """Load YAML, resolve $include recursively.
+
+    Three cases:
+    1. File has ``$include`` → recurse into each included file.
+    2. File has ``experiments`` → explicit experiment list.
+    3. File has neither → the file *itself* is a single experiment.
+    """
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if not isinstance(cfg, dict):
         return {"experiments": []}
@@ -92,16 +97,21 @@ def _load_config(config_path: Path) -> dict[str, Any]:
         child = _load_config(config_path.parent / inc)
         experiments.extend(child.get("experiments", []))
 
-    local = cfg.get("experiments", [])
-    experiments.extend(local)
+    # If cfg has explicit experiments list, use that.
+    # Otherwise, if cfg has meaningful content (and no $include), treat itself as one experiment.
+    if "experiments" in cfg:
+        experiments.extend(cfg.pop("experiments", []))
+    elif not includes and any(k not in ("scheduler",) for k in cfg):
+        experiments.append(cfg)
+
     cfg["experiments"] = experiments
     return cfg
 
 
 def _build_cmd(exp: dict[str, Any]) -> list[str]:
-    """Build a `python -m scripts.cli train/test` command."""
+    """Build a ``cy train/test`` or ``cy run`` command."""
     exp_type = exp.get("type", "train")
-    cmd = [sys.executable, "-m", "scripts.cli", exp_type]
+    cmd = ["cy", exp_type]
 
     flag_map = {
         "model": "--model",
