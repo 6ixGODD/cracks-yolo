@@ -156,6 +156,14 @@ def run(
         str | None,
         Option("--device", help="Override device (cuda/cpu)"),
     ] = None,
+    test_only: Annotated[
+        bool,
+        Option("--test-only", help="Skip training, run test only. Requires --weights."),
+    ] = False,
+    weights: Annotated[
+        Path | None,
+        Option("--weights", "-w", help="Path to checkpoint .pt for --test-only"),
+    ] = None,
 ) -> None:
     """Run a single experiment from a YAML config file (train or test)."""
     import yaml
@@ -179,8 +187,31 @@ def run(
     if device is not None:
         cfg["device"] = device
 
-    if exp_type == "train":
-        run_train(**cfg)
+    if test_only:
+        if weights is None:
+            raise ValueError("--weights is required when --test-only is set")
+        test_cfg = {
+            k: v
+            for k, v in cfg.items()
+            if k in ("model_name", "dataset", "batch_size", "device", "seed")
+        }
+        test_cfg["weights"] = weights
+        test_cfg["output_dir"] = cfg["output_dir"] / "test"
+        run_test(**test_cfg)
+    elif exp_type == "train":
+        train_report = run_train(**cfg)
+        # Auto-run test on the best checkpoint
+        weights_path = train_report.checkpoint_path or (cfg["output_dir"] / "weights" / "best.pt")
+        if weights_path.exists():
+            print(f"\n{'=' * 60}\nRunning test on best checkpoint: {weights_path}\n{'=' * 60}")
+            test_cfg = {
+                k: v
+                for k, v in cfg.items()
+                if k in ("model_name", "dataset", "output_dir", "batch_size", "device", "seed")
+            }
+            test_cfg["weights"] = weights_path
+            test_cfg["output_dir"] = cfg["output_dir"] / "test"
+            run_test(**test_cfg)
     elif exp_type == "test":
         run_test(**cfg)
     else:

@@ -56,6 +56,28 @@ def _print_model_summary(
     print()
 
 
+def _sync_ultralytics_output(ultra_dir: Path, target_dir: Path) -> None:
+    """Copy ultralytics training artifacts into our output directory.
+
+    ultralytics saves to ``project/name/``; we want everything under
+    ``output_dir/`` so the pipeline can find results.csv, weights, plots, etc.
+    """
+    import shutil
+
+    if ultra_dir.resolve() == target_dir.resolve():
+        return
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for src in ultra_dir.iterdir():
+        dst = target_dir / src.name
+        if src.is_dir():
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+        else:
+            shutil.copy2(src, dst)
+
+
 class UltralyticsAdapter(BaseModel):
     """Wraps an ultralytics ``DetectionModel`` for any YOLO family.
 
@@ -154,7 +176,7 @@ class UltralyticsAdapter(BaseModel):
             "imgsz": self.input_size,
             "device": config.device,
             "workers": config.num_workers,
-            "project": str(config.output_dir.parent),
+            "project": str(config.output_dir.resolve().parent),
             "name": config.output_dir.name,
             "exist_ok": True,
             "optimizer": config.optimizer,
@@ -177,6 +199,10 @@ class UltralyticsAdapter(BaseModel):
         # setup_model() will see nn.Module and skip the get_model() rebuild.
         trainer.model = self._inner
         trainer.train()
+
+        # After training: move ultralytics output into our output_dir if
+        # ultralytics saved elsewhere (e.g. when config.output_dir is relative)
+        _sync_ultralytics_output(trainer.save_dir, config.output_dir)
 
         self._inner = trainer.model
         self._set_state(ModelState.TRAINED)

@@ -436,38 +436,72 @@ class TorchvisionBase(BaseModel):
 
         self._inner.eval()
         calc = COCOMetricsCalculator(num_classes=self.num_classes, iou_threshold=0.5)
+        global_img_idx = 0
         with torch.no_grad():
-            for images, _targets in val_loader:
+            for images, targets in val_loader:
                 images = images.to(device)
                 outs = self._inner(images)
-                # Convert to per-image for metrics
+                # Build per-image detections + ground truths
                 for b, out in enumerate(outs if isinstance(outs, list) else [outs]):
+                    img_id = global_img_idx
+                    global_img_idx += 1
                     if not isinstance(out, dict):
                         continue
+
+                    # --- detections ---
                     boxes = out.get("boxes", torch.tensor([])).cpu()
                     scores = out.get("scores", torch.tensor([])).cpu()
                     labels = out.get("labels", torch.tensor([])).cpu()
+                    detections: list[dict[str, Any]] = []
                     for j in range(len(boxes)):
-                        if scores[j] > 0.001:
-                            calc.update([
-                                {
-                                    "image_id": b,
-                                    "detections": [
-                                        {
-                                            "image_id": b,
-                                            "class_id": int(labels[j]) - 1 if labels[j] > 0 else 0,
-                                            "score": float(scores[j]),
-                                            "bbox_xyxy": (
-                                                float(boxes[j][0]),
-                                                float(boxes[j][1]),
-                                                float(boxes[j][2]),
-                                                float(boxes[j][3]),
-                                            ),
-                                        }
-                                    ],
-                                    "ground_truths": [],
-                                }
-                            ])
+                        s = float(scores[j])
+                        if s > 0.001:
+                            cls_id = int(labels[j]) - 1
+                            if cls_id < 0:
+                                cls_id = 0
+                            detections.append({
+                                "image_id": img_id,
+                                "class_id": cls_id,
+                                "score": s,
+                                "bbox_xyxy": (
+                                    float(boxes[j][0]),
+                                    float(boxes[j][1]),
+                                    float(boxes[j][2]),
+                                    float(boxes[j][3]),
+                                ),
+                            })
+
+                    # --- ground truths (torchvision format: list[dict]) ---
+                    gt: list[dict[str, Any]] = []
+                    if isinstance(targets, list) and b < len(targets):
+                        t = targets[b]
+                        if isinstance(t, dict):
+                            gt_boxes = t.get("boxes", torch.tensor([]))
+                            gt_labels = t.get("labels", torch.tensor([]))
+                            for j in range(len(gt_boxes)):
+                                cls_gt = int(gt_labels[j].item()) - 1  # 1-indexed → 0-indexed
+                                if cls_gt < 0:
+                                    cls_gt = 0
+                                box = gt_boxes[j].tolist()
+                                gt.append({
+                                    "image_id": img_id,
+                                    "class_id": cls_gt,
+                                    "score": 1.0,
+                                    "bbox_xyxy": (
+                                        float(box[0]),
+                                        float(box[1]),
+                                        float(box[2]),
+                                        float(box[3]),
+                                    ),
+                                })
+
+                    calc.update([
+                        {
+                            "image_id": img_id,
+                            "detections": detections,
+                            "ground_truths": gt,
+                        }
+                    ])
 
         if old_thresh is not None:
             self._inner.score_thresh = old_thresh
