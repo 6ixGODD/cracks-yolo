@@ -248,13 +248,32 @@ class UltralyticsAdapter(BaseModel):
 
     def inference(self, images: torch.Tensor) -> list[InferenceResult]:
         self._assert_state(ModelState.TRAINED, "inference")
-        from ultralytics.utils.nms import non_max_suppression
-
         self._inner.eval()
         results: list[InferenceResult] = []
         with torch.no_grad():
             raw = self._inner(images)
-            # non_max_suppression decodes raw grid-offset output → pixel xyxy
+
+            # RT-DETR already outputs decoded detections: (B, 300, 6) norm → pixel
+            if self._use_rtdetr:
+                if isinstance(raw, (list, tuple)):
+                    raw = raw[0]
+                for b in range(images.shape[0]):
+                    det = raw[b]  # (300, 6) = (x1,y1,x2,y2,conf,cls) normalized
+                    mask = det[:, 4] > 0.001
+                    boxes_norm = det[mask, :4]
+                    boxes_px = (boxes_norm * self.input_size).clamp(0, self.input_size)
+                    results.append(
+                        InferenceResult(
+                            boxes=boxes_px.cpu(),
+                            scores=det[mask, 4].cpu(),
+                            labels=det[mask, 5].long().cpu(),
+                        )
+                    )
+                return results
+
+            # YOLO families: raw grid-offset → decode via non_max_suppression
+            from ultralytics.utils.nms import non_max_suppression
+
             preds = non_max_suppression(
                 raw,
                 conf_thres=0.001,
@@ -272,7 +291,6 @@ class UltralyticsAdapter(BaseModel):
                         )
                     )
                 else:
-                    # det: (N, 6) = (x1, y1, x2, y2, conf, cls), clipped to image
                     boxes = det[:, :4].clamp(0, self.input_size)
                     results.append(
                         InferenceResult(
