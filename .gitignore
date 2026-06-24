@@ -111,3 +111,5 @@ runs/
 /_*.py
 /output*
 /*.bak
+plots/
+test_metrics.*
