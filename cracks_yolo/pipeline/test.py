@@ -241,7 +241,6 @@ def _compute_metrics(
 
     scores_list = []
     labels_list = []
-    total_gt = sum(len(v) for v in gt_by_img.values())
 
     def iou_xywh(b1, b2):
         x1, y1, w1, h1 = b1
@@ -288,12 +287,16 @@ def _compute_metrics(
             m["f1"] = float(f1s[bi])
             m["sensitivity"] = m["recall"]
             m["ppv"] = m["precision"]
-            tp = int(np.sum(labels_arr))
-            fp = int(np.sum(1 - labels_arr))
-            fn = max(0, total_gt - tp)
-            tn = len(records) - fp
-            m["specificity"] = tn / (tn + fp) if (tn + fp) > 0 else 1.0
-            m["npv"] = tn / (tn + fn) if (tn + fn) > 0 else 1.0
+            # Image-level binary classification: crack present vs absent
+            gt_img_ids = {a["image_id"] for a in annotations}
+            dt_img_ids = {d["image_id"] for d in coco_dt if d.get("score", 0) >= 0.25}
+            n_pos_imgs = len(gt_img_ids)
+            n_neg_imgs = len(records) - n_pos_imgs
+            fp_img = len(dt_img_ids - gt_img_ids)
+            fn_img = len(gt_img_ids - dt_img_ids)
+            tn_img = n_neg_imgs - fp_img
+            m["specificity"] = tn_img / (tn_img + fp_img) if (tn_img + fp_img) > 0 else 1.0
+            m["npv"] = tn_img / (tn_img + fn_img) if (tn_img + fn_img) > 0 else 1.0
         else:
             m["auc_pr"] = 0.0
             m["auc_roc"] = 0.5

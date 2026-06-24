@@ -113,3 +113,4 @@ runs/
 /*.bak
 plots/
 test_metrics.*
+fixup_specificity.py
