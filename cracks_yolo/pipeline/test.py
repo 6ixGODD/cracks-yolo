@@ -131,7 +131,10 @@ def run_test(
 
 
 def _compute_metrics(
-    records: list, preds: list[dict], _isize: int, _dataset: str
+    records: list,
+    preds: list[dict],
+    _isize: int,
+    _dataset: str,
 ) -> dict[str, float]:
     """Compute COCO metrics from predictions + GT."""
     from collections import defaultdict

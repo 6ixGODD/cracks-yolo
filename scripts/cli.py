@@ -89,6 +89,44 @@ def test(
 
 
 @app.command()
+def run(
+    config: Annotated[Path, Option("--config", "-c", help="Single experiment YAML config file")],
+    output_dir: Annotated[
+        Path | None, Option("--output-dir", "-o", help="Override output directory")
+    ] = None,
+    device: Annotated[str | None, Option("--device", help="Override device (cuda/cpu)")] = None,
+) -> None:
+    """Run a single experiment from a YAML config file (train or test)."""
+    import yaml
+
+    from cracks_yolo.pipeline.test import run_test
+    from cracks_yolo.pipeline.train import run_train
+
+    cfg = yaml.safe_load(config.read_text(encoding="utf-8"))
+    if not isinstance(cfg, dict):
+        raise ValueError(f"invalid experiment config: {config}")
+
+    exp_type = cfg.pop("type", "train")
+    cfg.pop("name", None)  # metadata, not a pipeline arg
+
+    # Map YAML field names to pipeline kwargs
+    if "model" in cfg:
+        cfg["model_name"] = cfg.pop("model")
+
+    if output_dir is not None:
+        cfg["output_dir"] = output_dir
+    if device is not None:
+        cfg["device"] = device
+
+    if exp_type == "train":
+        run_train(**cfg)
+    elif exp_type == "test":
+        run_test(**cfg)
+    else:
+        raise ValueError(f"unknown experiment type: {exp_type}")
+
+
+@app.command()
 def compose(
     config: Annotated[Path, Option("--config", "-c", help="Compose YAML with $include")],
     output_dir: Annotated[Path, Option("--output-dir", "-o", help="Output directory")],
