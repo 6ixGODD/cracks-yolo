@@ -48,6 +48,7 @@ def run_test(
         model = cls(num_classes=1)
 
     model.load(weights)
+    model.to(device)
 
     src = YOLOSource(dataset)
     isize = model.input_size
