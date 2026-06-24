@@ -98,6 +98,27 @@ def _build_rtdetr_model(cfg: str, nc: int) -> nn.Module:
     return m
 
 
+def _replace_c3sac_v2(model: nn.Module, indices: tuple[int, ...], sac_v2_cls: type) -> None:
+    """Replace C3SAC at *indices* with SAC-v2 variants in ``model.model``."""
+    from cracks_yolo.ops.sac import C3SAC
+
+    seq = model.model
+    for i in indices:
+        old = seq[i]
+        if not isinstance(old, C3SAC):
+            continue
+        c1 = old.cv1.conv.in_channels
+        c2 = old.cv3.conv.out_channels
+        n = len(old.m)
+        new = sac_v2_cls(c1, c2, n, shortcut=True)
+        from cracks_yolo.zoo.ultralytics.sac_injection import _copy_layer_meta
+        from cracks_yolo.zoo.ultralytics.sac_injection import _copy_shared_weights
+
+        _copy_shared_weights(new, old)
+        _copy_layer_meta(new, old)
+        seq[i] = new
+
+
 class UltralyticsAdapter(BaseModel):
     """Wraps an ultralytics ``DetectionModel`` for any YOLO family.
 
@@ -474,6 +495,29 @@ class YOLOv5sSACTR(UltralyticsAdapter):
             asset="yolov5su",
             sac_indices=(2, 4, 6),
             tr_indices=(8,),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5sSACTRV2(UltralyticsAdapter):
+    """YOLOv5s + C3SAC-v2 (ratio=4, 5x5 ctx) at (2,4,6) + double C3TR at (8,17)."""
+
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        inner = _build_detection_model("yolov5s.yaml", num_classes)
+        apply_sac_tr(inner, sac_indices=(2, 4, 6), tr_indices=(8, 17))
+        # Override SAC blocks with v2 (expanded dilation + context)
+        from cracks_yolo.ops.sac_v2 import C3SACV2
+
+        _replace_c3sac_v2(inner, (2, 4, 6), C3SACV2)
+        super().__init__(
+            inner=inner,
+            cfg="yolov5s.yaml",
+            asset="yolov5su",
+            sac_indices=(2, 4, 6),
+            tr_indices=(8, 17),
             decode_format="anchor_based",
             num_classes=num_classes,
             input_size=input_size,
@@ -1030,6 +1074,7 @@ ZOO: dict[str, type[UltralyticsAdapter]] = {
     "yolov5s_sac": YOLOv5sSAC,
     "yolov5s_tr": YOLOv5sTR,
     "yolov5s_sactr": YOLOv5sSACTR,
+    "yolov5s_sactr_v2": YOLOv5sSACTRV2,
     "yolov5m": YOLOv5m,
     "yolov5l": YOLOv5l,
     "yolov5x": YOLOv5x,
