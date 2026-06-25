@@ -448,6 +448,53 @@ def visualize(
     print(f"\nPlots saved to {output_dir}/")
 
 
+@app.command(name="analyze-model")
+def analyze_model_cmd(
+    model: Annotated[
+        str,
+        Option("--model", "-m", help="ZOO key (e.g. yolov5s_sactr)"),
+    ],
+    output_dir: Annotated[
+        Path,
+        Option("--output-dir", "-o", help="Output directory"),
+    ],
+    device: Annotated[
+        str,
+        Option("--device", help="Device (cuda/cpu)"),
+    ] = "cuda",
+    input_size: Annotated[
+        int,
+        Option("--input-size", help="Input resolution"),
+    ] = 640,
+) -> None:
+    """Analyze a single model: param count, GFLOPs, latency percentiles, peak VRAM.
+
+    Saves model_analysis.json with MACs, FLOPs, latency p50/p95/mean, peak
+    memory, and parameter counts.
+    """
+    from cracks_yolo.analysis.model import analyze_model
+    from cracks_yolo.analysis.model import save_model_analysis
+    from cracks_yolo.zoo import ZOO
+
+    cls = ZOO[model]
+    m = cls(num_classes=1)
+    report = analyze_model(m, input_size=input_size, device=device)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_model_analysis(report, output_dir)
+    g = 1e9
+    fps = 1000.0 / report.latency_mean_ms if report.latency_mean_ms > 0 else 0
+    print(
+        f"{model} @ {input_size}:\n"
+        f"  params: {report.n_parameters:,}  ({report.n_trainable_parameters:,} trainable)\n"
+        f"  GFLOPs: {report.flops / g:.2f}  MACs: {report.macs / g:.2f}\n"
+        f"  latency: mean={report.latency_mean_ms:.2f}ms  p50={report.latency_p50_ms:.2f}ms  "
+        f"p95={report.latency_p95_ms:.2f}ms\n"
+        f"  FPS: {fps:.1f}\n"
+        f"  peak VRAM: {report.peak_vram_bytes / 1e9:.2f} GB"
+    )
+    print(f"  saved → {output_dir / 'model_analysis.json'}")
+
+
 @app.command(name="analyze-dataset")
 def analyze_dataset_cmd(
     dataset: Annotated[
