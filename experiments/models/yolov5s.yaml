@@ -3,9 +3,9 @@ type: train
 model: yolov5s
 dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
 output_dir: output/yolov5s
-epochs: 300
+epochs: 250
 batch_size: 32
-lr: 0.0008
+lr: 0.0007
 pretrained: true
 device: cuda
 seed: 42

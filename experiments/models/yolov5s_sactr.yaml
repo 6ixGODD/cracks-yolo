@@ -5,13 +5,15 @@ dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
 output_dir: output/yolov5s_sactr
 epochs: 600
 batch_size: 32
-lr: 0.0015
+lr: 0.001
 pretrained: true
 device: cuda
 seed: 42
 num_workers: 8
 optimizer: sgd
+momentum: 0.95
 cosine_lr: true
 use_ema: true
+warmup_epochs: 15
 early_stopping_patience: 150
 clip_grad_norm: 10.0
