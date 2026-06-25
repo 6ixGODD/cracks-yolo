@@ -446,3 +446,81 @@ def visualize(
         )
 
     print(f"\nPlots saved to {output_dir}/")
+
+
+@app.command(name="analyze-dataset")
+def analyze_dataset_cmd(
+    dataset: Annotated[
+        str,
+        Option("--dataset", "-d", help="Dataset root path"),
+    ],
+    output_dir: Annotated[
+        Path,
+        Option("--output-dir", "-o", help="Output directory"),
+    ],
+    splits: Annotated[
+        str,
+        Option("--splits", "-s", help="Comma-separated splits (default: train,valid,test)"),
+    ] = "train,valid,test",
+) -> None:
+    """Analyze a dataset: diversity metrics + distribution plots.
+
+    Outputs dataset_analysis.json (per-split + combined) and one PNG per
+    analysis per split: class distribution, bbox-size histogram, area-bucket
+    pie, aspect-ratio histogram, objects-per-image histogram, bbox-center
+    heatmap, image-size scatter, class-imbalance bar.
+    """
+    from cracks_yolo.analysis.dataset import analyze_dataset
+    from cracks_yolo.analysis.dataset import save_dataset_analysis
+    from cracks_yolo.dataset.yolo import YOLOSource
+    from cracks_yolo.viz import dataset as dsviz
+
+    src = YOLOSource(dataset)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    split_list = [s.strip() for s in splits.split(",") if s.strip()]
+
+    all_records: list = []
+    for split in split_list:
+        records = src.load_split(split)
+        if not records:
+            print(f"  {split}: (empty) skip")
+            continue
+        all_records.extend(records)
+        report = analyze_dataset(records)
+        split_dir = output_dir / split
+        split_dir.mkdir(parents=True, exist_ok=True)
+        save_dataset_analysis(report, split_dir)
+
+        # Per-split plots
+        dsviz.plot_class_distribution(records, split_dir / "class_distribution.png")
+        dsviz.plot_bbox_size_distribution(records, split_dir / "bbox_size.png")
+        dsviz.plot_bbox_area_buckets(records, split_dir / "area_buckets.png")
+        dsviz.plot_aspect_ratio(records, split_dir / "aspect_ratio.png")
+        dsviz.plot_objects_per_image(records, split_dir / "objects_per_image.png")
+        dsviz.plot_bbox_position_heatmap(records, split_dir / "bbox_heatmap.png")
+        dsviz.plot_image_size_distribution(records, split_dir / "image_size.png")
+        dsviz.plot_class_imbalance(records, split_dir / "class_imbalance.png")
+
+        print(
+            f"  {split}: {report.n_images} images, {report.n_annotations} anns, "
+            f"entropy={report.class_shannon_entropy:.3f}, "
+            f"coverage={report.spatial_coverage:.3f}"
+        )
+
+    # Combined report + plots
+    if all_records:
+        report = analyze_dataset(all_records)
+        save_dataset_analysis(report, output_dir)
+        dsviz.plot_class_distribution(all_records, output_dir / "class_distribution.png")
+        dsviz.plot_bbox_size_distribution(all_records, output_dir / "bbox_size.png")
+        dsviz.plot_bbox_area_buckets(all_records, output_dir / "area_buckets.png")
+        dsviz.plot_aspect_ratio(all_records, output_dir / "aspect_ratio.png")
+        dsviz.plot_objects_per_image(all_records, output_dir / "objects_per_image.png")
+        dsviz.plot_bbox_position_heatmap(all_records, output_dir / "bbox_heatmap.png")
+        dsviz.plot_image_size_distribution(all_records, output_dir / "image_size.png")
+        dsviz.plot_class_imbalance(all_records, output_dir / "class_imbalance.png")
+        print(
+            f"\nCombined: {report.n_images} images, {report.n_annotations} anns, "
+            f"imbalance={report.imbalance_ratio:.2f}, entropy={report.class_shannon_entropy:.3f}"
+        )
+    print(f"\nAnalysis saved to {output_dir}/")

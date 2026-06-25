@@ -1,114 +1,158 @@
-# Metrics
+# Evaluation Metrics
 
 [English](metrics.md) | [中文](metrics.zh-CN.md)
 
-`cracks_yolo.metrics` provides detection evaluation via `COCOMetricsCalculator` with a
-pycocotools backend, plus efficiency profiling and paired statistical tests.
+This document formalises every metric reported in `test_metrics.csv`. All
+definitions follow the MS COCO evaluation protocol and standard binary
+classification theory, adapted to single-class object detection.
 
-## 1. Architecture
+## Notation
 
-    PerImageDetection[]  -->  COCOMetricsCalculator.update()  -->  .run()  -->  MetricReport
+Let $\mathcal{D}=\{(I_i,\mathcal{G}_i)\}_{i=1}^{N}$ denote the evaluation set
+of $N$ images, where $I_i$ is the $i$-th image and $\mathcal{G}_i$ its set of
+ground-truth boxes. Let $\mathcal{P}_i=\{(b_j,s_j)\}$ be the set of predicted
+boxes on $I_i$ with confidence scores $s_j$. A prediction $b_j$ is deemed a
+**true positive** (TP) if it matches an unmatched ground-truth box with
+Intersection-over-Union (IoU) at least $\tau$; otherwise it is a **false
+positive** (FP). Unmatched ground-truth boxes are **false negatives** (FN).
 
-`COCOMetricsCalculator` implements the `MetricsCalculator` Protocol (`update` / `run`). The
-pipeline collects per-image predictions and ground truths as `PerImageDetection` records,
-accumulates them via `update()`, and calls `run()` to produce a `MetricReport`.
+$$
+\mathrm{IoU}(b,g)=\frac{|b\cap g|}{|b\cup g|}
+$$
 
-### 1.1 Per-image detection format
+## mAP@0.5 (map50)
 
-`DetectionMetric` (`TypedDict`):
+Average Precision at IoU threshold $\tau=0.5$. The precision–recall curve is
+swept by varying the confidence threshold; AP is its area.
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `image_id` | `int` | Dataset image index. |
-| `class_id` | `int` | Predicted or ground-truth class. |
-| `score` | `float` | Confidence in [0,1]; 1.0 for ground truth. |
-| `bbox_xyxy` | `tuple[float,float,float,float]` | Box in `(x1, y1, x2, y2)` pixels. |
+$$
+\mathrm{AP}_{0.5}=\int_0^1 p(r)\,dr,\qquad
+p(r)=\frac{\mathrm{TP}(r)}{\mathrm{TP}(r)+\mathrm{FP}(r)},\quad
+r=\frac{\mathrm{TP}(r)}{\mathrm{TP}(r)+\mathrm{FN}}
+$$
 
-`PerImageDetection` (`TypedDict`): `image_id`, `detections: list[DetectionMetric]`,
-`ground_truths: list[DetectionMetric]`.
+For single-class detection, $\mathrm{mAP}_{0.5}=\mathrm{AP}_{0.5}$. It rewards
+the ranking quality of detections: a model that places true boxes at the top
+of its confidence-ordered list attains a high AP.
 
-## 2. pycocotools backend
+## mAP@[0.5:0.95] (map5095)
 
-`COCOMetricsCalculator.run()` converts accumulated records to COCO JSON via `_to_coco_format`,
-instantiates `pycocotools.coco.COCO` for ground truth and `COCO.loadRes` for detections, then
-runs `COCOeval` with `"bbox"` iouType. The 12-element `COCOeval.stats` array maps to:
+The primary COCO metric. AP is averaged over ten IoU thresholds
+$\tau\in\{0.50,0.55,\dots,0.95\}$:
 
-| Index | Field | Description |
-| --- | --- | --- |
-| 0 | `map5095` | AP at IoU=0.50:0.95, all areas, maxDets=100 |
-| 1 | `ap50` | AP at IoU=0.50 |
-| 2 | `ap75` | AP at IoU=0.75 |
-| 3–5 | `ap_small/medium/large` | Area-stratified AP |
-| 6–8 | `ar1/ar10/ar100` | AR at maxDets 1/10/100 |
-| 9–11 | `ar_small/medium/large` | Area-stratified AR |
+$$
+\mathrm{mAP}_{[0.5:0.95]}=\frac{1}{10}\sum_{k=0}^{9}\mathrm{AP}_{0.50+0.05k}
+$$
 
-`ar300` and `ar1000` alias `ar100` (pycocotools caps at 100). Per-class AP is not populated
-by the stock `COCOeval.summarize` call. When the accumulator is empty, `run()` returns a
-`MetricReport` with `map50=0.0, map5095=0.0` and all other fields at their defaults.
+This penalises loose localisation: a box overlapping a ground truth at IoU
+0.5 but not 0.75 contributes to $\mathrm{AP}_{0.5}$ yet not to
+$\mathrm{AP}_{0.75}$. The metric therefore jointly measures classification
+and regression accuracy.
 
-## 3. MetricReport
+## AP@0.75 (ap75)
 
-`MetricReport` (`@dataclass`) is the aggregate accuracy payload returned by `run()`:
+Average Precision at the strict IoU threshold $\tau=0.75$. It isolates
+localisation precision and is far more sensitive to box-fit quality than
+$\mathrm{AP}_{0.5}$.
 
-| Field | Default | Source |
-| --- | --- | --- |
-| `map50` | (required) | `COCOeval.stats[1]` |
-| `map5095` | (required) | `COCOeval.stats[0]` |
-| `ap50` | 0.0 | alias for `map50` |
-| `ap75` | 0.0 | `COCOeval.stats[2]` |
-| `per_class_ap` | `{}` | not populated |
-| `precision` | 0.0 | from PR curve at best-F1 threshold |
-| `recall` | 0.0 | from PR curve at best-F1 threshold |
-| `f1` | 0.0 | max of 2PR/(P+R+eps) over PR thresholds |
-| `ar1/ar10/ar100` | 0.0 | `COCOeval.stats[6–8]` |
-| `ar300/ar1000` | 0.0 | aliased to `ar100` |
-| `ar_small/medium/large` | 0.0 | `COCOeval.stats[9–11]` |
-| `auc_pr` | 0.0 | trapezoidal integral of PR curve |
-| `auc_roc` | 0.0 | trapezoidal integral of ROC curve |
-| `sensitivity` | 0.0 | TP/(TP+FN) at operating point |
-| `specificity` | 0.0 | TN/(TN+FP) at operating point |
-| `ppv` | 0.0 | positive predictive value = precision |
-| `npv` | 0.0 | TN/(TN+FN) at operating point |
-| `confusion_matrix` | `[]` | (C+1)x(C+1) including background |
-| `iou_threshold` | 0.5 | configured IoU threshold |
-| `conf_threshold` | 0.25 | F1-optimal confidence threshold |
-| `performance` | `[]` | `list[PerformanceMetric]` (FPS, params, etc.) |
-| `statistical_tests` | `[]` | `list[StatisticalTest]` for model comparison |
+## Precision (precision)
 
-The F1-optimal operating point is `t* = argmax_t F1(t)` from the PR curve. Precision, recall,
-sensitivity, specificity, PPV, NPV, and the confusion matrix are all reported at this threshold.
+At the operating point maximising the F1 score,
 
-## 4. PR and ROC curves
+$$
+\mathrm{Precision}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}}
+$$
 
-### 4.1 Matching rule
+It is the fraction of predicted boxes that are correct — the model's
+false-alarm rate is $1-\mathrm{Precision}$.
 
-A detection `(image_id, class_id, score, bbox)` is matched to the highest-IoU ground truth of
-the same class in the same image. If IoU >= threshold and the GT is not yet matched, it is a
-TP; otherwise FP. Unmatched GTs are FN. Classes are pooled for global curves.
+## Recall / Sensitivity (recall, sensitivity)
 
-### 4.2 PR curve
+$$
+\mathrm{Recall}=\mathrm{Sensitivity}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}}=\frac{\mathrm{TP}}{|\mathcal{G}|}
+$$
 
-`compute_pr_curve(detections, ground_truths, iou_thr)` returns `(precision, recall, thresholds)`.
-Detections sorted by descending score, with cumulative TP and FP:
+The fraction of ground-truth cracks that are recovered. The two columns are
+identical by definition; the duplicate naming reflects the machine-learning
+(`recall`) and medical-statistics (`sensitivity`) conventions.
 
-    P(t) = TP_cum(t) / (TP_cum(t) + FP_cum(t) + eps)
-    R(t) = TP_cum(t) / N_gt
+## F1 (f1)
 
-AUC-PR is computed via `compute_auc(precision, recall)` as the trapezoidal integral over
-points sorted by recall. This is the recommended threshold-independent summary for imbalanced
-single-class detection.
+The harmonic mean of precision and recall at the F1-optimal threshold:
 
-### 4.3 ROC curve
+$$
+F_1=\frac{2\,p\,r}{p+r}
+$$
 
-`compute_roc_curve(detections, ground_truths, iou_thr)` returns `(fpr, tpr, thresholds)`.
-TPR = `TP_cum / N_gt`. FPR = `FP_cum / max(FP_cum)`, normalised by total false positives
-at the lowest confidence. This makes the curve span [0,1] for ranking-quality assessment but
-the resulting FPR values are unsuitable for deriving specificity (1-FPR).
+It is invariant to the precision/recall trade-off imbalance and is preferred
+when a single operating point is required.
 
-AUC-ROC is computed via `compute_auc_roc(fpr, tpr)` as the trapezoidal integral over
-FPR-sorted points.
+## AR@1 / AR@10 / AR@100 (ar1, ar10, ar100)
 
-Sensitivity, specificity, and NPV are instead computed directly from matched detections in
-`_compute_classification_metrics_at_threshold`, where TN is defined as detections below the
-threshold that would have been FP if retained -- avoiding both the ROC normalisation issue
-and the ill-posed TN definition in object detection.
+Average Recall capped at $K$ detections per image:
+
+$$
+\mathrm{AR}_K=\frac{1}{N}\sum_{i=1}^{N}\frac{\mathrm{TP}_i^{(K)}}{|\mathcal{G}_i|}
+$$
+
+where $\mathrm{TP}_i^{(K)}$ counts true positives among the top-$K$ highest-
+confidence predictions on image $i$. $\mathrm{AR}_1$ measures the model's
+single-best-guess accuracy; $\mathrm{AR}_{100}$ approximates saturated recall.
+All AR values are averaged over IoU $\in[0.5:0.95]$.
+
+## AUC-PR (auc_pr)
+
+Area under the precision–recall curve, computed over **all** detections (not
+thresholded to a single operating point). For detection,
+
+$$
+\mathrm{AUC}_{PR}=\int_0^1 p(r)\,dr
+$$
+
+where the curve is built by ranking all detections by confidence. Unlike AP,
+which uses 101-point interpolation, AUC-PR here uses the trapezoidal rule on
+the empirical curve. It is the recommended summary statistic under severe
+class imbalance.
+
+## AUC-ROC (auc_roc)
+
+Area under the Receiver Operating Characteristic curve, plotting true-positive
+rate against false-positive rate:
+
+$$
+\mathrm{TPR}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}},\qquad
+\mathrm{FPR}=\frac{\mathrm{FP}}{\mathrm{FP}+\mathrm{TN}},\qquad
+\mathrm{AUC}_{ROC}=\int_0^1 \mathrm{TPR}(\mathrm{FPR})\,d(\mathrm{FPR})
+$$
+
+Here detections are matched to ground-truth boxes at IoU $0.5$ and treated as
+binary outcomes; unmatched predictions are negatives. $\mathrm{AUC}_{ROC}=0.5$
+is chance level.
+
+## Specificity (specificity)
+
+Image-level true-negative rate. An image is *positive* if it contains $\geq 1$
+crack in the ground truth, *negative* otherwise; it is *predicted positive* if
+the model emits $\geq 1$ detection above the score threshold $\sigma=0.25$.
+
+$$
+\mathrm{Specificity}=\frac{\mathrm{TN}_{\text{img}}}{\mathrm{TN}_{\text{img}}+\mathrm{FP}_{\text{img}}}
+$$
+
+where $\mathrm{FP}_{\text{img}}$ counts crack-free images falsely flagged and
+$\mathrm{TN}_{\text{img}}$ counts crack-free images correctly left alone. This
+is the clinically meaningful "specificity" — the probability that a normal
+tongue surface is not alarmed.
+
+## PPV / NPV (ppv, npv)
+
+Positive and Negative Predictive Values, image-level:
+
+$$
+\mathrm{PPV}=\frac{\mathrm{TP}_{\text{img}}}{\mathrm{TP}_{\text{img}}+\mathrm{FP}_{\text{img}}},\qquad
+\mathrm{NPV}=\frac{\mathrm{TN}_{\text{img}}}{\mathrm{TN}_{\text{img}}+\mathrm{FN}_{\text{img}}}
+$$
+
+PPV equals precision computed at the image level; NPV is the probability that
+a non-alarm is truly crack-free. Both depend on disease prevalence and are
+reported alongside specificity for clinical interpretation.

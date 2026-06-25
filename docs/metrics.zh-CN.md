@@ -2,110 +2,136 @@
 
 [English](metrics.md) | [中文](metrics.zh-CN.md)
 
-`cracks_yolo.metrics` 基于 pycocotools 后端提供 `COCOMetricsCalculator` 检测评估，
-并包含效率剖析与配对统计检验。
+本文档对 `test_metrics.csv` 中所报告的每一项指标进行严格的形式化定义。
+全部定义遵循 MS COCO 评测协议与经典二分类理论，并适配于单类目标检测任务。
 
-## 1. 架构
+## 符号约定
 
-    PerImageDetection[]  -->  COCOMetricsCalculator.update()  -->  .run()  -->  MetricReport
+设评测集 $\mathcal{D}=\{(I_i,\mathcal{G}_i)\}_{i=1}^{N}$，其中 $I_i$ 为第 $i$ 张
+图像，$\mathcal{G}_i$ 为其真值框集合。设 $\mathcal{P}_i=\{(b_j,s_j)\}$ 为模型在
+$I_i$ 上输出的预测框及其置信度。若预测框 $b_j$ 与某一未匹配真值框的交并比
+（IoU）不低于阈值 $\tau$，则计为**真正例**（TP）；否则计为**假正例**（FP）。
+未匹配的真值框计为**假负例**（FN）。
 
-`COCOMetricsCalculator` 实现 `MetricsCalculator` Protocol（`update`/`run`）。
-流水线逐帧收集预测与真值，构为 `PerImageDetection` 记录，经 `update()` 累积后
-调用 `run()` 生成 `MetricReport`。
+$$
+\mathrm{IoU}(b,g)=\frac{|b\cap g|}{|b\cup g|}
+$$
 
-### 1.1 逐帧检测格式
+## mAP@0.5（map50）
 
-`DetectionMetric` (`TypedDict`)：
+IoU 阈值 $\tau=0.5$ 下的平均精度。通过变化置信度阈值扫描精确率—召回率曲线，
+其下面积即为 AP。
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `image_id` | `int` | 数据集图像索引 |
-| `class_id` | `int` | 预测或真值类别 |
-| `score` | `float` | 置信度，$\in [0,1]$；真值恒为 1.0 |
-| `bbox_xyxy` | `tuple[float,float,float,float]` | $(x_1,y_1,x_2,y_2)$，单位像素 |
+$$
+\mathrm{AP}_{0.5}=\int_0^1 p(r)\,dr,\qquad
+p(r)=\frac{\mathrm{TP}(r)}{\mathrm{TP}(r)+\mathrm{FP}(r)},\quad
+r=\frac{\mathrm{TP}(r)}{\mathrm{TP}(r)+\mathrm{FN}}
+$$
 
-`PerImageDetection` (`TypedDict`)：`image_id`、`detections: list[DetectionMetric]`、
-`ground_truths: list[DetectionMetric]`。
+单类检测下 $\mathrm{mAP}_{0.5}=\mathrm{AP}_{0.5}$。该指标衡量检测结果的排序
+质量：若模型将真实框置于置信度排序的前列，则可获得较高的 AP。
 
-## 2. pycocotools 后端
+## mAP@[0.5:0.95]（map5095）
 
-`COCOMetricsCalculator.run()` 通过 `_to_coco_format` 将累积记录转换为 COCO JSON，
-实例化 `pycocotools.coco.COCO` 承载真值，以 `COCO.loadRes` 加载检测结果，
-再以 `"bbox"` 为 iouType 执行 `COCOeval`。`COCOeval.stats` 的 12 个元素映射如下：
+COCO 主指标。在十个 IoU 阈值 $\tau\in\{0.50,0.55,\dots,0.95\}$ 上对 AP 取平均：
 
-| 索引 | 字段 | 说明 |
-| --- | --- | --- |
-| 0 | `map5095` | AP@IoU=0.50:0.95，全区域，maxDets=100 |
-| 1 | `ap50` | AP@IoU=0.50 |
-| 2 | `ap75` | AP@IoU=0.75 |
-| 3–5 | `ap_small/medium/large` | 按区域分层的 AP |
-| 6–8 | `ar1/ar10/ar100` | AR，maxDets 分别取 1/10/100 |
-| 9–11 | `ar_small/medium/large` | 按区域分层的 AR |
+$$
+\mathrm{mAP}_{[0.5:0.95]}=\frac{1}{10}\sum_{k=0}^{9}\mathrm{AP}_{0.50+0.05k}
+$$
 
-`ar300` 与 `ar1000` 均取 alias 指向 `ar100`（pycocotools 上限为 100）。stock
-`COCOeval.summarize` 不输出逐类 AP。累加器为空时，`run()` 返回 `map50=0.0, map5095=0.0`，
-其余字段为默认值。
+该指标对定位偏差施加惩罚：若某框与真值的 IoU 为 0.5 但不足 0.75，则计入
+$\mathrm{AP}_{0.5}$ 却不计入 $\mathrm{AP}_{0.75}$。故该指标同时度量分类与回归精度。
 
-## 3. MetricReport
+## AP@0.75（ap75）
 
-`MetricReport`（`@dataclass`）为 `run()` 返回的聚合精度载荷：
+严格 IoU 阈值 $\tau=0.75$ 下的平均精度。它单独反映定位精度，对框贴合质量的敏感
+程度远高于 $\mathrm{AP}_{0.5}$。
 
-| 字段 | 默认值 | 来源 |
-| --- | --- | --- |
-| `map50` | (必填) | `COCOeval.stats[1]` |
-| `map5095` | (必填) | `COCOeval.stats[0]` |
-| `ap50` | 0.0 | `map50` 的别名 |
-| `ap75` | 0.0 | `COCOeval.stats[2]` |
-| `per_class_ap` | `{}` | 未填充 |
-| `precision` | 0.0 | PR 曲线最佳 F1 阈值处取值 |
-| `recall` | 0.0 | PR 曲线最佳 F1 阈值处取值 |
-| `f1` | 0.0 | $\max_t 2PR/(P+R+\epsilon)$，遍历 PR 阈值 |
-| `ar1/ar10/ar100` | 0.0 | `COCOeval.stats[6–8]` |
-| `ar300/ar1000` | 0.0 | 指向 `ar100` 的别名 |
-| `ar_small/medium/large` | 0.0 | `COCOeval.stats[9–11]` |
-| `auc_pr` | 0.0 | PR 曲线梯形积分 |
-| `auc_roc` | 0.0 | ROC 曲线梯形积分 |
-| `sensitivity` | 0.0 | 工作点处 TP/(TP+FN) |
-| `specificity` | 0.0 | 工作点处 TN/(TN+FP) |
-| `ppv` | 0.0 | 阳性预测值，即 precision |
-| `npv` | 0.0 | 工作点处 TN/(TN+FN) |
-| `confusion_matrix` | `[]` | $(C+1)\times(C+1)$，含背景类 |
-| `iou_threshold` | 0.5 | 配置的 IoU 阈值 |
-| `conf_threshold` | 0.25 | F1 最优置信度阈值 |
-| `performance` | `[]` | `list[PerformanceMetric]`（FPS、参数量等） |
-| `statistical_tests` | `[]` | `list[StatisticalTest]`，用于模型比较 |
+## 精确率（precision）
 
-F1 最优工作点为 $t^* = \arg\max_t F1(t)$，其中 $t$ 遍历 PR 曲线阈值。precision、
-recall、sensitivity、specificity、PPV、NPV 及混淆矩阵均在该阈值处报告。
+在使 F1 最大的操作点处，
 
-## 4. PR 与 ROC 曲线
+$$
+\mathrm{Precision}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}}
+$$
 
-### 4.1 匹配规则
+即预测框中正确的比例，模型的误报率为 $1-\mathrm{Precision}$。
 
-检测结果 $(image\_id, class\_id, score, bbox)$ 与同图同类真值中 IoU 最大者匹配。
-若 $\text{IoU}\geq\text{threshold}$ 且该真值尚未被匹配，记为 TP；否则记为 FP。
-未被匹配的真值为 FN。所有类别汇总后计算全局曲线。
+## 召回率 / 灵敏度（recall, sensitivity）
 
-### 4.2 PR 曲线
+$$
+\mathrm{Recall}=\mathrm{Sensitivity}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}}=\frac{\mathrm{TP}}{|\mathcal{G}|}
+$$
 
-`compute_pr_curve(detections, ground_truths, iou_thr)` 返回 `(precision, recall, thresholds)`。
-检测结果按置信度降序排列，累积 TP 与 FP：
+即被检出的真值裂纹比例。两列数值恒等，命名差异仅源于机器学习（`recall`）与
+医学统计（`sensitivity`）的约定。
 
-$$P(t) = \frac{\text{TP}_{\text{cum}}(t)}{\text{TP}_{\text{cum}}(t) + \text{FP}_{\text{cum}}(t) + \epsilon}, \quad
-R(t) = \frac{\text{TP}_{\text{cum}}(t)}{N_{gt}}$$
+## F1（f1）
 
-`compute_auc(precision, recall)` 对 recall 排序后的点做梯形积分，得 AUC-PR。
-此为类别不平衡单类检测任务首选的阈值无关汇总指标。
+精确率与召回率在 F1 最优阈值处的调和平均：
 
-### 4.3 ROC 曲线
+$$
+F_1=\frac{2\,p\,r}{p+r}
+$$
 
-`compute_roc_curve(detections, ground_truths, iou_thr)` 返回 `(fpr, tpr, thresholds)`。
-$\text{TPR} = \text{TP}_{\text{cum}} / N_{gt}$。$\text{FPR} = \text{FP}_{\text{cum}} / \max(\text{FP}_{\text{cum}})$，
-按最低置信度处的总假阳性数归一化。该归一化使曲线跨满 $[0,1]$ 以便评估排序质量，
-但所得 FPR 值不适用于推导 specificity（$1-\text{FPR}$）。
+该指标对精确率—召回率的失衡不敏感，适用于需要单一操作点的场景。
 
-`compute_auc_roc(fpr, tpr)` 对 FPR 排序后的点做梯形积分，得 AUC-ROC。
+## AR@1 / AR@10 / AR@100（ar1, ar10, ar100）
 
-sensitivity、specificity、NPV 改为在 `_compute_classification_metrics_at_threshold`
-中直接从已匹配的检测结果计算：TN 定义为低于阈值且若保留则构成 FP 的检测数量——
-以此规避 ROC 归一化问题及目标检测中 TN 定义的不适定性。
+每图限取 $K$ 个检测下的平均召回率：
+
+$$
+\mathrm{AR}_K=\frac{1}{N}\sum_{i=1}^{N}\frac{\mathrm{TP}_i^{(K)}}{|\mathcal{G}_i|}
+$$
+
+其中 $\mathrm{TP}_i^{(K)}$ 为图像 $I_i$ 上置信度最高的前 $K$ 个预测中的真正例
+数。$\mathrm{AR}_1$ 度量单次最佳猜测的准确率，$\mathrm{AR}_{100}$ 近似饱和召回。
+所有 AR 值均在 IoU $\in[0.5:0.95]$ 上取平均。
+
+## AUC-PR（auc_pr）
+
+精确率—召回率曲线下面积，基于**全部**检测（不限定单一操作点）计算。对检测任务，
+
+$$
+\mathrm{AUC}_{PR}=\int_0^1 p(r)\,dr
+$$
+
+曲线由按置信度排序的全部检测构建。与采用 101 点插值的 AP 不同，本文 AUC-PR 采用
+经验曲线的梯形积分。在类别严重不平衡时，该指标为推荐的综合统计量。
+
+## AUC-ROC（auc_roc）
+
+受试者工作特征曲线下面积，以真正例率对假正例率作图：
+
+$$
+\mathrm{TPR}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}},\qquad
+\mathrm{FPR}=\frac{\mathrm{FP}}{\mathrm{FP}+\mathrm{TN}},\qquad
+\mathrm{AUC}_{ROC}=\int_0^1 \mathrm{TPR}(\mathrm{FPR})\,d(\mathrm{FPR})
+$$
+
+此处检测在 IoU $0.5$ 下与真值框匹配并视作二分类结果，未匹配预测作为负例。
+$\mathrm{AUC}_{ROC}=0.5$ 为随机水平。
+
+## 特异度（specificity）
+
+图像级真负例率。若图像真值含 $\geq 1$ 个裂纹则为阳性，否则为阴性；若模型在置信度
+阈值 $\sigma=0.25$ 以上输出 $\geq 1$ 个检测，则预测为阳性。
+
+$$
+\mathrm{Specificity}=\frac{\mathrm{TN}_{\text{img}}}{\mathrm{TN}_{\text{img}}+\mathrm{FP}_{\text{img}}}
+$$
+
+其中 $\mathrm{FP}_{\text{img}}$ 为被误报的无裂纹图像数，$\mathrm{TN}_{\text{img}}$
+为被正确放过的无裂纹图像数。此即临床意义上的"特异度"——正常舌面不被报警的概率。
+
+## PPV / NPV（ppv, npv）
+
+图像级阳性/阴性预测值：
+
+$$
+\mathrm{PPV}=\frac{\mathrm{TP}_{\text{img}}}{\mathrm{TP}_{\text{img}}+\mathrm{FP}_{\text{img}}},\qquad
+\mathrm{NPV}=\frac{\mathrm{TN}_{\text{img}}}{\mathrm{TN}_{\text{img}}+\mathrm{FN}_{\text{img}}}
+$$
+
+PPV 等价于图像级精确率；NPV 为"未报警即确无裂纹"的概率。二者均依赖疾病患病率，
+故与特异度并列报告以供临床解读。
