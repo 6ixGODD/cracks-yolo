@@ -119,6 +119,26 @@ def _replace_c3sac_v2(model: nn.Module, indices: tuple[int, ...], sac_v2_cls: ty
         seq[i] = new
 
 
+def _replace_c3tr_v3(model: nn.Module, indices: tuple[int, ...], tr_v3_cls: type) -> None:
+    """Replace C3TR at *indices* with identity-initialized C3TRV3."""
+    from cracks_yolo.ops.sac import C3TR
+
+    seq = model.model
+    for i in indices:
+        old = seq[i]
+        if not isinstance(old, C3TR):
+            continue
+        c1 = old.cv1.conv.in_channels
+        c2 = old.cv3.conv.out_channels
+        new = tr_v3_cls(c1, c2, 1, shortcut=True)
+        from cracks_yolo.zoo.ultralytics.sac_injection import _copy_layer_meta
+        from cracks_yolo.zoo.ultralytics.sac_injection import _copy_shared_weights
+
+        _copy_shared_weights(new, old)
+        _copy_layer_meta(new, old)
+        seq[i] = new
+
+
 class UltralyticsAdapter(BaseModel):
     """Wraps an ultralytics ``DetectionModel`` for any YOLO family.
 
@@ -535,6 +555,36 @@ class YOLOv5sSACTRV2(UltralyticsAdapter):
         from cracks_yolo.ops.sac_v2 import C3SACV2
 
         _replace_c3sac_v2(inner, (2, 4, 6), C3SACV2)
+        super().__init__(
+            inner=inner,
+            cfg="yolov5s.yaml",
+            asset="yolov5su",
+            sac_indices=(2, 4, 6),
+            tr_indices=(8, 17),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5sSACTRV3(UltralyticsAdapter):
+    """YOLOv5s + C3SAC-v2 (ratio=4) + identity-init C3TRV3 at (8,17).
+
+    C3TRV3 uses identity-initialized QKV attention — starts as a pass-through
+    and gradually learns attention patterns, avoiding random-init noise on small data.
+    """
+
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        inner = _build_detection_model("yolov5s.yaml", num_classes)
+        apply_sac_tr(inner, sac_indices=(2, 4, 6), tr_indices=(8, 17))
+        # Replace SAC with v2 (ratio=4, 5x5 ctx)
+        from cracks_yolo.ops.sac_v2 import C3SACV2
+        from cracks_yolo.ops.sac_v2 import C3TRV3
+
+        _replace_c3sac_v2(inner, (2, 4, 6), C3SACV2)
+        # Replace C3TR with identity-initialized C3TRV3
+        _replace_c3tr_v3(inner, (8, 17), C3TRV3)
         super().__init__(
             inner=inner,
             cfg="yolov5s.yaml",
@@ -1098,6 +1148,7 @@ ZOO: dict[str, type[UltralyticsAdapter]] = {
     "yolov5s_tr": YOLOv5sTR,
     "yolov5s_sactr": YOLOv5sSACTR,
     "yolov5s_sactr_v2": YOLOv5sSACTRV2,
+    "yolov5s_sactr_v3": YOLOv5sSACTRV3,
     "yolov5m": YOLOv5m,
     "yolov5l": YOLOv5l,
     "yolov5x": YOLOv5x,

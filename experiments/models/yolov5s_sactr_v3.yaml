@@ -1,0 +1,17 @@
+name: yolov5s_sactr_v3
+type: train
+model: yolov5s_sactr_v3
+dataset: data/CrackDetection_Augmentation.v1.yolov5pytorch
+output_dir: output/yolov5s_sactr_v3
+epochs: 600
+batch_size: 16
+lr: 0.001
+pretrained: true
+device: cuda
+seed: 42
+num_workers: 8
+optimizer: sgd
+cosine_lr: true
+use_ema: true
+early_stopping_patience: 150
+clip_grad_norm: 10.0

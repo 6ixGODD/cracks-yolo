@@ -5,4 +5,4 @@ $include:
   - models/yolov5s.yaml
   - models/yolov5s_sac.yaml
   - models/yolov5s_sactr.yaml
-  - models/yolov5s_sactr_v2.yaml
+  - models/yolov5s_sactr_v3.yaml
