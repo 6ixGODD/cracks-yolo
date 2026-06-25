@@ -465,11 +465,12 @@ def analyze_dataset_cmd(
 ) -> None:
     """Analyze a dataset: diversity metrics + distribution plots.
 
-    Outputs dataset_analysis.json (per-split + combined) and one PNG per
-    analysis per split: class distribution, bbox-size histogram, area-bucket
-    pie, aspect-ratio histogram, objects-per-image histogram, bbox-center
-    heatmap, image-size scatter, class-imbalance bar.
+    Outputs dataset_analysis.json + .csv (per-split + combined) and one PNG per
+    analysis per split: bbox-size histogram (log bins), area-bucket bar,
+    aspect-ratio histogram, objects-per-image histogram, bbox-center heatmap.
     """
+    import csv as _csv
+
     from cracks_yolo.analysis.dataset import analyze_dataset
     from cracks_yolo.analysis.dataset import save_dataset_analysis
     from cracks_yolo.dataset.yolo import YOLOSource
@@ -478,6 +479,9 @@ def analyze_dataset_cmd(
     src = YOLOSource(dataset)
     output_dir.mkdir(parents=True, exist_ok=True)
     split_list = [s.strip() for s in splits.split(",") if s.strip()]
+
+    # For the combined summary CSV/Excel
+    summary_rows: list[dict] = []
 
     all_records: list = []
     for split in split_list:
@@ -492,15 +496,15 @@ def analyze_dataset_cmd(
         save_dataset_analysis(report, split_dir)
 
         # Per-split plots
-        dsviz.plot_class_distribution(records, split_dir / "class_distribution.png")
         dsviz.plot_bbox_size_distribution(records, split_dir / "bbox_size.png")
         dsviz.plot_bbox_area_buckets(records, split_dir / "area_buckets.png")
         dsviz.plot_aspect_ratio(records, split_dir / "aspect_ratio.png")
         dsviz.plot_objects_per_image(records, split_dir / "objects_per_image.png")
         dsviz.plot_bbox_position_heatmap(records, split_dir / "bbox_heatmap.png")
-        dsviz.plot_image_size_distribution(records, split_dir / "image_size.png")
-        dsviz.plot_class_imbalance(records, split_dir / "class_imbalance.png")
 
+        d = report.to_dict()
+        d["split"] = split
+        summary_rows.append(d)
         print(
             f"  {split}: {report.n_images} images, {report.n_annotations} anns, "
             f"entropy={report.class_shannon_entropy:.3f}, "
@@ -511,16 +515,58 @@ def analyze_dataset_cmd(
     if all_records:
         report = analyze_dataset(all_records)
         save_dataset_analysis(report, output_dir)
-        dsviz.plot_class_distribution(all_records, output_dir / "class_distribution.png")
+        d = report.to_dict()
+        d["split"] = "combined"
+        summary_rows.append(d)
         dsviz.plot_bbox_size_distribution(all_records, output_dir / "bbox_size.png")
         dsviz.plot_bbox_area_buckets(all_records, output_dir / "area_buckets.png")
         dsviz.plot_aspect_ratio(all_records, output_dir / "aspect_ratio.png")
         dsviz.plot_objects_per_image(all_records, output_dir / "objects_per_image.png")
         dsviz.plot_bbox_position_heatmap(all_records, output_dir / "bbox_heatmap.png")
-        dsviz.plot_image_size_distribution(all_records, output_dir / "image_size.png")
-        dsviz.plot_class_imbalance(all_records, output_dir / "class_imbalance.png")
         print(
             f"\nCombined: {report.n_images} images, {report.n_annotations} anns, "
             f"imbalance={report.imbalance_ratio:.2f}, entropy={report.class_shannon_entropy:.3f}"
         )
+
+    # Summary CSV: one row per split (+ combined)
+    if summary_rows:
+        summary_csv = output_dir / "dataset_summary.csv"
+
+        fields = [
+            "split",
+            "n_images",
+            "n_annotations",
+            "n_classes",
+            "imbalance_ratio",
+            "class_shannon_entropy",
+            "bbox_area_small",
+            "bbox_area_medium",
+            "bbox_area_large",
+            "bbox_aspect_ratio_buckets",
+            "spatial_coverage",
+            "image_width_mean",
+            "image_width_std",
+            "image_height_mean",
+            "image_height_std",
+        ]
+        with summary_csv.open("w", newline="", encoding="utf-8") as f:
+            w = _csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+            w.writeheader()
+            for row in summary_rows:
+                w.writerow(row)
+        # Excel
+        try:
+            from openpyxl import Workbook
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "dataset_summary"
+            ws.append(fields)
+            for row in summary_rows:
+                ws.append([row.get(k, "") for k in fields])
+            wb.save(output_dir / "dataset_summary.xlsx")
+        except ImportError:
+            pass
+        print(f"\nSummary: {summary_csv}")
+
     print(f"\nAnalysis saved to {output_dir}/")

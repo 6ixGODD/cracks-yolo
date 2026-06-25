@@ -19,32 +19,42 @@ _ACADEMIC_STYLE: dict[str, Any] = {
     "figure.dpi": 300,
     "savefig.dpi": 300,
     "savefig.bbox": "tight",
-    "font.family": "serif",
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
     "font.size": 10,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "legend.fontsize": 9,
-    "xtick.labelsize": 8,
-    "ytick.labelsize": 8,
+    "axes.titlesize": 11,
+    "axes.labelsize": 10,
+    "legend.fontsize": 8.5,
+    "xtick.labelsize": 8.5,
+    "ytick.labelsize": 8.5,
     "axes.linewidth": 0.8,
-    "lines.linewidth": 1.2,
+    "axes.edgecolor": "#333333",
+    "axes.labelcolor": "#333333",
+    "xtick.color": "#333333",
+    "ytick.color": "#333333",
+    "lines.linewidth": 1.3,
     "lines.markersize": 0,
     "axes.grid": True,
-    "grid.alpha": 0.3,
+    "axes.axisbelow": True,
+    "grid.alpha": 0.25,
     "grid.linewidth": 0.5,
+    "grid.color": "#cccccc",
+    "axes.spines.top": False,
+    "axes.spines.right": False,
 }
 
+# Colorblind-safe, print-friendly palette (Wong 2011 subset)
 _COLORS = [
-    "#1f77b4",
-    "#ff7f0e",
-    "#2ca02c",
-    "#d62728",
-    "#9467bd",
-    "#8c564b",
-    "#e377c2",
-    "#7f7f7f",
-    "#bcbd22",
-    "#17becf",
+    "#0072B2",  # blue
+    "#D55E00",  # vermillion
+    "#009E73",  # green
+    "#CC79A7",  # pink
+    "#56B4E9",  # sky blue
+    "#E69F00",  # orange
+    "#F0E442",  # yellow
+    "#000000",  # black
+    "#999999",  # grey
+    "#882255",  # wine
 ]
 
 
@@ -382,43 +392,48 @@ def plot_confusion_matrix(
     import matplotlib.pyplot as plt
 
     _setup_style()
-    fig, ax = plt.subplots(figsize=(4, 3.5))
+    # Confusion matrix keeps all 4 spines for the grid look
+    with plt.rc_context({"axes.spines.top": True, "axes.spines.right": True}):
+        fig, ax = plt.subplots(figsize=(4.2, 3.8))
 
-    # Normalize by row
-    cm_norm = cm.astype(np.float64).copy()
-    for r in range(cm.shape[0]):
-        row_sum = cm[r].sum()
-        if row_sum > 0:
-            cm_norm[r] = cm[r] / row_sum
+        # Normalize by row (recall per true class)
+        cm_norm = cm.astype(np.float64).copy()
+        for r in range(cm.shape[0]):
+            row_sum = cm[r].sum()
+            if row_sum > 0:
+                cm_norm[r] = cm[r] / row_sum
 
-    im = ax.imshow(cm_norm, cmap="Blues", vmin=0, vmax=1)
+        im = ax.imshow(cm_norm, cmap="Blues", vmin=0, vmax=1, aspect="equal")
 
-    tick_labels = [f"Pred {labels[0]}", f"Pred {labels[1]}"]
-    ax.set_xticks([0, 1])
-    ax.set_xticklabels(tick_labels)
-    ax.set_yticks([0, 1])
-    ax.set_yticklabels([f"True {labels[0]}", f"True {labels[1]}"])
+        tick_labels = [f"Pred {labels[0]}", f"Pred {labels[1]}"]
+        ax.set_xticks([0, 1])
+        ax.set_xticklabels(tick_labels, fontsize=8.5)
+        ax.set_yticks([0, 1])
+        ax.set_yticklabels([f"True {labels[0]}", f"True {labels[1]}"], fontsize=8.5)
+        ax.tick_params(length=0)
 
-    # Annotate
-    for r in range(cm.shape[0]):
-        for c in range(cm.shape[1]):
-            val = int(cm[r, c])
-            pct = cm_norm[r, c]
-            ax.text(
-                c,
-                r,
-                f"{val}\n({pct:.1%})",
-                ha="center",
-                va="center",
-                fontsize=9,
-                color="white" if pct > 0.5 else "black",
-            )
+        # Annotate: count + row-fraction
+        for r in range(cm.shape[0]):
+            for c in range(cm.shape[1]):
+                val = int(cm[r, c])
+                pct = cm_norm[r, c]
+                ax.text(
+                    c,
+                    r,
+                    f"{val}\n({pct:.1%})",
+                    ha="center",
+                    va="center",
+                    fontsize=9,
+                    color="white" if pct > 0.5 else "#333333",
+                )
 
-    ax.set_title(title)
-    fig.colorbar(im, ax=ax, shrink=0.8, label="Fraction")
-    fig.tight_layout()
-    fig.savefig(output_path)
-    plt.close(fig)
+        ax.set_title(title, fontsize=10)
+        cbar = fig.colorbar(im, ax=ax, shrink=0.85)
+        cbar.set_label("Row fraction", fontsize=8.5)
+        cbar.ax.tick_params(labelsize=7.5)
+        fig.tight_layout()
+        fig.savefig(output_path)
+        plt.close(fig)
     return output_path
 
 

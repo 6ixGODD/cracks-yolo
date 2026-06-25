@@ -1,8 +1,8 @@
-"""Dataset distribution plots — academic styling, dpi=300.
+"""Dataset distribution plots — academic styling, sans-serif, dpi=300.
 
-Generates: class distribution, bbox size histogram (log), bbox area buckets
+Generates: bbox-size histogram (log-spaced bins), bbox-area buckets
 (COCO small/medium/large), aspect-ratio histogram, objects-per-image
-histogram, bbox-center heatmap, image-size scatter, class imbalance.
+histogram, bbox-center heatmap.
 """
 
 from __future__ import annotations
@@ -21,72 +21,67 @@ _STYLE = {
     "figure.dpi": 300,
     "savefig.dpi": 300,
     "savefig.bbox": "tight",
-    "font.family": "serif",
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
     "font.size": 10,
-    "axes.titlesize": 12,
-    "axes.labelsize": 11,
-    "legend.fontsize": 9,
+    "axes.titlesize": 11,
+    "axes.labelsize": 10,
+    "legend.fontsize": 8.5,
+    "xtick.labelsize": 8.5,
+    "ytick.labelsize": 8.5,
     "axes.linewidth": 0.8,
+    "axes.edgecolor": "#333333",
+    "axes.labelcolor": "#333333",
+    "xtick.color": "#333333",
+    "ytick.color": "#333333",
     "axes.grid": True,
-    "grid.alpha": 0.3,
+    "axes.axisbelow": True,
+    "grid.alpha": 0.25,
     "grid.linewidth": 0.5,
+    "grid.color": "#cccccc",
+    "axes.spines.top": False,
+    "axes.spines.right": False,
 }
-_BLUE = "#1f77b4"
-_ORANGE = "#ff7f0e"
-_GREEN = "#2ca02c"
-_RED = "#d62728"
+_BLUE = "#0072B2"
+_ORANGE = "#E69F00"
+_GREEN = "#009E73"
+_RED = "#D55E00"
+_GREY = "#999999"
 
 
 def _setup() -> None:
     matplotlib.rcParams.update(_STYLE)
 
 
-def _counts(records: list[RawDetection]) -> dict[int, int]:
-    c: dict[int, int] = {}
-    for rec in records:
-        for lab in rec.labels:
-            c[lab] = c.get(lab, 0) + 1
-    return c
-
-
-def plot_class_distribution(records: list[RawDetection], out_png: Path) -> None:
-    """Bar plot of per-class instance counts."""
-    _setup()
-    counts = _counts(records)
-    if not counts:
-        return
-    labels = sorted(counts.keys())
-    values = [counts[c] for c in labels]
-    fig, ax = plt.subplots(figsize=(max(5, 1.6 * len(labels)), 4))
-    bars = ax.bar([str(c) for c in labels], values, color=_BLUE, width=0.6)
-    ax.bar_label(bars, fontsize=8, padding=2)
-    ax.set_xlabel("Class ID")
-    ax.set_ylabel("Instance count")
-    ax.set_title("Class distribution")
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
+def _areas_norm(records: list[RawDetection]) -> list[float]:
+    return [float((b[2] - b[0]) * (b[3] - b[1])) for rec in records for b in rec.boxes_norm]
 
 
 def plot_bbox_size_distribution(records: list[RawDetection], out_png: Path) -> None:
-    """Histogram of bbox areas (normalized to image area), log x-axis."""
+    """Histogram of bbox areas with log-spaced bins (equal width on log axis)."""
     _setup()
-    areas = [float((b[2] - b[0]) * (b[3] - b[1])) for rec in records for b in rec.boxes_norm]
+    areas = _areas_norm(records)
     if not areas:
         return
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-    ax.hist(areas, bins=50, color=_ORANGE, edgecolor="black", alpha=0.75)
+    areas = np.asarray(areas)
+    lo = max(areas.min(), 1e-5)
+    hi = areas.max()
+    bins = np.logspace(np.log10(lo), np.log10(hi), 30)
+    fig, ax = plt.subplots(figsize=(6.5, 4.2))
+    ax.hist(areas, bins=bins, color=_BLUE, edgecolor="white", linewidth=0.4, alpha=0.9)
     ax.set_xscale("log")
-    ax.set_xlabel(r"Bbox area (fraction of image area)")
+    ax.set_xlabel("Bbox area (fraction of image area)")
     ax.set_ylabel("Count")
     ax.set_title("Bounding-box size distribution")
+    # format y-axis as integers
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
     fig.tight_layout()
     fig.savefig(out_png)
     plt.close(fig)
 
 
 def plot_bbox_area_buckets(records: list[RawDetection], out_png: Path) -> None:
-    """Bar/pie of COCO-style small / medium / large bbox counts.
+    """Bar chart of COCO-style small / medium / large bbox counts.
 
     Thresholds (normalized to image area, assuming 64-grid):
     small  < (32/64)^2 ; medium < (96/64)^2 ; large >= (96/64)^2.
@@ -104,21 +99,28 @@ def plot_bbox_area_buckets(records: list[RawDetection], out_png: Path) -> None:
                 n_med += 1
             else:
                 n_large += 1
-    if n_small + n_med + n_large == 0:
+    total = n_small + n_med + n_large
+    if total == 0:
         return
-    fig, ax = plt.subplots(figsize=(5, 5))
+    labels = ["Small", "Medium", "Large"]
     sizes = [n_small, n_med, n_large]
-    labels = [f"Small\n({n_small})", f"Medium\n({n_med})", f"Large\n({n_large})"]
     colors = [_RED, _ORANGE, _GREEN]
-    ax.pie(
-        sizes,
-        labels=labels,
-        colors=colors,
-        autopct="%1.1f%%",
-        startangle=90,
-        textprops={"fontsize": 9},
-    )
+    fig, ax = plt.subplots(figsize=(5.5, 4.2))
+    bars = ax.bar(labels, sizes, color=colors, width=0.55, edgecolor="white", linewidth=0.4)
+    for b, n in zip(bars, sizes, strict=True):
+        pct = 100 * n / total
+        ax.text(
+            b.get_x() + b.get_width() / 2,
+            n,
+            f"{n}\n({pct:.1f}%)",
+            ha="center",
+            va="bottom",
+            fontsize=8.5,
+        )
+    ax.set_ylabel("Count")
     ax.set_title("Bbox area buckets (COCO scale)")
+    ax.set_ylim(0, max(sizes) * 1.18)
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
     fig.tight_layout()
     fig.savefig(out_png)
     plt.close(fig)
@@ -135,11 +137,12 @@ def plot_aspect_ratio(records: list[RawDetection], out_png: Path) -> None:
                 ars.append(float((b[2] - b[0]) / h))
     if not ars:
         return
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-    ax.hist(ars, bins=40, color=_GREEN, edgecolor="black", alpha=0.75)
-    ax.set_xlabel(r"Aspect ratio $w/h$")
+    fig, ax = plt.subplots(figsize=(6.5, 4.2))
+    ax.hist(ars, bins=40, color=_GREEN, edgecolor="white", linewidth=0.4, alpha=0.9)
+    ax.set_xlabel("Aspect ratio $w/h$")
     ax.set_ylabel("Count")
     ax.set_title("Bounding-box aspect-ratio distribution")
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
     fig.tight_layout()
     fig.savefig(out_png)
     plt.close(fig)
@@ -151,18 +154,20 @@ def plot_objects_per_image(records: list[RawDetection], out_png: Path) -> None:
     counts = [len(rec.boxes_norm) for rec in records]
     if not counts:
         return
-    fig, ax = plt.subplots(figsize=(7, 4.5))
+    fig, ax = plt.subplots(figsize=(6.5, 4.2))
     ax.hist(
         counts,
         bins=range(0, max(counts) + 2),
         color=_BLUE,
-        edgecolor="black",
-        alpha=0.75,
+        edgecolor="white",
+        linewidth=0.4,
+        alpha=0.9,
         align="left",
     )
     ax.set_xlabel("Objects per image")
     ax.set_ylabel("Image count")
     ax.set_title("Object-count distribution per image")
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
     fig.tight_layout()
     fig.savefig(out_png)
     plt.close(fig)
@@ -181,51 +186,19 @@ def plot_bbox_position_heatmap(records: list[RawDetection], out_png: Path, grid:
             heat[gy, gx] += 1
     if heat.sum() == 0:
         return
-    fig, ax = plt.subplots(figsize=(6, 5.5))
-    im = ax.imshow(heat, cmap="hot", origin="lower")
-    ax.set_xlabel(r"$x$ grid")
-    ax.set_ylabel(r"$y$ grid")
-    ax.set_title("Bbox-center spatial density")
-    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Count")
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
-
-
-def plot_image_size_distribution(records: list[RawDetection], out_png: Path) -> None:
-    """Scatter of image width vs height."""
-    _setup()
-    if not records:
-        return
-    widths = [r.width for r in records]
-    heights = [r.height for r in records]
-    fig, ax = plt.subplots(figsize=(5.5, 5.5))
-    ax.scatter(widths, heights, alpha=0.4, color=_GREEN, s=12, edgecolors="none")
-    ax.set_xlabel("Width (px)")
-    ax.set_ylabel("Height (px)")
-    ax.set_title("Image-size distribution")
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
-
-
-def plot_class_imbalance(records: list[RawDetection], out_png: Path) -> None:
-    """Horizontal bar of per-class counts, sorted, with imbalance ratio."""
-    _setup()
-    counts = _counts(records)
-    if not counts:
-        return
-    items = sorted(counts.items(), key=lambda kv: kv[1])
-    labels = [str(k) for k, _ in items]
-    values = [v for _, v in items]
-    fig, ax = plt.subplots(figsize=(7, max(3, 0.4 * len(items))))
-    bars = ax.barh(labels, values, color=_RED, height=0.6)
-    ax.bar_label(bars, fontsize=8, padding=2)
-    ax.set_xlabel("Instance count")
-    ax.set_title("Class imbalance")
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
+    with plt.rc_context({"axes.spines.top": True, "axes.spines.right": True}):
+        fig, ax = plt.subplots(figsize=(5.6, 5.2))
+        im = ax.imshow(heat, cmap="magma", origin="lower")
+        ax.set_xlabel("$x$ grid")
+        ax.set_ylabel("$y$ grid")
+        ax.set_title("Bbox-center spatial density")
+        ax.tick_params(length=0)
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label("Count", fontsize=8.5)
+        cbar.ax.tick_params(labelsize=7.5)
+        fig.tight_layout()
+        fig.savefig(out_png)
+        plt.close(fig)
 
 
 __all__ = [
@@ -233,8 +206,5 @@ __all__ = [
     "plot_bbox_area_buckets",
     "plot_bbox_position_heatmap",
     "plot_bbox_size_distribution",
-    "plot_class_distribution",
-    "plot_class_imbalance",
-    "plot_image_size_distribution",
     "plot_objects_per_image",
 ]

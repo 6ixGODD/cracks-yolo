@@ -111,9 +111,8 @@ runs/
 *.torchscript
 /_*.py
 /output*
+/dataset_analysis
 /*.bak
-plots/
+/plots/
 test_metrics.*
-fixup_specificity.py
-*.torchscript
 *.ts

@@ -123,11 +123,25 @@ def _std(xs: list[int], mean: float) -> float:
 
 
 def save_dataset_analysis(report: DatasetAnalysisReport, out_dir: Path) -> None:
-    """Write ``dataset_analysis.json`` to ``out_dir``."""
+    """Write ``dataset_analysis.json`` + ``dataset_analysis.csv`` to ``out_dir``."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "dataset_analysis.json").write_text(
-        json.dumps(report.to_dict(), indent=2), encoding="utf-8"
-    )
+    d = report.to_dict()
+    # Flatten class_counts for CSV (one row per metric)
+    (out_dir / "dataset_analysis.json").write_text(json.dumps(d, indent=2), encoding="utf-8")
+    _write_csv(d, out_dir / "dataset_analysis.csv")
+
+
+def _write_csv(d: dict, path: Path) -> None:
+    import csv
+
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["metric", "value"])
+        for k, v in d.items():
+            if k == "class_counts":
+                w.writerow(["class_counts", json.dumps(v, ensure_ascii=False)])
+            else:
+                w.writerow([k, v])
 
 
 __all__ = ["DatasetAnalysisReport", "analyze_dataset", "save_dataset_analysis"]
