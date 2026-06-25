@@ -127,9 +127,88 @@ def test(
         int,
         Option("--seed", help="Random seed"),
     ] = 42,
+    torchscript: Annotated[
+        bool,
+        Option("--torchscript", help="Weights is a TorchScript file (static YOLOv5 inference)"),
+    ] = False,
 ) -> None:
     """Test a trained model on test + val splits."""
     from cracks_yolo.pipeline.test import run_test
+
+    if torchscript:
+        from cracks_yolo.zoo.static_yolo import StaticYOLOv5
+
+        model_obj = StaticYOLOv5()
+        model_obj.load(weights)
+        # inline run_test logic for StaticYOLOv5
+        import json
+        from pathlib import Path as _Path
+
+        import torch
+
+        from cracks_yolo.dataset.torchadapter import DetectionDataset
+        from cracks_yolo.dataset.torchadapter import detection_collate
+        from cracks_yolo.dataset.transforms import build_transforms
+        from cracks_yolo.dataset.yolo import YOLOSource
+        from cracks_yolo.pipeline.test import _compute_metrics
+        from cracks_yolo.pipeline.test import _save_metrics_csv
+
+        out = _Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        model_obj.to(device)
+        isize = model_obj.input_size
+        src = YOLOSource(dataset)
+        results: dict = {"model": "static_yolov5"}
+
+        for split in ("test", "valid"):
+            records = src.load_split(split)
+            if not records:
+                continue
+            ds = DetectionDataset(
+                records, transform=build_transforms(isize, train=False, augment=False)
+            )
+            from torch.utils.data import DataLoader
+
+            loader = DataLoader(
+                ds,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=0,
+                collate_fn=detection_collate,
+            )
+
+            all_preds = []
+            with torch.no_grad():
+                for imgs, targets in loader:
+                    imgs = imgs.to(device)
+                    res_list = model_obj.inference(imgs)
+                    for b, res in enumerate(res_list):
+                        raw_id = (
+                            targets[b].get("image_id", torch.tensor(b)).item()
+                            if isinstance(targets, list)
+                            else b
+                        )
+                        img_id = int(raw_id) + 1
+                        for j in range(len(res.boxes)):
+                            bx = res.boxes[j].tolist()
+                            all_preds.append({
+                                "image_id": img_id,
+                                "category_id": int(res.labels[j]) + 1,
+                                "bbox": [bx[0], bx[1], bx[2] - bx[0], bx[3] - bx[1]],
+                                "score": float(res.scores[j]),
+                            })
+
+            metrics = _compute_metrics(records, all_preds, isize, dataset)
+            results[f"{split}_metrics"] = metrics
+            results[f"{split}_predictions"] = all_preds
+            pred_file = out / f"best_predictions_{split}.json"
+            pred_file.write_text(json.dumps(all_preds))
+            print(
+                f"  {split}: mAP@50={metrics.get('map50', 0):.4f}  mAP@50-95={metrics.get('map5095', 0):.4f}"
+            )
+
+        _save_metrics_csv(results, out / "metrics.csv")
+        return
 
     run_test(
         model_name=model,
