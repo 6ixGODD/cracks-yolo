@@ -140,7 +140,7 @@ def test(
 
         model_obj = StaticYOLOv5()
         model_obj.load(weights)
-        # inline run_test logic for StaticYOLOv5
+        # TS model stays on CPU (mixed device constants from old export)
         import json
         from pathlib import Path as _Path
 
@@ -155,7 +155,6 @@ def test(
 
         out = _Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
-        model_obj.to(device)
         isize = model_obj.input_size
         src = YOLOSource(dataset)
         results: dict = {"model": "static_yolov5"}
@@ -180,8 +179,7 @@ def test(
             all_preds = []
             with torch.no_grad():
                 for imgs, targets in loader:
-                    imgs = imgs.to(device)
-                    res_list = model_obj.inference(imgs)
+                    res_list = model_obj.inference(imgs)  # TS runs on CPU
                     for b, res in enumerate(res_list):
                         raw_id = (
                             targets[b].get("image_id", torch.tensor(b)).item()

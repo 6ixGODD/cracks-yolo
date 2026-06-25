@@ -48,10 +48,13 @@ class StaticYOLOv5(BaseModel):
         if self._model is None:
             raise RuntimeError("call .load(weights_path) before inference")
 
-        self._model.eval()
+        # TS model has mixed devices from old export → run on CPU
+        images_cpu = images.cpu()
         results: list[InferenceResult] = []
         with torch.no_grad():
-            raw = self._model(images)  # (B, 25200, 6) raw predictions
+            raw = self._model(images_cpu)
+            if isinstance(raw, (list, tuple)):
+                raw = raw[0]  # old YOLOv5 outputs (pred, train_out)
 
         # Old YOLOv5 non_max_suppression — apply per image
         for b in range(images.shape[0]):
