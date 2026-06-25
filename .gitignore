@@ -108,9 +108,12 @@ weights/
 runs/
 *.pt
 *.pth
+*.torchscript
 /_*.py
 /output*
 /*.bak
 plots/
 test_metrics.*
 fixup_specificity.py
+*.torchscript
+*.ts

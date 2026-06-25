@@ -101,7 +101,7 @@ def train(
 def test(
     model: Annotated[
         str,
-        Option("--model", "-m", help="ZOO key"),
+        Option("--model", "-m", help="ZOO key (ignored when --torchscript, pass any value)"),
     ],
     weights: Annotated[
         Path,
