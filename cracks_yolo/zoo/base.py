@@ -124,6 +124,7 @@ class TrainConfig:
     device: str = "cuda"
     num_workers: int = 8
     pretrained: bool = True
+    close_mosaic: int | None = None
     # For ultralytics: passed through to YOLO().train()
     extra_kwargs: dict[str, Any] = field(default_factory=dict)
 

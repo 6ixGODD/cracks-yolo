@@ -175,7 +175,11 @@ class TransformerBlockV3(nn.Module):
 
 
 class C3TRV3(nn.Module):
-    """C3 with identity-initialized TransformerBlockV3."""
+    """C3 with identity-initialized TransformerBlockV3.
+
+    num_heads/num_layers control transformer size — pass smaller values
+    (e.g. 2 heads, 1 layer) for a lightweight TR that lowers overfitting risk.
+    """
 
     def __init__(
         self,
@@ -185,6 +189,8 @@ class C3TRV3(nn.Module):
         shortcut: bool = True,
         g: int = 1,
         e: float = 0.5,
+        num_heads: int = 4,
+        num_layers: int = 2,
     ) -> None:
         super().__init__()
         _ = (n, shortcut, g)  # interface compat with C3
@@ -193,7 +199,7 @@ class C3TRV3(nn.Module):
 
         self.cv1 = _UltraConv(c1, c_, 1, 1)
         self.cv2 = _UltraConv(c1, c_, 1, 1)
-        self.m = TransformerBlockV3(c_, c_, num_heads=4, num_layers=2)
+        self.m = TransformerBlockV3(c_, c_, num_heads=num_heads, num_layers=num_layers)
         self.cv3 = _UltraConv(2 * c_, c2, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

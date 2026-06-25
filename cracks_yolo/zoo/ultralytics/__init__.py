@@ -139,6 +139,37 @@ def _replace_c3tr_v3(model: nn.Module, indices: tuple[int, ...], tr_v3_cls: type
         seq[i] = new
 
 
+def _replace_c3_with_tr_v3(
+    model: nn.Module,
+    indices: tuple[int, ...],
+    tr_v3_cls: type,
+    num_heads: int = 2,
+    num_layers: int = 1,
+) -> None:
+    """Replace plain C3 at *indices* with a lightweight C3TRV3 (identity-init).
+
+    Used to *incrementally* add a transformer at neck positions without
+    touching backbone SAC blocks — unlike ``apply_sac_tr`` which replaces.
+    """
+    from ultralytics.nn.modules.block import C3
+
+    seq = model.model
+    for i in indices:
+        old = seq[i]
+        if not isinstance(old, C3):
+            continue
+        c1 = old.cv1.conv.in_channels
+        c2 = old.cv3.conv.out_channels
+        n = len(old.m) if hasattr(old, "m") else 1
+        new = tr_v3_cls(c1, c2, n, shortcut=True, num_heads=num_heads, num_layers=num_layers)
+        from cracks_yolo.zoo.ultralytics.sac_injection import _copy_layer_meta
+        from cracks_yolo.zoo.ultralytics.sac_injection import _copy_shared_weights
+
+        _copy_shared_weights(new, old)
+        _copy_layer_meta(new, old)
+        seq[i] = new
+
+
 class UltralyticsAdapter(BaseModel):
     """Wraps an ultralytics ``DetectionModel`` for any YOLO family.
 
@@ -247,6 +278,10 @@ class UltralyticsAdapter(BaseModel):
         }
         if config.warmup_epochs:
             overrides["warmup_epochs"] = config.warmup_epochs
+        # close_mosaic: disable mosaic augmentation for the final N epochs
+        # to let the model refine localization on real images.
+        if config.close_mosaic is not None:
+            overrides["close_mosaic"] = config.close_mosaic
 
         trainer = Trainer(overrides=overrides)
         # Replace yaml-path-string model with our SAC-injected nn.Module.
@@ -591,6 +626,38 @@ class YOLOv5sSACTRV3(UltralyticsAdapter):
             asset="yolov5su",
             sac_indices=(2, 4, 6),
             tr_indices=(8, 17),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5sSACTRV4(UltralyticsAdapter):
+    """YOLOv5s + C3SAC-v2 at backbone (2,4,6) + small C3TRV3 at neck (23).
+
+    V4 design: TR is *incremental* — it replaces a neck C3 (not a backbone SAC
+    block), so all three SAC positions are preserved. The transformer is
+    lightweight (2 heads, 1 layer, identity-init) to minimise overfitting on
+    a small dataset.
+    """
+
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        inner = _build_detection_model("yolov5s.yaml", num_classes)
+        # SAC only on backbone — TR will be added separately at neck
+        apply_sac_tr(inner, sac_indices=(2, 4, 6), tr_indices=())
+        from cracks_yolo.ops.sac_v2 import C3SACV2
+        from cracks_yolo.ops.sac_v2 import C3TRV3
+
+        _replace_c3sac_v2(inner, (2, 4, 6), C3SACV2)
+        # Incremental TR at neck index 23 (P5 output C3) — small + identity-init
+        _replace_c3_with_tr_v3(inner, (23,), C3TRV3, num_heads=2, num_layers=1)
+        super().__init__(
+            inner=inner,
+            cfg="yolov5s.yaml",
+            asset="yolov5su",
+            sac_indices=(2, 4, 6),
+            tr_indices=(23,),
             decode_format="anchor_based",
             num_classes=num_classes,
             input_size=input_size,
@@ -1149,6 +1216,7 @@ ZOO: dict[str, type[UltralyticsAdapter]] = {
     "yolov5s_sactr": YOLOv5sSACTR,
     "yolov5s_sactr_v2": YOLOv5sSACTRV2,
     "yolov5s_sactr_v3": YOLOv5sSACTRV3,
+    "yolov5s_sactr_v4": YOLOv5sSACTRV4,
     "yolov5m": YOLOv5m,
     "yolov5l": YOLOv5l,
     "yolov5x": YOLOv5x,
