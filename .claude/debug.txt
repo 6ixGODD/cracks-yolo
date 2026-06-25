@@ -1,0 +1,972 @@
+2026-06-25T07:48:18.627Z [DEBUG] MDM settings load completed in 18ms
+2026-06-25T07:48:18.664Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: C:\Program Files\ClaudeCode\managed-settings.json
+2026-06-25T07:48:18.667Z [DEBUG] CA certs: Config fallback - globalEnv keys: , settingsEnv keys: ANTHROPIC_API_KEY,ANTHROPIC_AUTH_TOKEN,ANTHROPIC_BASE_URL,ANTHROPIC_DEFAULT_HAIKU_MODEL,ANTHROPIC_DEFAULT_OPUS_MODEL,ANTHROPIC_DEFAULT_SONNET_MODEL,CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,CLAUDE_CODE_SUBAGENT_MODEL
+2026-06-25T07:48:18.669Z [DEBUG] [init] configureGlobalMTLS starting
+2026-06-25T07:48:18.669Z [DEBUG] [init] configureGlobalMTLS complete
+2026-06-25T07:48:18.670Z [DEBUG] [init] configureGlobalAgents starting
+2026-06-25T07:48:18.670Z [DEBUG] CA certs: stores=bundled,system, extraCertsPath=undefined
+2026-06-25T07:48:18.672Z [DEBUG] CA certs: Loaded 145 bundled root certificates
+2026-06-25T07:48:18.698Z [DEBUG] CA certs: Loaded 173 system CA certificates
+2026-06-25T07:48:18.698Z [DEBUG] mTLS: Creating HTTPS agent with custom certificates
+2026-06-25T07:48:18.699Z [DEBUG] [init] configureGlobalAgents complete
+2026-06-25T07:48:18.866Z [DEBUG] Using bash path: "D:\Git\bin\bash.exe"
+2026-06-25T07:48:18.869Z [DEBUG] Error log sink initialized
+2026-06-25T07:48:18.877Z [DEBUG] Applying permission update: Adding 8 allow rule(s) to destination 'userSettings': ["mcp__codegraph__codegraph_explore","mcp__codegraph__codegraph_search","mcp__codegraph__codegraph_node","mcp__codegraph__codegraph_callers","mcp__codegraph__codegraph_callees","mcp__codegraph__codegraph_impact","mcp__codegraph__codegraph_files","mcp__codegraph__codegraph_status"]
+2026-06-25T07:48:18.877Z [DEBUG] Applying permission update: Adding 4 allow rule(s) to destination 'projectSettings': ["Bash","WebSearch","WebFetch(domain:github.com)","WebFetch(domain:raw.githubusercontent.com)"]
+2026-06-25T07:48:18.878Z [DEBUG] [ToolSearch:optimistic] disabled: ANTHROPIC_BASE_URL=https://openrouter.ai/api is not a first-party Anthropic host. Set ENABLE_TOOL_SEARCH=true (or auto / auto:N) if your proxy forwards tool_reference blocks.
+2026-06-25T07:48:18.879Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-06-25T07:48:18.883Z [DEBUG] [STARTUP] Running setup()...
+2026-06-25T07:48:18.889Z [DEBUG] Loading skills from: managed=C:\Program Files\ClaudeCode\.claude\skills, user=C:\Users\BC\.claude\skills, project=[]
+2026-06-25T07:48:18.891Z [DEBUG] Broken symlink or missing file encountered for settings.json at path: C:\Program Files\ClaudeCode\managed-settings.json
+2026-06-25T07:48:18.898Z [DEBUG] Error log sink initialized
+2026-06-25T07:48:18.909Z [DEBUG] Failed to stat directory C:\Program Files\ClaudeCode\.claude\commands: ENOENT: no such file or directory, stat 'C:\Program Files\ClaudeCode\.claude\commands'
+2026-06-25T07:48:18.910Z [DEBUG] Failed to stat directory C:\Users\BC\.claude\commands: ENOENT: no such file or directory, stat 'C:\Users\BC\.claude\commands'
+2026-06-25T07:48:18.911Z [DEBUG] Loaded 0 unique skills (0 unconditional, 0 conditional, managed: 0, user: 0, project: 0, additional: 0, legacy commands: 0)
+2026-06-25T07:48:18.911Z [DEBUG] Failed to stat directory C:\Program Files\ClaudeCode\.claude\agents: ENOENT: no such file or directory, stat 'C:\Program Files\ClaudeCode\.claude\agents'
+2026-06-25T07:48:18.911Z [DEBUG] Failed to stat directory C:\Users\BC\.claude\agents: ENOENT: no such file or directory, stat 'C:\Users\BC\.claude\agents'
+2026-06-25T07:48:18.916Z [DEBUG] [STARTUP] setup() completed in 32ms
+2026-06-25T07:48:18.916Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-06-25T07:48:18.948Z [DEBUG] Loaded 10 installed plugins from C:\Users\BC\.claude\plugins\installed_plugins.json
+2026-06-25T07:48:18.950Z [DEBUG] Using pre-resolved git SHA for remember@claude-plugins-official: a4ff96f38622
+2026-06-25T07:48:18.952Z [DEBUG] Git remote URL: https://github.com/6ixGODD/cracks-yolo
+2026-06-25T07:48:18.953Z [DEBUG] Parsed repository: github.com/6ixGODD/cracks-yolo from URL: https://github.com/6ixGODD/cracks-yolo
+2026-06-25T07:48:18.964Z [DEBUG] Processing 4 skill paths for plugin document-skills
+2026-06-25T07:48:18.965Z [DEBUG] Read hooks.json for plugin superpowers (enabled=true): C:\Users\BC\.claude\plugins\cache\claude-plugins-official\superpowers\6.0.2\hooks\hooks.json
+2026-06-25T07:48:18.965Z [DEBUG] Found 4 valid skill paths for plugin document-skills, setting skillsPaths
+2026-06-25T07:48:18.967Z [DEBUG] Found 5 plugins (5 enabled, 0 disabled)
+2026-06-25T07:48:18.968Z [DEBUG] Plugin not available for MCP: skill-creator@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:18.968Z [DEBUG] Plugin not available for MCP: code-review@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:18.969Z [DEBUG] Plugin not available for MCP: code-simplifier@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:18.970Z [DEBUG] Plugin not available for MCP: remember@claude-plugins-official - error type: plugin-not-installed
+2026-06-25T07:48:18.971Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:18.972Z [DEBUG] getPluginSkills: Processing 5 enabled plugins
+2026-06-25T07:48:18.973Z [DEBUG] Checking plugin superpowers: skillsPath=exists, skillsPaths=0 paths
+2026-06-25T07:48:18.973Z [DEBUG] Attempting to load skills from plugin superpowers default skillsPath: C:\Users\BC\.claude\plugins\cache\claude-plugins-official\superpowers\6.0.2\skills
+2026-06-25T07:48:18.974Z [DEBUG] Checking plugin document-skills: skillsPath=none, skillsPaths=4 paths
+2026-06-25T07:48:18.975Z [DEBUG] Attempting to load skills from plugin document-skills skillsPaths: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\xlsx, C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\docx, C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pptx, C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pdf
+2026-06-25T07:48:18.975Z [DEBUG] Loading from skillPath: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\xlsx for plugin document-skills
+2026-06-25T07:48:18.976Z [DEBUG] Loading from skillPath: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\docx for plugin document-skills
+2026-06-25T07:48:18.976Z [DEBUG] Loading from skillPath: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pptx for plugin document-skills
+2026-06-25T07:48:18.977Z [DEBUG] Loading from skillPath: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pdf for plugin document-skills
+2026-06-25T07:48:18.978Z [DEBUG] Checking plugin github: skillsPath=none, skillsPaths=0 paths
+2026-06-25T07:48:18.978Z [DEBUG] Checking plugin context7: skillsPath=none, skillsPaths=0 paths
+2026-06-25T07:48:18.979Z [DEBUG] Checking plugin playwright: skillsPath=none, skillsPaths=0 paths
+2026-06-25T07:48:18.979Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:18.980Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:18.981Z [DEBUG] Total plugin workflows loaded: 0
+2026-06-25T07:48:18.981Z [DEBUG] Loading hooks from plugin: superpowers
+2026-06-25T07:48:18.982Z [DEBUG] Registered 1 hooks from 5 plugins
+2026-06-25T07:48:18.982Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:18.983Z [DEBUG] Total plugin commands loaded: 0
+2026-06-25T07:48:18.983Z [DEBUG] Total plugin agents loaded: 0
+2026-06-25T07:48:19.223Z [WARN] Missing environment variables in plugin MCP config: GITHUB_PERSONAL_ACCESS_TOKEN
+2026-06-25T07:48:19.225Z [ERROR] Plugin MCP server error - mcp-config-invalid: MCP server github invalid: Missing environment variables: GITHUB_PERSONAL_ACCESS_TOKEN
+2026-06-25T07:48:19.227Z [DEBUG] Loaded 1 skills from plugin document-skills custom path: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\xlsx
+2026-06-25T07:48:19.228Z [DEBUG] Loaded 1 skills from plugin document-skills custom path: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\docx
+2026-06-25T07:48:19.229Z [DEBUG] Loaded 1 skills from plugin document-skills custom path: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pptx
+2026-06-25T07:48:19.230Z [DEBUG] Loaded 1 skills from plugin document-skills custom path: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pdf
+2026-06-25T07:48:19.247Z [DEBUG] Loaded 14 skills from plugin superpowers default directory
+2026-06-25T07:48:19.249Z [DEBUG] Total plugin skills loaded: 18 (0 duplicate/user-owned entries skipped)
+2026-06-25T07:48:19.250Z [DEBUG] getSkills returning: 0 skill dir commands, 18 plugin skills, 20 bundled skills, 0 builtin plugin skills
+2026-06-25T07:48:19.256Z [DEBUG] [STARTUP] Commands and agents loaded in 339ms
+2026-06-25T07:48:19.259Z [DEBUG] [STARTUP] Running showSetupScreens()...
+2026-06-25T07:48:19.350Z [DEBUG] Cleared CA certificates cache
+2026-06-25T07:48:19.350Z [DEBUG] Cleared mTLS configuration cache
+2026-06-25T07:48:19.352Z [DEBUG] Cleared proxy agent cache
+2026-06-25T07:48:19.353Z [DEBUG] CA certs: stores=bundled,system, extraCertsPath=undefined
+2026-06-25T07:48:19.355Z [DEBUG] CA certs: Loaded 145 bundled root certificates
+2026-06-25T07:48:19.356Z [DEBUG] CA certs: Loaded 173 system CA certificates
+2026-06-25T07:48:19.358Z [DEBUG] mTLS: Creating HTTPS agent with custom certificates
+2026-06-25T07:48:19.360Z [DEBUG] [STARTUP] showSetupScreens() completed in 101ms
+2026-06-25T07:48:19.361Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-06-25T07:48:19.362Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-06-25T07:48:19.363Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-06-25T07:48:19.364Z [DEBUG] Starting background startup prefetches
+2026-06-25T07:48:19.365Z [DEBUG] [Bootstrap] Skipped: Nonessential traffic disabled
+2026-06-25T07:48:19.366Z [DEBUG] [STARTUP] MCP configs resolved in 346ms (awaited at +486ms)
+2026-06-25T07:48:19.372Z [DEBUG] All plugins already exist, skipping migration
+2026-06-25T07:48:19.375Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:19.376Z [DEBUG] [Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)
+2026-06-25T07:48:19.386Z [DEBUG] Preserving file permissions: 100666
+2026-06-25T07:48:19.387Z [DEBUG] Writing to temp file: C:\Users\BC\.claude.json.tmp.12180.47cd8648ee0f
+2026-06-25T07:48:19.389Z [DEBUG] Applied original permissions to temp file
+2026-06-25T07:48:19.391Z [DEBUG] Temp file written successfully, size: 52372 bytes
+2026-06-25T07:48:19.392Z [DEBUG] Renaming C:\Users\BC\.claude.json.tmp.12180.47cd8648ee0f to C:\Users\BC\.claude.json
+2026-06-25T07:48:19.394Z [DEBUG] File C:\Users\BC\.claude.json written atomically
+2026-06-25T07:48:19.396Z [DEBUG] Initialized versioned plugins system with 10 plugins
+2026-06-25T07:48:19.400Z [DEBUG] LSP Diagnostics: Resetting all state (0 pending, 0 files tracked)
+2026-06-25T07:48:19.420Z [DEBUG] MCP server "codegraph": Starting connection with timeout of 30000ms
+2026-06-25T07:48:19.461Z [DEBUG] Path D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo already tracked for repo 6ixgodd/cracks-yolo
+2026-06-25T07:48:19.462Z [DEBUG] Total LSP servers loaded: 0
+2026-06-25T07:48:19.463Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-06-25T07:48:19.465Z [DEBUG] LSP manager initialized with 0 servers
+2026-06-25T07:48:19.465Z [DEBUG] LSP server manager initialized successfully
+2026-06-25T07:48:19.467Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-06-25T07:48:19.471Z [DEBUG] MCP server "plugin:context7:context7": Starting connection with timeout of 30000ms
+2026-06-25T07:48:19.509Z [DEBUG] MCP server "plugin:playwright:playwright": Starting connection with timeout of 30000ms
+2026-06-25T07:48:19.558Z [DEBUG] [Perfetto] initializePerfettoTracing called, env value: undefined
+2026-06-25T07:48:19.559Z [DEBUG] [3P telemetry] isTelemetryEnabled=false (CLAUDE_CODE_ENABLE_TELEMETRY=undefined)
+2026-06-25T07:48:19.585Z [DEBUG] Loading skills from: managed=C:\Program Files\ClaudeCode\.claude\skills, user=C:\Users\BC\.claude\skills, project=[]
+2026-06-25T07:48:19.587Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:19.588Z [DEBUG] getPluginSkills: Processing 5 enabled plugins
+2026-06-25T07:48:19.588Z [DEBUG] Checking plugin superpowers: skillsPath=exists, skillsPaths=0 paths
+2026-06-25T07:48:19.589Z [DEBUG] Attempting to load skills from plugin superpowers default skillsPath: C:\Users\BC\.claude\plugins\cache\claude-plugins-official\superpowers\6.0.2\skills
+2026-06-25T07:48:19.589Z [DEBUG] Checking plugin document-skills: skillsPath=none, skillsPaths=4 paths
+2026-06-25T07:48:19.590Z [DEBUG] Attempting to load skills from plugin document-skills skillsPaths: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\xlsx, C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\docx, C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pptx, C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pdf
+2026-06-25T07:48:19.591Z [DEBUG] Loading from skillPath: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\xlsx for plugin document-skills
+2026-06-25T07:48:19.592Z [DEBUG] Loading from skillPath: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\docx for plugin document-skills
+2026-06-25T07:48:19.593Z [DEBUG] Loading from skillPath: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pptx for plugin document-skills
+2026-06-25T07:48:19.593Z [DEBUG] Loading from skillPath: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pdf for plugin document-skills
+2026-06-25T07:48:19.594Z [DEBUG] Checking plugin github: skillsPath=none, skillsPaths=0 paths
+2026-06-25T07:48:19.595Z [DEBUG] Checking plugin context7: skillsPath=none, skillsPaths=0 paths
+2026-06-25T07:48:19.596Z [DEBUG] Checking plugin playwright: skillsPath=none, skillsPaths=0 paths
+2026-06-25T07:48:19.597Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:19.598Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:19.599Z [DEBUG] Total plugin workflows loaded: 0
+2026-06-25T07:48:19.600Z [DEBUG] Total plugin commands loaded: 0
+2026-06-25T07:48:19.619Z [DEBUG] Failed to stat directory C:\Program Files\ClaudeCode\.claude\commands: ENOENT: no such file or directory, stat 'C:\Program Files\ClaudeCode\.claude\commands'
+2026-06-25T07:48:19.621Z [DEBUG] Failed to stat directory C:\Users\BC\.claude\commands: ENOENT: no such file or directory, stat 'C:\Users\BC\.claude\commands'
+2026-06-25T07:48:19.622Z [DEBUG] Loaded 0 unique skills (0 unconditional, 0 conditional, managed: 0, user: 0, project: 0, additional: 0, legacy commands: 0)
+2026-06-25T07:48:19.623Z [DEBUG] Loaded 1 skills from plugin document-skills custom path: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\xlsx
+2026-06-25T07:48:19.625Z [DEBUG] Loaded 1 skills from plugin document-skills custom path: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\docx
+2026-06-25T07:48:19.626Z [DEBUG] Loaded 1 skills from plugin document-skills custom path: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pptx
+2026-06-25T07:48:19.628Z [DEBUG] Loaded 1 skills from plugin document-skills custom path: C:\Users\BC\.claude\plugins\cache\anthropic-agent-skills\document-skills\575462609294\skills\pdf
+2026-06-25T07:48:19.641Z [WARN] [3P telemetry] Event dropped (no event logger initialized): plugin_loaded
+2026-06-25T07:48:19.654Z [DEBUG] Loaded 14 skills from plugin superpowers default directory
+2026-06-25T07:48:19.662Z [DEBUG] Total plugin skills loaded: 18 (0 duplicate/user-owned entries skipped)
+2026-06-25T07:48:19.663Z [DEBUG] getSkills returning: 0 skill dir commands, 18 plugin skills, 20 bundled skills, 0 builtin plugin skills
+2026-06-25T07:48:19.908Z [DEBUG] FileHistory: No need to copy file history for resuming with same session id: 328922f4-f076-469c-a3cc-55af53f16eaf
+2026-06-25T07:48:20.025Z [DEBUG] [keybindings] KeybindingSetup initialized with 174 bindings, 0 warnings
+2026-06-25T07:48:20.048Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:20.088Z [DEBUG] [claudeai-mcp] Disabled: API-key auth precedence active
+2026-06-25T07:48:20.091Z [DEBUG] [REPL:mount] REPL mounted, disabled=false
+2026-06-25T07:48:20.093Z [DEBUG] Official marketplace auto-install skipped: already_installed
+2026-06-25T07:48:20.095Z [DEBUG] performStartupChecks called
+2026-06-25T07:48:20.096Z [DEBUG] Starting background plugin installations
+2026-06-25T07:48:20.098Z [DEBUG] [jobStateNameSync] watch skipped: Error: ENOENT: no such file or directory, watch 'C:\Users\BC\.claude\jobs\328922f4'
+2026-06-25T07:48:20.173Z [DEBUG] extractReadFilesFromMessages: skipping Edit disk read for D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\fixup_specificity.py: ENOENT: no such file or directory, open 'D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\fixup_specificity.py'
+2026-06-25T07:48:20.174Z [DEBUG] extractReadFilesFromMessages: skipping Edit disk read for D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\fixup_specificity.py: ENOENT: no such file or directory, open 'D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\fixup_specificity.py'
+2026-06-25T07:48:20.237Z [DEBUG] Preserving file permissions: 100666
+2026-06-25T07:48:20.237Z [DEBUG] Writing to temp file: C:\Users\BC\.claude.json.tmp.12180.dec558e15432
+2026-06-25T07:48:20.239Z [DEBUG] Applied original permissions to temp file
+2026-06-25T07:48:20.241Z [DEBUG] Temp file written successfully, size: 52373 bytes
+2026-06-25T07:48:20.241Z [DEBUG] Renaming C:\Users\BC\.claude.json.tmp.12180.dec558e15432 to C:\Users\BC\.claude.json
+2026-06-25T07:48:20.243Z [DEBUG] File C:\Users\BC\.claude.json written atomically
+2026-06-25T07:48:20.246Z [DEBUG] [ScheduledTasks] scheduler start() — enabled=false, hasTasks=false
+2026-06-25T07:48:20.649Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:21.060Z [DEBUG] High write ratio: blit=0, write=240275 (100.0% writes), screen=2375x156
+2026-06-25T07:48:21.156Z [DEBUG] Slow render: 94.6ms, screen: 2375x156, damage: 156x2375 at (0,0), changes: 247056
+2026-06-25T07:48:21.210Z [DEBUG] Plugin not available for MCP: skill-creator@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:21.211Z [DEBUG] Plugin not available for MCP: code-review@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:21.211Z [DEBUG] Plugin not available for MCP: code-simplifier@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:21.212Z [DEBUG] Plugin not available for MCP: remember@claude-plugins-official - error type: plugin-not-installed
+2026-06-25T07:48:21.212Z [WARN] Missing environment variables in plugin MCP config: GITHUB_PERSONAL_ACCESS_TOKEN
+2026-06-25T07:48:21.214Z [DEBUG] Plugin not available for MCP: skill-creator@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:21.214Z [DEBUG] Plugin not available for MCP: code-review@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:21.214Z [DEBUG] Plugin not available for MCP: code-simplifier@claude-plugins-official - error type: plugin-cache-miss
+2026-06-25T07:48:21.215Z [DEBUG] Plugin not available for MCP: remember@claude-plugins-official - error type: plugin-not-installed
+2026-06-25T07:48:21.215Z [WARN] Missing environment variables in plugin MCP config: GITHUB_PERSONAL_ACCESS_TOKEN
+2026-06-25T07:48:21.217Z [DEBUG] performBackgroundPluginInstallations called
+2026-06-25T07:48:21.253Z [DEBUG] [auto-mode] verifyAutoModeGateAccess: enabledState=opt-in disabledBySettings=false model=anthropic/claude-sonnet-4.6 modelSupported=false disableFastModeBreakerFires=false carouselAvailable=false canEnterAuto=false
+2026-06-25T07:48:21.254Z [WARN] auto mode disabled: model anthropic/claude-sonnet-4.6 does not support auto mode
+2026-06-25T07:48:21.255Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-06-25T07:48:21.255Z [DEBUG] [auto-mode] kickOutOfAutoIfNeeded applying: ctx.mode=bypassPermissions ctx.prePlanMode=undefined reason=model
+2026-06-25T07:48:21.257Z [DEBUG] [keybindings] Watching for changes to C:\Users\BC\.claude\keybindings.json
+2026-06-25T07:48:21.259Z [ERROR] Plugin MCP server error - mcp-config-invalid: MCP server github invalid: Missing environment variables: GITHUB_PERSONAL_ACCESS_TOKEN
+2026-06-25T07:48:21.261Z [ERROR] Plugin MCP server error - mcp-config-invalid: MCP server github invalid: Missing environment variables: GITHUB_PERSONAL_ACCESS_TOKEN
+2026-06-25T07:48:21.264Z [DEBUG] Failed to stat directory C:\Program Files\ClaudeCode\.claude\skills: ENOENT: no such file or directory, stat 'C:\Program Files\ClaudeCode\.claude\skills'
+2026-06-25T07:48:21.265Z [DEBUG] Failed to stat directory C:\Users\BC\.claude\skills: ENOENT: no such file or directory, stat 'C:\Users\BC\.claude\skills'
+2026-06-25T07:48:21.266Z [DEBUG] Failed to stat directory C:\Program Files\ClaudeCode\.claude\agents: ENOENT: no such file or directory, stat 'C:\Program Files\ClaudeCode\.claude\agents'
+2026-06-25T07:48:21.266Z [DEBUG] Failed to stat directory C:\Users\BC\.claude\agents: ENOENT: no such file or directory, stat 'C:\Users\BC\.claude\agents'
+2026-06-25T07:48:21.311Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:21.320Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
+2026-06-25T07:48:21.321Z [DEBUG] [FileIndex] getFilesUsingGit called
+2026-06-25T07:48:21.358Z [DEBUG] XTVERSION: no reply (terminal ignored query)
+2026-06-25T07:48:21.359Z [DEBUG] DECRQM(2026): skipped (no XTVERSION reply) → sync unsupported
+2026-06-25T07:48:21.360Z [DEBUG] DECSTBM: gated (TMUX=unset ZELLIJ=unset TERM_PROGRAM=unset TERM=unset)
+2026-06-25T07:48:21.362Z [DEBUG] Ripgrep first use test: PASSED (mode=embedded, path=C:\Users\BC\.local\bin\claude.exe)
+2026-06-25T07:48:21.387Z [DEBUG] Failed to stat directory C:\Program Files\ClaudeCode\.claude\output-styles: ENOENT: no such file or directory, stat 'C:\Program Files\ClaudeCode\.claude\output-styles'
+2026-06-25T07:48:21.388Z [DEBUG] Failed to stat directory C:\Users\BC\.claude\workflows: ENOENT: no such file or directory, stat 'C:\Users\BC\.claude\workflows'
+2026-06-25T07:48:21.389Z [DEBUG] Failed to stat directory C:\Users\BC\.claude\output-styles: ENOENT: no such file or directory, stat 'C:\Users\BC\.claude\output-styles'
+2026-06-25T07:48:21.389Z [DEBUG] Failed to stat directory C:\Program Files\ClaudeCode\.claude\workflows: ENOENT: no such file or directory, stat 'C:\Program Files\ClaudeCode\.claude\workflows'
+2026-06-25T07:48:21.390Z [DEBUG] Failed to stat directory C:\Program Files\ClaudeCode\.claude\routines: ENOENT: no such file or directory, stat 'C:\Program Files\ClaudeCode\.claude\routines'
+2026-06-25T07:48:21.391Z [DEBUG] Failed to stat directory C:\Users\BC\.claude\routines: ENOENT: no such file or directory, stat 'C:\Users\BC\.claude\routines'
+2026-06-25T07:48:21.393Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:21.394Z [DEBUG] Total plugin agents loaded: 0
+2026-06-25T07:48:21.396Z [DEBUG] Watching for changes in setting files C:\Users\BC\.claude\settings.json, D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\.claude\settings.json, D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\.claude\settings.local.json...
+2026-06-25T07:48:21.398Z [DEBUG] Loaded plugins - Enabled: 5, Disabled: 0, Commands: 0, Agents: 0, Errors: 4
+2026-06-25T07:48:21.436Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:21.448Z [DEBUG] MCP server "codegraph": Successfully connected (transport: stdio) in 2033ms
+2026-06-25T07:48:21.449Z [DEBUG] MCP server "codegraph": Server instructions truncated from 7056 to 2048 chars
+2026-06-25T07:48:21.449Z [DEBUG] MCP server "codegraph": Connection established with capabilities: {"hasTools":true,"hasPrompts":false,"hasResources":false,"hasResourceSubscribe":false,"serverVersion":{"name":"codegraph","version":"1.0.1"}}
+2026-06-25T07:48:21.450Z [DEBUG] [MCP] Server "codegraph" connected with subscribe=false
+2026-06-25T07:48:21.486Z [DEBUG] MCP server "codegraph": Channel notifications skipped: server did not declare claude/channel capability
+2026-06-25T07:48:21.487Z [DEBUG] [FileIndex] git ls-files (tracked) took 165ms
+2026-06-25T07:48:21.490Z [DEBUG] [FileIndex] git ls-files: 1560 tracked files in 169ms
+2026-06-25T07:48:21.504Z [DEBUG] [FileIndex] using git ls-files result (1560 files)
+2026-06-25T07:48:21.512Z [DEBUG] [FileIndex] cache refresh completed in 192ms
+2026-06-25T07:48:21.539Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:21.575Z [DEBUG] Loaded 2 CLAUDE.md/rules files:
+  [Project] D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\CLAUDE.md (9285 chars)
+  [AutoMem] C:\Users\BC\.claude\projects\D--WorkSpace-projects-2025-cracks-yolo-proj-cracks-yolo\memory\MEMORY.md (122 chars)
+2026-06-25T07:48:21.594Z [DEBUG] [FileIndex] background untracked fetch: 2 files
+2026-06-25T07:48:21.596Z [DEBUG] [FileIndex] rebuilt index with 1560 tracked + 2 untracked files
+2026-06-25T07:48:22.042Z [DEBUG] MCP server "plugin:playwright:playwright": Successfully connected (transport: stdio) in 2534ms
+2026-06-25T07:48:22.042Z [DEBUG] MCP server "plugin:playwright:playwright": Connection established with capabilities: {"hasTools":true,"hasPrompts":false,"hasResources":false,"hasResourceSubscribe":false,"serverVersion":{"name":"Playwright","version":"1.61.0-alpha-1781023400000"}}
+2026-06-25T07:48:22.043Z [DEBUG] [MCP] Server "plugin:playwright:playwright" connected with subscribe=false
+2026-06-25T07:48:22.052Z [DEBUG] MCP server "plugin:playwright:playwright": Channel notifications skipped: server did not declare claude/channel capability
+2026-06-25T07:48:22.098Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:22.386Z [ERROR] MCP server "plugin:context7:context7" Server stderr: Context7 Documentation MCP Server v3.2.2 running on stdio
+2026-06-25T07:48:22.387Z [DEBUG] MCP server "plugin:context7:context7": Successfully connected (transport: stdio) in 2917ms
+2026-06-25T07:48:22.387Z [DEBUG] MCP server "plugin:context7:context7": Connection established with capabilities: {"hasTools":true,"hasPrompts":true,"hasResources":true,"hasResourceSubscribe":false,"serverVersion":{"name":"Context7","icons":[{"src":"https://context7.com/context7-icon-green.png","mimeType":"image/png"}],"version":"3.2.2","websiteUrl":"https://context7.com","description":"Context7 provides up-to-date documentation and code examples for libraries and frameworks."}}
+2026-06-25T07:48:22.387Z [DEBUG] [MCP] Server "plugin:context7:context7" connected with subscribe=false
+2026-06-25T07:48:22.396Z [DEBUG] MCP server "plugin:context7:context7": Channel notifications skipped: server did not declare claude/channel capability
+2026-06-25T07:48:22.428Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:24.383Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:25.222Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:25.235Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:26.989Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:27.011Z [DEBUG] High write ratio: blit=0, write=240275 (100.0% writes), screen=2375x156
+2026-06-25T07:48:27.013Z [DEBUG] AutoUpdaterWrapper: Installation type: native
+2026-06-25T07:48:27.018Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
+2026-06-25T07:48:27.019Z [DEBUG] [FileIndex] getFilesUsingGit called
+2026-06-25T07:48:27.257Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:27.259Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:27.369Z [DEBUG] High write ratio: blit=0, write=241455 (100.0% writes), screen=2392x156
+2026-06-25T07:48:27.495Z [DEBUG] [FileIndex] git ls-files (tracked) took 476ms
+2026-06-25T07:48:27.496Z [DEBUG] [FileIndex] git ls-files: 1560 tracked files in 477ms
+2026-06-25T07:48:27.528Z [DEBUG] [FileIndex] using git ls-files result (1560 files)
+2026-06-25T07:48:27.532Z [DEBUG] [FileIndex] skipped index rebuild — tracked paths unchanged
+2026-06-25T07:48:27.532Z [DEBUG] [FileIndex] cache refresh completed in 514ms
+2026-06-25T07:48:27.597Z [DEBUG] [FileIndex] background untracked fetch: 2 files
+2026-06-25T07:48:27.598Z [DEBUG] [FileIndex] skipped index rebuild — merged paths unchanged
+2026-06-25T07:48:27.872Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-06-25T07:48:27.872Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-06-25T07:48:27.873Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-06-25T07:48:27.874Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-06-25T07:48:27.889Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:27.891Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:27.899Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:27.905Z [DEBUG] Plugin autoupdate: skipped (auto-updater disabled)
+2026-06-25T07:48:27.918Z [DEBUG] FileHistory: Making snapshot for message a0bac2c4-6ac0-4c6e-aafb-3b96571817df
+2026-06-25T07:48:27.922Z [DEBUG] Plugin loading errors: Plugin "skill-creator" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-review" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "code-simplifier" not cached at C:\Users\BC\.claude\plugins\marketplaces\claude-plugins-official — run /plugins to refresh, Plugin "remember" is enabled in project settings but isn't installed — run `claude plugin install remember@claude-plugins-official --scope project`
+2026-06-25T07:48:27.922Z [DEBUG] Total plugin output styles loaded: 0
+2026-06-25T07:48:27.923Z [DEBUG] act_dont_rederive_arm_active source=growthbook
+2026-06-25T07:48:27.939Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\pipeline\protocol.py
+2026-06-25T07:48:27.939Z [DEBUG] FileHistory: Missing tracked file: output\_check_remap.py
+2026-06-25T07:48:27.940Z [DEBUG] FileHistory: Missing tracked file: output\_diag_align.py
+2026-06-25T07:48:27.940Z [DEBUG] FileHistory: Missing tracked file: experiments\README.md
+2026-06-25T07:48:27.941Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\pipeline\crossval.py
+2026-06-25T07:48:27.941Z [DEBUG] FileHistory: Missing tracked file: _fix_tv.py
+2026-06-25T07:48:27.942Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\ultralytics_detectors.py
+2026-06-25T07:48:27.943Z [DEBUG] FileHistory: Missing tracked file: docs\cross_validation.md
+2026-06-25T07:48:27.943Z [DEBUG] FileHistory: Missing tracked file: output\_debug_map.py
+2026-06-25T07:48:27.943Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\yolov9.py
+2026-06-25T07:48:27.944Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\yolov10.py
+2026-06-25T07:48:27.944Z [DEBUG] FileHistory: Missing tracked file: output\_diag_v8.py
+2026-06-25T07:48:27.945Z [DEBUG] FileHistory: Missing tracked file: output\_batch_smoke.py
+2026-06-25T07:48:27.945Z [DEBUG] FileHistory: Missing tracked file: output\_gen_server_yaml.py
+2026-06-25T07:48:27.946Z [DEBUG] FileHistory: Missing tracked file: output\_check_head.py
+2026-06-25T07:48:27.946Z [DEBUG] FileHistory: Missing tracked file: _debug_tv.py
+2026-06-25T07:48:27.947Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\torchvision_detectors.py
+2026-06-25T07:48:27.947Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\yolov7.py
+2026-06-25T07:48:27.948Z [DEBUG] FileHistory: Missing tracked file: experiments\models\yolov5s_sactr_tuned.yaml
+2026-06-25T07:48:27.948Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\weights\loader.py
+2026-06-25T07:48:27.949Z [DEBUG] FileHistory: Missing tracked file: experiments\README.zh-CN.md
+2026-06-25T07:48:27.949Z [DEBUG] FileHistory: Missing tracked file: scripts\train_v5_official.py
+2026-06-25T07:48:27.950Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\ultralytics\sac.py
+2026-06-25T07:48:27.950Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\ultralytics_sac.py
+2026-06-25T07:48:27.951Z [DEBUG] FileHistory: Missing tracked file: _fix_final_csv.py
+2026-06-25T07:48:27.951Z [DEBUG] FileHistory: Missing tracked file: _collect_all.py
+2026-06-25T07:48:27.951Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\losses\yolov7.py
+2026-06-25T07:48:27.952Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\pipeline\_utils.py
+2026-06-25T07:48:27.952Z [DEBUG] FileHistory: Missing tracked file: _fix_tv2.py
+2026-06-25T07:48:27.953Z [DEBUG] FileHistory: Missing tracked file: scripts\schedule_experiments.py
+2026-06-25T07:48:27.953Z [DEBUG] FileHistory: Missing tracked file: _patch.py
+2026-06-25T07:48:27.954Z [DEBUG] FileHistory: Missing tracked file: output\_align_v8.py
+2026-06-25T07:48:27.954Z [DEBUG] FileHistory: Missing tracked file: _test_torchvision.py
+2026-06-25T07:48:27.955Z [DEBUG] FileHistory: Missing tracked file: _debug_retina3.py
+2026-06-25T07:48:27.955Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\ultralytics\configs.py
+2026-06-25T07:48:27.955Z [DEBUG] FileHistory: Missing tracked file: output\_gen_yaml.py
+2026-06-25T07:48:27.956Z [DEBUG] FileHistory: Missing tracked file: experiments\models\yolov5s_sac_tuned.yaml
+2026-06-25T07:48:27.957Z [DEBUG] FileHistory: Missing tracked file: _test_all.py
+2026-06-25T07:48:27.957Z [DEBUG] FileHistory: Missing tracked file: output\_check_v5keys.py
+2026-06-25T07:48:27.957Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\ops\sac_ops.py
+2026-06-25T07:48:27.958Z [DEBUG] FileHistory: Missing tracked file: output\_cluster.py
+2026-06-25T07:48:27.958Z [DEBUG] FileHistory: Missing tracked file: output\_d4.py
+2026-06-25T07:48:27.959Z [DEBUG] FileHistory: Missing tracked file: _debug_retina.py
+2026-06-25T07:48:27.959Z [DEBUG] FileHistory: Missing tracked file: output\_model_list.py
+2026-06-25T07:48:27.960Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\yolov8.py
+2026-06-25T07:48:27.960Z [DEBUG] FileHistory: Missing tracked file: _run_s4.py
+2026-06-25T07:48:27.961Z [DEBUG] FileHistory: Missing tracked file: _debug_retina2.py
+2026-06-25T07:48:27.961Z [DEBUG] FileHistory: Missing tracked file: scripts\server_status.sh
+2026-06-25T07:48:27.962Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\losses\yolov5.py
+2026-06-25T07:48:27.962Z [DEBUG] FileHistory: Missing tracked file: experiments\models\yolov5s_baseline.yaml
+2026-06-25T07:48:27.963Z [DEBUG] FileHistory: Missing tracked file: output\_d3.py
+2026-06-25T07:48:27.963Z [DEBUG] FileHistory: Missing tracked file: _fix_v5_metrics.py
+2026-06-25T07:48:27.963Z [DEBUG] FileHistory: Missing tracked file: output\_smoke_all.py
+2026-06-25T07:48:27.964Z [DEBUG] FileHistory: Missing tracked file: output\_gen_v5_yaml.py
+2026-06-25T07:48:27.964Z [DEBUG] FileHistory: Missing tracked file: output\_check_v8keys.py
+2026-06-25T07:48:27.965Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\zoo\yolov5.py
+2026-06-25T07:48:27.965Z [DEBUG] FileHistory: Missing tracked file: output\_ssh.py
+2026-06-25T07:48:27.965Z [DEBUG] FileHistory: Missing tracked file: scripts\cli.py
+2026-06-25T07:48:27.966Z [DEBUG] FileHistory: Missing tracked file: _fix_csv.py
+2026-06-25T07:48:27.966Z [DEBUG] FileHistory: Missing tracked file: output\_test_remapper.py
+2026-06-25T07:48:27.967Z [DEBUG] FileHistory: Missing tracked file: output\_debug_val.py
+2026-06-25T07:48:27.967Z [DEBUG] FileHistory: Missing tracked file: _check_tv.py
+2026-06-25T07:48:27.968Z [DEBUG] FileHistory: Missing tracked file: _unified_test.py
+2026-06-25T07:48:27.968Z [DEBUG] FileHistory: Missing tracked file: output\_fix_metrics.py
+2026-06-25T07:48:27.969Z [DEBUG] FileHistory: Missing tracked file: docs\cross_validation.zh-CN.md
+2026-06-25T07:48:27.969Z [DEBUG] FileHistory: Missing tracked file: examples\yolov5s_sactr_cv\README.md
+2026-06-25T07:48:27.969Z [DEBUG] FileHistory: Missing tracked file: scripts\train.py
+2026-06-25T07:48:27.970Z [DEBUG] FileHistory: Missing tracked file: _final_test.py
+2026-06-25T07:48:27.970Z [DEBUG] FileHistory: Missing tracked file: _remote_start.py
+2026-06-25T07:48:27.970Z [DEBUG] FileHistory: Missing tracked file: output\_gen_compose.py
+2026-06-25T07:48:27.971Z [DEBUG] FileHistory: Missing tracked file: scripts\__init__.py
+2026-06-25T07:48:27.972Z [DEBUG] FileHistory: Missing tracked file: _fix_v5_final.py
+2026-06-25T07:48:27.972Z [DEBUG] FileHistory: Missing tracked file: scripts\test.py
+2026-06-25T07:48:27.973Z [DEBUG] FileHistory: Missing tracked file: cracks_yolo\weights\remappers.py
+2026-06-25T07:48:27.973Z [DEBUG] FileHistory: Missing tracked file: scripts\quickstart_server.sh
+2026-06-25T07:48:27.973Z [DEBUG] FileHistory: Missing tracked file: _run_s5.py
+2026-06-25T07:48:27.974Z [DEBUG] FileHistory: Missing tracked file: fixup_specificity.py
+2026-06-25T07:48:27.974Z [DEBUG] FileHistory: Missing tracked file: scripts\train_ultralytics.py
+2026-06-25T07:48:27.975Z [DEBUG] FileHistory: Missing tracked file: examples\yolov5s_sactr_cv\README.zh-CN.md
+2026-06-25T07:48:27.975Z [DEBUG] FileHistory: Missing tracked file: examples\yolov10_fcos_retinanet_sweep\README.zh-CN.md
+2026-06-25T07:48:27.976Z [DEBUG] FileHistory: Missing tracked file: examples\yolov10_fcos_retinanet_sweep\sweep.yaml
+2026-06-25T07:48:27.976Z [DEBUG] FileHistory: Missing tracked file: output2\final\_compute_all_metrics.py
+2026-06-25T07:48:27.976Z [DEBUG] FileHistory: Missing tracked file: output3\metrics_guide.md
+2026-06-25T07:48:27.977Z [DEBUG] FileHistory: Missing tracked file: examples\yolov8_direct\README.zh-CN.md
+2026-06-25T07:48:27.977Z [DEBUG] FileHistory: Missing tracked file: examples\yolov8_direct\README.md
+2026-06-25T07:48:27.978Z [DEBUG] FileHistory: Missing tracked file: examples\yolov10_fcos_retinanet_sweep\README.md
+2026-06-25T07:48:27.978Z [DEBUG] FileHistory: Missing tracked file: scripts\test_v5_official.py
+2026-06-25T07:48:27.984Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-06-25T07:48:28.031Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.183.d09; cc_entrypoint=cli;
+2026-06-25T07:48:28.032Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:28.034Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:28.036Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-06-25T07:48:28.037Z [DEBUG] [API:auth] OAuth token check starting
+2026-06-25T07:48:28.183Z [DEBUG] [API:auth] OAuth token check complete
+2026-06-25T07:48:28.186Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:28.190Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:48:28.205Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:48:28.217Z [DEBUG] FileHistory: Added snapshot for a0bac2c4-6ac0-4c6e-aafb-3b96571817df, tracking 146 files
+2026-06-25T07:48:28.224Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:28.403Z [DEBUG] High write ratio: blit=0, write=241649 (100.0% writes), screen=2396x156
+2026-06-25T07:48:28.406Z [DEBUG] Registered claude-cli:// protocol handler in Windows registry
+2026-06-25T07:48:28.407Z [DEBUG] Auto-registered claude-cli:// deep link protocol handler
+2026-06-25T07:48:36.804Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:42.334Z [ERROR] API error (attempt 1/11): 400 400 {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcMGtuBkvNDYPEmbrHo\"}","provider_name":"Azure","is_byok":false,"previous_errors":[{"code":400,"message":"Provider returned error","provider_name":"Google","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcLkUobMQdh1BdCqeaR\"}"},{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcLpeL7YR2jLQ1eVJfQ\"}"},{"code":400,"message":"Provider returned error","provider_name":"Amazon Bedrock","raw":"{\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"}"},{"code":400,"message":"Provider returned error","provider_name":"Google","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcM61ZFtvKw3Bkt5TZg\"}"},{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcMBs2ybo8GA93JH8oa\"}"}]}},"user_id":"user_3EWnfbC2p6tD9iGhfAZmyWyprJ0"}
+2026-06-25T07:48:42.336Z [WARN] [thinking] server rejected a thinking block; stripping all thinking blocks and retrying.
+2026-06-25T07:48:42.337Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:42.338Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:48:42.348Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:48:44.600Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:48:48.766Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:02.946Z [DEBUG] Stream started - received first chunk
+2026-06-25T07:49:02.948Z [DEBUG] [API:timing] first byte after 20611ms
+2026-06-25T07:49:07.370Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:07.396Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:07.415Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:07.814Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:08.215Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:08.768Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:09.273Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:09.560Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:10.136Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:10.276Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:10.362Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:10.391Z [DEBUG] High write ratio: blit=0, write=242402 (100.0% writes), screen=2403x156
+2026-06-25T07:49:10.408Z [INFO] [Stall] tool_dispatch_start tool=Edit toolUseId=toolu_vrtx_0119XEvKxt2naWrrxy7f9d85 permissionDecisionMs=5
+2026-06-25T07:49:10.415Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:10.441Z [DEBUG] Preserving file permissions: 100666
+2026-06-25T07:49:10.442Z [DEBUG] Writing to temp file: D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\cracks_yolo\zoo\ultralytics\__init__.py.tmp.12180.dc4098cfa4bd
+2026-06-25T07:49:10.463Z [DEBUG] Applied original permissions to temp file
+2026-06-25T07:49:10.465Z [DEBUG] Temp file written successfully, size: 46953 bytes
+2026-06-25T07:49:10.466Z [DEBUG] Renaming D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\cracks_yolo\zoo\ultralytics\__init__.py.tmp.12180.dc4098cfa4bd to D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\cracks_yolo\zoo\ultralytics\__init__.py
+2026-06-25T07:49:10.468Z [DEBUG] File D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\cracks_yolo\zoo\ultralytics\__init__.py written atomically
+2026-06-25T07:49:10.473Z [INFO] [Stall] tool_dispatch_end tool=Edit toolUseId=toolu_vrtx_0119XEvKxt2naWrrxy7f9d85 outcome=ok durationMs=66
+2026-06-25T07:49:10.481Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-06-25T07:49:10.481Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-06-25T07:49:10.482Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-06-25T07:49:10.483Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-06-25T07:49:10.486Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-06-25T07:49:10.510Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.183.d09; cc_entrypoint=cli;
+2026-06-25T07:49:10.511Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:10.512Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:10.514Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-06-25T07:49:10.515Z [DEBUG] [API:auth] OAuth token check starting
+2026-06-25T07:49:10.516Z [DEBUG] [API:auth] OAuth token check complete
+2026-06-25T07:49:10.517Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:10.519Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:49:10.531Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:49:10.550Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:19.947Z [ERROR] API error (attempt 1/11): 400 400 {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcQ1y3vpckwt3MExd5j\"}","provider_name":"Azure","is_byok":false,"previous_errors":[{"code":429,"message":"Provider returned error","provider_name":"Google","raw":"anthropic/claude-sonnet-4.6 is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations"},{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcPcYeFaaS648HVVxYN\"}"},{"code":400,"message":"Provider returned error","provider_name":"Amazon Bedrock","raw":"{\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"}"},{"code":400,"message":"Provider returned error","provider_name":"Google","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcPuba1dq7x39zr9YJC\"}"},{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcPyRkZvng5c7uj1x2d\"}"}]}},"user_id":"user_3EWnfbC2p6tD9iGhfAZmyWyprJ0"}
+2026-06-25T07:49:19.948Z [WARN] [thinking] server rejected a thinking block; stripping all thinking blocks and retrying.
+2026-06-25T07:49:19.949Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:19.950Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:49:19.960Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:49:35.313Z [DEBUG] Stream started - received first chunk
+2026-06-25T07:49:35.314Z [DEBUG] [API:timing] first byte after 15365ms
+2026-06-25T07:49:35.328Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:35.394Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:35.790Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:36.108Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:36.582Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:37.096Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:37.373Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:37.553Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:37.960Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:38.385Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:38.759Z [INFO] [Stall] tool_dispatch_start tool=Write toolUseId=toolu_016VPsG5TTyDnPQskcEDgqLm permissionDecisionMs=3
+2026-06-25T07:49:38.770Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:38.803Z [DEBUG] High write ratio: blit=0, write=243078 (100.0% writes), screen=2413x156
+2026-06-25T07:49:38.819Z [DEBUG] FileHistory: Tracked file modification for D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\experiments\models\yolov5s_sactr_v5.yaml
+2026-06-25T07:49:38.822Z [DEBUG] Writing to temp file: D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\experiments\models\yolov5s_sactr_v5.yaml.tmp.12180.ad1b15c3af97
+2026-06-25T07:49:38.826Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:38.832Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.860Z [DEBUG] [binaryCheck] Binary 'pyright-langserver' not found
+2026-06-25T07:49:38.860Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.861Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.862Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:38.863Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.863Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.864Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:38.865Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.865Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.876Z [DEBUG] Temp file written successfully, size: 371 bytes
+2026-06-25T07:49:38.876Z [DEBUG] Renaming D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\experiments\models\yolov5s_sactr_v5.yaml.tmp.12180.ad1b15c3af97 to D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\experiments\models\yolov5s_sactr_v5.yaml
+2026-06-25T07:49:38.881Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:38.881Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.882Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.882Z [DEBUG] File D:\WorkSpace\projects\2025\cracks-yolo\proj\cracks-yolo\experiments\models\yolov5s_sactr_v5.yaml written atomically
+2026-06-25T07:49:38.883Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:38.884Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.884Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.885Z [INFO] [Stall] tool_dispatch_end tool=Write toolUseId=toolu_016VPsG5TTyDnPQskcEDgqLm outcome=ok durationMs=126
+2026-06-25T07:49:38.890Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:38.891Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.891Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.897Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-06-25T07:49:38.898Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-06-25T07:49:38.898Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-06-25T07:49:38.899Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-06-25T07:49:38.900Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:38.900Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.900Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:38.905Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-06-25T07:49:38.930Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.183.d09; cc_entrypoint=cli;
+2026-06-25T07:49:38.931Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:38.932Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:38.934Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-06-25T07:49:38.935Z [DEBUG] [API:auth] OAuth token check starting
+2026-06-25T07:49:38.936Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.937Z [DEBUG] [API:auth] OAuth token check complete
+2026-06-25T07:49:38.938Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:38.939Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:49:38.948Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:49:38.959Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:38.960Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.960Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:38.968Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:38.990Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:38.991Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:38.998Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.031Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.031Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.032Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.039Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.040Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.040Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.053Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.054Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.054Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.071Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.071Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.072Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.081Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.081Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.081Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.088Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.089Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.089Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.093Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.093Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.093Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.097Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.097Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.098Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.104Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.105Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.105Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.110Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.110Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.111Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.114Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.115Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.115Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.121Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.122Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.122Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.126Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.127Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.127Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.131Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.131Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.131Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.138Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.138Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.139Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.146Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.146Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.147Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.151Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.151Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.151Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.159Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.163Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.163Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.163Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.165Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.166Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.166Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.173Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.174Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.174Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.179Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.179Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.180Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.183Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.184Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.184Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.192Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.192Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.193Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.198Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.198Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.198Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.202Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.202Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.203Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.211Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.211Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.212Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.220Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.220Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.221Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.225Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.226Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.229Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.233Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.237Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.238Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.239Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.241Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.241Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.242Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.250Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.251Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.255Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.259Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.260Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.260Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.265Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.265Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.266Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.274Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.278Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.278Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.278Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.280Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.281Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.281Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.286Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.286Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.286Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.294Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.298Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.298Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.299Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.301Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.305Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.306Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.306Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.310Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.311Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.311Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.316Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.317Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.317Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.329Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.330Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.330Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.335Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.336Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.336Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.340Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.340Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.340Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.348Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.348Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.348Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.353Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.354Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.354Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.358Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.364Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.365Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.365Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .sh
+2026-06-25T07:49:39.367Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.370Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.371Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.371Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.373Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.374Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.374Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.381Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.385Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.385Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.385Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .sh
+2026-06-25T07:49:39.387Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.398Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.399Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.399Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.401Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.401Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.402Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.406Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.406Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.407Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.413Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.416Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.417Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.417Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.419Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.420Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.420Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.425Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.425Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.426Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.432Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.432Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.432Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.437Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.437Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.438Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.442Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.442Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.443Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.450Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.450Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.451Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.455Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.455Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.456Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.461Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.472Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.474Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.476Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.479Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.483Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.490Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.490Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.491Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.493Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.494Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.494Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.498Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.505Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.505Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.506Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.508Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.511Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.513Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.515Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.515Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.516Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.521Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.521Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.522Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.526Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.526Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.527Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.538Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.542Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.542Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.543Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.545Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.545Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.546Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.549Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.549Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.550Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.556Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.557Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.557Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.561Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.562Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.562Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.570Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.571Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.574Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.578Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.579Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.579Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.583Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.589Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.590Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.590Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .toml
+2026-06-25T07:49:39.592Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.596Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.599Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.602Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.602Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.603Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.608Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.608Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.609Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.613Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.613Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.613Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.617Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.618Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.618Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.625Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.629Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.629Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.630Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.636Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.637Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.637Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.644Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.645Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.645Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.649Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.650Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.650Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.654Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.654Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.655Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.660Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.664Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.664Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.664Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.666Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.667Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.667Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.671Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.676Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.679Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.679Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.680Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.682Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.682Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.682Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.686Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.687Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.687Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.694Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.697Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.697Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.698Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.704Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.704Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.705Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.709Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.716Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.716Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.717Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.718Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.722Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.722Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.723Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.727Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.731Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.731Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.732Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .md
+2026-06-25T07:49:39.733Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.736Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.736Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.737Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.738Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.744Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.745Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.745Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.747Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.748Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.748Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.751Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.752Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.752Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:39.756Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.761Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.762Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.762Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.764Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.765Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.765Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .py
+2026-06-25T07:49:39.773Z [DEBUG] [binaryCheck] Cache hit for 'pyright-langserver': false
+2026-06-25T07:49:39.773Z [DEBUG] [lspRecommendation] Skipping pyright-lsp@claude-plugins-official (binary 'pyright-langserver' not found)
+2026-06-25T07:49:39.773Z [DEBUG] [lspRecommendation] Looking for LSP plugins for .yaml
+2026-06-25T07:49:44.597Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:49.664Z [ERROR] API error (attempt 1/11): 400 400 {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcSBV6bssoya8xwM8zh\"}","provider_name":"Google","is_byok":false,"previous_errors":[{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcRdsaP33nPgbJNhy5o\"}"},{"code":400,"message":"Provider returned error","provider_name":"Amazon Bedrock","raw":"{\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"}"},{"code":400,"message":"Provider returned error","provider_name":"Google","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcRrjjPSRySjnhv9msF\"}"},{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcS19FWXn4fGurVuwob\"}"},{"code":400,"message":"Provider returned error","provider_name":"Azure","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcS4482Ndukmvp4NCxB\"}"}]}},"user_id":"user_3EWnfbC2p6tD9iGhfAZmyWyprJ0"}
+2026-06-25T07:49:49.667Z [WARN] [thinking] server rejected a thinking block; stripping all thinking blocks and retrying.
+2026-06-25T07:49:49.668Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:49.671Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:49:49.685Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:49:49.763Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:53.665Z [DEBUG] Stream started - received first chunk
+2026-06-25T07:49:53.666Z [DEBUG] [API:timing] first byte after 3998ms
+2026-06-25T07:49:53.673Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:54.073Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:54.102Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:54.903Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:55.014Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:55.445Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:55.962Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:56.332Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:56.725Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:57.189Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:57.724Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:58.236Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:58.668Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:59.090Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:59.556Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:49:59.943Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:00.031Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:00.427Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:00.892Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:00.987Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01C9SiVysZuSUtn4rgnzXRKB permissionDecisionMs=16
+2026-06-25T07:50:01.006Z [DEBUG] Creating shell snapshot for bash (D:\Git\bin\bash.exe)
+2026-06-25T07:50:01.006Z [DEBUG] Looking for shell config file: C:\Users\BC\.bashrc
+2026-06-25T07:50:01.182Z [DEBUG] Shell config file not found: C:\Users\BC\.bashrc, creating snapshot with Claude Code defaults only
+2026-06-25T07:50:01.183Z [DEBUG] Snapshots directory: C:\Users\BC\.claude\shell-snapshots
+2026-06-25T07:50:01.205Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:01.233Z [DEBUG] High write ratio: blit=0, write=243521 (100.0% writes), screen=2430x156
+2026-06-25T07:50:01.497Z [DEBUG] Spawn-env probe captured 120 keys
+2026-06-25T07:50:02.457Z [DEBUG] Creating snapshot at: C:\Users\BC\.claude\shell-snapshots\snapshot-bash-1782373801183-1rbh1s.sh
+2026-06-25T07:50:02.457Z [DEBUG] Execution timeout: 10000ms
+2026-06-25T07:50:03.145Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:03.976Z [DEBUG] Shell snapshot created successfully (5273 bytes)
+2026-06-25T07:50:03.984Z [DEBUG] No session environment scripts found
+2026-06-25T07:50:03.986Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-06-25T07:50:07.034Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:08.048Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:09.049Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:10.047Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:10.414Z [INFO] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01C9SiVysZuSUtn4rgnzXRKB outcome=ok durationMs=9427
+2026-06-25T07:50:10.421Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-06-25T07:50:10.421Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-06-25T07:50:10.422Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-06-25T07:50:10.423Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-06-25T07:50:10.426Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-06-25T07:50:10.450Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.183.d09; cc_entrypoint=cli;
+2026-06-25T07:50:10.451Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:10.452Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:10.455Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-06-25T07:50:10.456Z [DEBUG] [API:auth] OAuth token check starting
+2026-06-25T07:50:10.456Z [DEBUG] [API:auth] OAuth token check complete
+2026-06-25T07:50:10.457Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:10.459Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:50:10.470Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:50:10.492Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:10.533Z [DEBUG] High write ratio: blit=0, write=243639 (100.0% writes), screen=2434x156
+2026-06-25T07:50:12.878Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:18.379Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:18.927Z [ERROR] API error (attempt 1/11): 400 400 {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcUKbZVTH5ywfVQ1UAS\"}","provider_name":"Azure","is_byok":false,"previous_errors":[{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcU1uhHaEnmAz8A1Anu\"}"},{"code":400,"message":"Provider returned error","provider_name":"Amazon Bedrock","raw":"{\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"}"},{"code":400,"message":"Provider returned error","provider_name":"Google","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcUBmGvxG16RLitJioQ\"}"},{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcUGq83b2Zi7ViiVDeT\"}"},{"code":429,"message":"Provider returned error","provider_name":"Google","raw":"anthropic/claude-sonnet-4.6 is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations"}]}},"user_id":"user_3EWnfbC2p6tD9iGhfAZmyWyprJ0"}
+2026-06-25T07:50:18.928Z [WARN] [thinking] server rejected a thinking block; stripping all thinking blocks and retrying.
+2026-06-25T07:50:18.930Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:18.931Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:50:18.939Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:50:23.435Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:24.572Z [DEBUG] Stream started - received first chunk
+2026-06-25T07:50:24.573Z [DEBUG] [API:timing] first byte after 5643ms
+2026-06-25T07:50:24.576Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:24.991Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:25.092Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:25.105Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:25.541Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:26.224Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:26.329Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:26.823Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:27.124Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:27.693Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:27.913Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:28.580Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:28.793Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:29.228Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:29.616Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:29.634Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:29.667Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01SLozM3AjiFx8eH1XwF7UsV permissionDecisionMs=57
+2026-06-25T07:50:29.669Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-06-25T07:50:29.677Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:29.699Z [DEBUG] High write ratio: blit=0, write=243738 (100.0% writes), screen=2439x156
+2026-06-25T07:50:29.826Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:30.774Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:31.285Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:35.087Z [WARN] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_01SLozM3AjiFx8eH1XwF7UsV outcome=error durationMs=5420
+2026-06-25T07:50:35.088Z [DEBUG] Bash tool error (5420ms): Shell command failed
+2026-06-25T07:50:35.094Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-06-25T07:50:35.094Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-06-25T07:50:35.095Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-06-25T07:50:35.095Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-06-25T07:50:35.104Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:35.127Z [DEBUG] High write ratio: blit=0, write=243942 (100.0% writes), screen=2443x156
+2026-06-25T07:50:35.159Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-06-25T07:50:35.180Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.183.d09; cc_entrypoint=cli;
+2026-06-25T07:50:35.181Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:35.182Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:35.184Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-06-25T07:50:35.185Z [DEBUG] [API:auth] OAuth token check starting
+2026-06-25T07:50:35.185Z [DEBUG] [API:auth] OAuth token check complete
+2026-06-25T07:50:35.186Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:35.188Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:50:35.197Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:50:43.718Z [ERROR] API error (attempt 1/11): 400 400 {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcWD2UyRCpc8vELgtT9\"}","provider_name":"Google","is_byok":false,"previous_errors":[{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcVmyr9XcGTwQJogND7\"}"},{"code":400,"message":"Provider returned error","provider_name":"Amazon Bedrock","raw":"{\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"}"},{"code":400,"message":"Provider returned error","provider_name":"Google","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcVuEuQvDszmKKULKm6\"}"},{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcVzGH6T4q6fWBzrjm6\"}"},{"code":400,"message":"Provider returned error","provider_name":"Azure","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcW4BBAxLRRzHhfe3Ga\"}"}]}},"user_id":"user_3EWnfbC2p6tD9iGhfAZmyWyprJ0"}
+2026-06-25T07:50:43.719Z [WARN] [thinking] server rejected a thinking block; stripping all thinking blocks and retrying.
+2026-06-25T07:50:43.720Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:50:43.721Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:50:43.728Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:50:58.448Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:05.393Z [DEBUG] Stream started - received first chunk
+2026-06-25T07:51:05.393Z [DEBUG] [API:timing] first byte after 21674ms
+2026-06-25T07:51:05.402Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:05.832Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:06.434Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:06.458Z [DEBUG] High write ratio: blit=0, write=244717 (100.0% writes), screen=2453x156
+2026-06-25T07:51:06.477Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_vrtx_01LJbxpM4MYXzMXRVjXLtxzw permissionDecisionMs=53
+2026-06-25T07:51:06.483Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:06.491Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-06-25T07:51:09.019Z [WARN] [Stall] tool_dispatch_end tool=Bash toolUseId=toolu_vrtx_01LJbxpM4MYXzMXRVjXLtxzw outcome=error durationMs=2542
+2026-06-25T07:51:09.020Z [DEBUG] Bash tool error (2542ms): Shell command failed
+2026-06-25T07:51:09.026Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-06-25T07:51:09.027Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-06-25T07:51:09.027Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-06-25T07:51:09.028Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-06-25T07:51:09.034Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:09.100Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-06-25T07:51:09.124Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.183.d09; cc_entrypoint=cli;
+2026-06-25T07:51:09.125Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:09.126Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:09.128Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-06-25T07:51:09.128Z [DEBUG] [API:auth] OAuth token check starting
+2026-06-25T07:51:09.129Z [DEBUG] [API:auth] OAuth token check complete
+2026-06-25T07:51:09.130Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:09.131Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:51:09.140Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:51:14.614Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:16.860Z [ERROR] API error (attempt 1/11): 400 400 {"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcYZqBUGb5BAmDoyxCv\"}","provider_name":"Azure","is_byok":false,"previous_errors":[{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcYGLDxEzfcFWhDJpkV\"}"},{"code":400,"message":"Provider returned error","provider_name":"Amazon Bedrock","raw":"{\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"}"},{"code":400,"message":"Provider returned error","provider_name":"Google","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_vrtx_011CcPcYR2rEK3KNobCd9C2P\"}"},{"code":400,"message":"Provider returned error","provider_name":"Anthropic","raw":"{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.165.content.0: Invalid `signature` in `thinking` block\"},\"request_id\":\"req_011CcPcYSvD2TNmGGPgZDQbn\"}"},{"code":429,"message":"Provider returned error","provider_name":"Google","raw":"anthropic/claude-sonnet-4.6 is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations"}]}},"user_id":"user_3EWnfbC2p6tD9iGhfAZmyWyprJ0"}
+2026-06-25T07:51:16.862Z [WARN] [thinking] server rejected a thinking block; stripping all thinking blocks and retrying.
+2026-06-25T07:51:16.863Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:16.864Z [DEBUG] [API:timing] dispatching to firstParty model=anthropic/claude-sonnet-4.6
+2026-06-25T07:51:16.875Z [DEBUG] [API REQUEST] /api/v1/messages source=repl_main_thread
+2026-06-25T07:51:22.629Z [DEBUG] Stream started - received first chunk
+2026-06-25T07:51:22.629Z [DEBUG] [API:timing] first byte after 5767ms
+2026-06-25T07:51:22.640Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:22.842Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:23.062Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:23.272Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:23.301Z [INFO] [Stall] tool_dispatch_start tool=Bash toolUseId=toolu_01FDGgzMvQrcg167xa86KQ64 permissionDecisionMs=33
+2026-06-25T07:51:23.309Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable
+2026-06-25T07:51:23.330Z [DEBUG] High write ratio: blit=0, write=245410 (100.0% writes), screen=2466x156
+2026-06-25T07:51:23.333Z [DEBUG] Spawning shell without login (-l flag skipped)
+2026-06-25T07:51:23.375Z [DEBUG] Fast mode unavailable: Fast mode is currently unavailable

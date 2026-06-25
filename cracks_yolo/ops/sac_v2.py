@@ -174,6 +174,93 @@ class TransformerBlockV3(nn.Module):
         return p.permute(0, 2, 1).reshape(b, c, h, w)
 
 
+# ---------------------------------------------------------------------------
+# Transformer v4 — identity-init + LayerNorm (scale-stable)
+# ---------------------------------------------------------------------------
+
+
+class TransformerLayerV4(nn.Module):
+    """Identity-init attention + LayerNorm for scale stability.
+
+    Same identity-init as V3 (Q,K→0, V→I, MLP→0) so the layer starts as a
+    pass-through, but adds LayerNorm before attention and MLP.  LN stabilises
+    the residual stream once QKV deviate from identity, preventing BN drift
+    downstream.  This is the ViT-standard pre-norm arrangement.
+    """
+
+    def __init__(self, c: int, num_heads: int = 4) -> None:
+        super().__init__()
+        self.norm1 = nn.LayerNorm(c)
+        self.q = nn.Linear(c, c, bias=False)
+        self.k = nn.Linear(c, c, bias=False)
+        self.v = nn.Linear(c, c, bias=False)
+        nn.init.normal_(self.q.weight, std=1e-4)
+        nn.init.normal_(self.k.weight, std=1e-4)
+        nn.init.normal_(self.v.weight, std=0.0)
+        self.v.weight.data += torch.eye(c)
+        self.ma = nn.MultiheadAttention(embed_dim=c, num_heads=num_heads, batch_first=True)
+        self.norm2 = nn.LayerNorm(c)
+        self.fc1 = nn.Linear(c, c, bias=False)
+        self.fc2 = nn.Linear(c, c, bias=False)
+        nn.init.normal_(self.fc1.weight, std=1e-4)
+        nn.init.normal_(self.fc2.weight, std=1e-4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + self.ma(self.q(self.norm1(x)), self.k(self.norm1(x)), self.v(self.norm1(x)))[0]
+        return x + self.fc2(self.fc1(self.norm2(x)))
+
+
+class TransformerBlockV4(nn.Module):
+    """Identity-init + LayerNorm transformer block — v4."""
+
+    def __init__(self, c1: int, c2: int, num_heads: int = 4, num_layers: int = 2) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(c1, c2, kernel_size=1, bias=False)
+        self.pos_embed = nn.Parameter(torch.zeros(1, c2, 1, 1))
+        self.layers = nn.Sequential(*[TransformerLayerV4(c2, num_heads) for _ in range(num_layers)])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv(x)
+        b, c, h, w = x.shape
+        p = x.flatten(2).permute(0, 2, 1)
+        p = p + self.pos_embed.squeeze(-1).squeeze(-1).unsqueeze(0)
+        p = self.layers(p)
+        return p.permute(0, 2, 1).reshape(b, c, h, w)
+
+
+class C3TRV4(nn.Module):
+    """C3 with identity-init + LayerNorm TransformerBlockV4.
+
+    num_heads/num_layers control transformer size.  V4 adds LayerNorm over
+    V3 for scale stability; placement at the P3 neck (small-stride, many
+    tokens) lets attention operate at the crack-relevant spatial scale.
+    """
+
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        n: int = 1,
+        shortcut: bool = True,
+        g: int = 1,
+        e: float = 0.5,
+        num_heads: int = 2,
+        num_layers: int = 1,
+    ) -> None:
+        super().__init__()
+        _ = (n, shortcut, g)
+        c_ = int(c2 * e)
+        from ultralytics.nn.modules.conv import Conv as _UltraConv
+
+        self.cv1 = _UltraConv(c1, c_, 1, 1)
+        self.cv2 = _UltraConv(c1, c_, 1, 1)
+        self.m = TransformerBlockV4(c_, c_, num_heads=num_heads, num_layers=num_layers)
+        self.cv3 = _UltraConv(2 * c_, c2, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.cv3(torch.cat((self.m(self.cv1(x)), self.cv2(x)), dim=1))
+
+
 class C3TRV3(nn.Module):
     """C3 with identity-initialized TransformerBlockV3.
 

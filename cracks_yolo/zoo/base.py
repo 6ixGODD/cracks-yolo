@@ -125,6 +125,7 @@ class TrainConfig:
     num_workers: int = 8
     pretrained: bool = True
     close_mosaic: int | None = None
+    degrees: float = 0.0
     # For ultralytics: passed through to YOLO().train()
     extra_kwargs: dict[str, Any] = field(default_factory=dict)
 

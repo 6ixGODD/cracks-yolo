@@ -282,6 +282,9 @@ class UltralyticsAdapter(BaseModel):
         # to let the model refine localization on real images.
         if config.close_mosaic is not None:
             overrides["close_mosaic"] = config.close_mosaic
+        # Rotation augmentation (useful for crack orientation diversity)
+        if config.degrees > 0:
+            overrides["degrees"] = config.degrees
 
         trainer = Trainer(overrides=overrides)
         # Replace yaml-path-string model with our SAC-injected nn.Module.
@@ -658,6 +661,38 @@ class YOLOv5sSACTRV4(UltralyticsAdapter):
             asset="yolov5su",
             sac_indices=(2, 4, 6),
             tr_indices=(23,),
+            decode_format="anchor_based",
+            num_classes=num_classes,
+            input_size=input_size,
+            logger=logger,
+        )
+
+
+class YOLOv5sSACTRV5(UltralyticsAdapter):
+    """YOLOv5s + C3SAC-v2 at backbone (2,4,6) + C3TRV4 (LN) at neck P3 (17).
+
+    V5 over V4: (1) TR relocated from P5 (index 23, 20×20 tokens) to P3
+    (index 17, 80×80 tokens) so attention operates at the crack-relevant
+    spatial scale; (2) LayerNorm added to the transformer (pre-norm) to
+    stabilise the residual stream once QKV deviate from identity-init,
+    preventing downstream BN drift.
+    """
+
+    def __init__(self, num_classes: int = 1, input_size: int = 640, logger: Any = None) -> None:
+        inner = _build_detection_model("yolov5s.yaml", num_classes)
+        apply_sac_tr(inner, sac_indices=(2, 4, 6), tr_indices=())
+        from cracks_yolo.ops.sac_v2 import C3SACV2
+        from cracks_yolo.ops.sac_v2 import C3TRV4
+
+        _replace_c3sac_v2(inner, (2, 4, 6), C3SACV2)
+        # Incremental TR at neck index 17 (P3 output C3, stride 8) — LN + identity-init
+        _replace_c3_with_tr_v3(inner, (17,), C3TRV4, num_heads=2, num_layers=1)
+        super().__init__(
+            inner=inner,
+            cfg="yolov5s.yaml",
+            asset="yolov5su",
+            sac_indices=(2, 4, 6),
+            tr_indices=(17,),
             decode_format="anchor_based",
             num_classes=num_classes,
             input_size=input_size,
@@ -1217,6 +1252,7 @@ ZOO: dict[str, type[UltralyticsAdapter]] = {
     "yolov5s_sactr_v2": YOLOv5sSACTRV2,
     "yolov5s_sactr_v3": YOLOv5sSACTRV3,
     "yolov5s_sactr_v4": YOLOv5sSACTRV4,
+    "yolov5s_sactr_v5": YOLOv5sSACTRV5,
     "yolov5m": YOLOv5m,
     "yolov5l": YOLOv5l,
     "yolov5x": YOLOv5x,

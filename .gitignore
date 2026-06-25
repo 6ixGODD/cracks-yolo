@@ -100,19 +100,18 @@ AGENTS.md
 TODO.md
 
 # Cracks-YOLO artifacts
+/dataset_analysis/
+/plots/
 /output/
+/weights/
+/runs/
+/metrics/
+/output*
+/_*.py
+/*.bak
 *.zip
-weights/
-!/tests/weights/
-!/cracks_yolo/weights/
-runs/
 *.pt
 *.pth
 *.torchscript
-/_*.py
-/output*
-/dataset_analysis
-/*.bak
-/plots/
-test_metrics.*
 *.ts
+test_metrics.*
