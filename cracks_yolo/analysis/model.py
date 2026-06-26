@@ -38,11 +38,12 @@ class ModelAnalysisReport:
 
 
 def _count_macs(model: nn.Module, input_size: int) -> float:
-    """Count MACs (multiply-accumulate ops).
+    """Count MACs (multiply-accumulate ops) via FlopCounterMode.
 
-    Uses thop as primary (counts only conv/linear/BatchNorm MACs, matching
-    the YOLO literature convention). Falls back to PyTorch FlopCounterMode
-    (counts all ATen ops, broader but less standard).
+    Uses PyTorch's built-in ``FlopCounterMode`` which hooks at the ATen-op
+    level (``aten::conv2d``, ``aten::linear``, etc.) — this correctly counts
+    SAConv2d's internal convolutions which bypass ``nn.Conv2d.forward()``
+    via ``_conv_forward()`` and are invisible to thop's per-module hooks.
 
     Returns MACs; GFLOPs = 2 × MACs / 1e9.
     """
@@ -52,17 +53,18 @@ def _count_macs(model: nn.Module, input_size: int) -> float:
     x = torch.zeros((1, 3, input_size, input_size), device=dev)
     macs = 0.0
     try:
-        from thop import profile
+        from torch.utils.flop_counter import FlopCounterMode
 
-        macs, _ = profile(model, inputs=(x,), verbose=False)
-        macs = float(macs)
+        with FlopCounterMode(display=False) as fcm:
+            _ = model(x)
+        # FlopCounterMode returns total FLOPs; MACs = FLOPs / 2.
+        macs = float(fcm.get_total_flops()) / 2.0
     except Exception:
         try:
-            from torch.utils.flop_counter import FlopCounterMode
+            from thop import profile
 
-            with FlopCounterMode(display=False) as fcm:
-                _ = model(x)
-            macs = float(fcm.get_total_flops()) / 2.0
+            macs, _ = profile(model, inputs=(x,), verbose=False)
+            macs = float(macs)
         except Exception:
             macs = 0.0
     finally:
